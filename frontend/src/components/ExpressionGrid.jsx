@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { ImageCell } from "./ImageCell.jsx";
 import { Lightbox } from "./Lightbox.jsx";
 
-export function ExpressionGrid({ genes, data, onRemoveGene }) {
+export function ExpressionGrid({ genes, data, onRemoveGene, nImages }) {
   const [lightboxImage, setLightboxImage] = useState(null);
 
   // Collect all canonical stages that appear across any gene, sorted by begin_hours
@@ -21,14 +21,16 @@ export function ExpressionGrid({ genes, data, onRemoveGene }) {
       .map(([hours, label]) => ({ hours, label }));
   }, [genes, data]);
 
-  // Build lookup: gene → begin_hours → ImageRecord
+  // Build lookup: gene → begin_hours → ImageRecord[]
   const lookup = useMemo(() => {
     const map = {};
     for (const symbol of genes) {
       map[symbol] = {};
       for (const img of data[symbol] || []) {
         if (img.stage_begin_hours != null) {
-          map[symbol][img.stage_begin_hours] = img;
+          const h = img.stage_begin_hours;
+          if (!map[symbol][h]) map[symbol][h] = [];
+          map[symbol][h].push(img);
         }
       }
     }
@@ -75,12 +77,13 @@ export function ExpressionGrid({ genes, data, onRemoveGene }) {
               <tr key={hours}>
                 <td className="row-header">{label}</td>
                 {genes.map((symbol) => {
-                  const img = lookup[symbol]?.[hours];
-                  if (img) {
+                  const imgs = lookup[symbol]?.[hours];
+                  if (imgs && imgs.length > 0) {
                     return (
                       <ImageCell
                         key={symbol}
-                        image={img}
+                        images={imgs}
+                        nImages={nImages ?? 1}
                         onClick={setLightboxImage}
                       />
                     );

@@ -1,13 +1,17 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 
+const VALID_N_IMAGES = [1, 3, 6, 10];
+
 function parseUrl() {
   const params = new URLSearchParams(window.location.search);
   const genesParam = params.get("genes");
+  const nImagesParam = parseInt(params.get("n_images") || "1", 10);
   return {
     genes: genesParam ? genesParam.split(",").filter(Boolean) : [],
     stageMin: params.get("stage_min") ? parseFloat(params.get("stage_min")) : null,
     stageMax: params.get("stage_max") ? parseFloat(params.get("stage_max")) : null,
     anatomy: params.get("anatomy") || null,
+    nImages: VALID_N_IMAGES.includes(nImagesParam) ? nImagesParam : 1,
   };
 }
 
@@ -27,6 +31,7 @@ export function useUrlState() {
         if (next.stageMin != null) params.set("stage_min", next.stageMin);
         if (next.stageMax != null) params.set("stage_max", next.stageMax);
         if (next.anatomy) params.set("anatomy", next.anatomy);
+        if (next.nImages && next.nImages !== 1) params.set("n_images", next.nImages);
         const search = params.toString();
         window.history.replaceState(null, "", search ? `?${search}` : window.location.pathname);
       }, 300);

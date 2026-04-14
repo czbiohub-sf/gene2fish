@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.4 — Multi-image view (2026-04-14)
+
+**Branch:** `feature/multi-image-view` (not yet merged to main)
+
+**Feature:** Users can now view 1, 3, 6, or 10 images per gene × timepoint cell using a toggle in the header ("Images per cell"). Default is 1 (unchanged from v0.3). Images are ranked by preparation type (whole-mount first) then anatomy term count.
+
+**Changed files:**
+- `backend/gene2image/models.py` — Added `n_images: int = 1` to `BatchRequest`
+- `backend/gene2image/stage_utils.py` — Extracted `_score_image()`, added `select_top_n(images, n)` returning up to n ranked images per stage
+- `backend/gene2image/routes.py` — `_select_representatives` now takes `n` and uses `select_top_n`; batch endpoint passes `body.n_images`
+- `frontend/src/hooks/useUrlState.js` — `nImages` (1/3/6/10) added to URL state, synced as `?n_images=N`
+- `frontend/src/hooks/useGeneData.js` — Passes `n_images` in batch request, re-fetches on change
+- `frontend/src/App.jsx` — "Images per cell" toggle control with buttons 1 / 3 / 6 / 10
+- `frontend/src/components/ExpressionGrid.jsx` — Lookup now stores `ImageRecord[]` per stage cell
+- `frontend/src/components/ImageCell.jsx` — Renders N images side-by-side; each clickable for lightbox; failed images disappear silently in multi mode
+- `frontend/src/styles/main.css` — Toggle button styles; multi-image flexbox cell layout
+
+**Known issue — ZFIN image loading:** ZFIN appears to enforce per-IP rate limits on their image server. After a burst of image requests (loading a gene with many timepoints, or switching to 6/10 images per cell), the IP gets temporarily blocked and subsequent images fail to load. Images already cached in the browser are unaffected. The workaround is to wait a few minutes before loading more genes. A future fix could add request throttling on the frontend to stay under the rate limit.
+
+---
+
 ## v0.3 — Extractor performance fix (2026-04-14)
 
 **Changed:** `zfin_image_metadata_extractor.py`

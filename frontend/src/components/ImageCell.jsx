@@ -1,28 +1,47 @@
 import { useState } from "react";
 
-export function ImageCell({ image, onClick }) {
+function SingleImage({ image, onClick, compact, onFail }) {
   const [src, setSrc] = useState(image.image_url);
   const [failed, setFailed] = useState(false);
 
   function handleError(e) {
     if (src === image.image_url && image.image_url_fallback !== image.image_url) {
-      // First failure: try the plain .jpg fallback
       setSrc(image.image_url_fallback);
     } else {
-      // Second failure: show placeholder
       e.target.onerror = null;
       setFailed(true);
+      onFail?.();
     }
   }
+
+  if (failed) return null;
+
+  return (
+    <img
+      className={`cell-img${compact ? " compact" : ""}`}
+      src={src}
+      alt={`${image.gene_symbol} at ${image.stage_display_label}`}
+      loading="lazy"
+      onError={handleError}
+      onClick={(e) => { e.stopPropagation(); onClick(image); }}
+      title={[
+        image.stage_display_label,
+        image.anatomy_names?.length ? image.anatomy_names.join(", ") : null,
+        image.image_id,
+      ].filter(Boolean).join(" · ")}
+    />
+  );
+}
+
+function SingleCell({ image, onClick }) {
+  const [failed, setFailed] = useState(false);
 
   const tooltipText = [
     image.stage_display_label,
     image.anatomy_names?.length ? image.anatomy_names.join(", ") : null,
     image.image_id,
     image.publication_id,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  ].filter(Boolean).join(" · ");
 
   if (failed) {
     return (
@@ -44,14 +63,35 @@ export function ImageCell({ image, onClick }) {
 
   return (
     <td className="image-cell" onClick={() => onClick(image)}>
-      <img
-        className="cell-img"
-        src={src}
-        alt={`${image.gene_symbol} at ${image.stage_display_label}`}
-        loading="lazy"
-        onError={handleError}
-      />
+      <SingleImage image={image} onClick={onClick} compact={false} onFail={() => setFailed(true)} />
       <div className="cell-tooltip">{tooltipText}</div>
+    </td>
+  );
+}
+
+export function ImageCell({ images, nImages, onClick }) {
+  const n = nImages ?? 1;
+  const displayImages = images.slice(0, n);
+
+  if (n === 1) {
+    return <SingleCell image={displayImages[0]} onClick={onClick} />;
+  }
+
+  return (
+    <td
+      className="image-cell multi"
+      style={{ "--n": n }}
+    >
+      <div className="image-cell-inner multi">
+        {displayImages.map((img) => (
+          <SingleImage
+            key={img.image_id}
+            image={img}
+            onClick={onClick}
+            compact={true}
+          />
+        ))}
+      </div>
     </td>
   );
 }

@@ -7,11 +7,13 @@ import { AnatomyFilter } from "./components/AnatomyFilter.jsx";
 import { ExpressionGrid } from "./components/ExpressionGrid.jsx";
 import { Attribution } from "./components/Attribution.jsx";
 
+const N_IMAGE_OPTIONS = [1, 3, 6, 10];
+
 export default function App() {
   const [urlState, setUrlState] = useUrlState();
-  const { genes, stageMin, stageMax, anatomy } = urlState;
+  const { genes, stageMin, stageMax, anatomy, nImages } = urlState;
 
-  const { data, loading, error } = useGeneData(genes, stageMin, stageMax, anatomy);
+  const { data, loading, error } = useGeneData(genes, stageMin, stageMax, anatomy, nImages);
 
   const addGene = useCallback(
     (symbol) => {
@@ -46,6 +48,13 @@ export default function App() {
     [setUrlState]
   );
 
+  const setNImages = useCallback(
+    (n) => {
+      setUrlState((s) => ({ ...s, nImages: n }));
+    },
+    [setUrlState]
+  );
+
   return (
     <div id="root">
       <header className="app-header">
@@ -58,6 +67,20 @@ export default function App() {
             onChange={setStageRange}
           />
           <AnatomyFilter value={anatomy} onChange={setAnatomy} />
+          <div className="n-images-toggle">
+            <span className="n-images-label">Images per cell</span>
+            <div className="n-images-buttons">
+              {N_IMAGE_OPTIONS.map((n) => (
+                <button
+                  key={n}
+                  className={`n-images-btn${(nImages ?? 1) === n ? " active" : ""}`}
+                  onClick={() => setNImages(n)}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
         {loading && (
           <div style={{ marginTop: 8, fontSize: 12, color: "#6b7280" }}>
@@ -76,6 +99,7 @@ export default function App() {
           genes={genes}
           data={data}
           onRemoveGene={removeGene}
+          nImages={nImages ?? 1}
         />
       </main>
 

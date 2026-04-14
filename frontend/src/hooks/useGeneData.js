@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 
-export function useGeneData(genes, stageMin, stageMax, anatomy) {
+export function useGeneData(genes, stageMin, stageMax, anatomy, nImages) {
   const [data, setData] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -22,6 +22,7 @@ export function useGeneData(genes, stageMin, stageMax, anatomy) {
           stage_min: stageMin ?? null,
           stage_max: stageMax ?? null,
           anatomy: anatomy ?? null,
+          n_images: nImages ?? 1,
         };
         const res = await fetch("/api/genes/batch", {
           method: "POST",
@@ -40,7 +41,7 @@ export function useGeneData(genes, stageMin, stageMax, anatomy) {
 
     fetchData();
     return () => { cancelled = true; };
-  }, [genes.join(","), stageMin, stageMax, anatomy]);
+  }, [genes.join(","), stageMin, stageMax, anatomy, nImages]);
 
   return { data, loading, error };
 }
