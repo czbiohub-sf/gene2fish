@@ -248,6 +248,7 @@ class ZFINImageMetadataExtractor:
         self.input_dir = Path(input_dir)
         self.data = {}
         self._load_all_data()
+        self._build_indexes()
 
     def _load_all_data(self):
         """Load all required TSV files into memory."""
@@ -261,8 +262,150 @@ class ZFINImageMetadataExtractor:
                 print(f"  ✗ {filename}: not found")
                 self.data[filename] = pd.DataFrame(columns=columns)
 
+    def _build_indexes(self):
+        """Pre-build O(1) dict lookups from every DataFrame.
+
+        The original code did df[df[col] == val] inside the per-image loop,
+        which is O(n) per lookup and O(n²) overall for 53k images. Building
+        dicts once here makes every lookup O(1) and reduces total runtime from
+        hours to seconds.
+        """
+        print("\nBuilding indexes...")
+
+        # image_id → {figure_id, image_preparation}
+        self._img_to_fig: Dict[str, Dict] = {}
+        for _, row in self.data["ImageFigures.txt"].iterrows():
+            self._img_to_fig[row["Image ID"]] = {
+                "figure_id": row.get("Figure ID"),
+                "image_preparation": row.get("Image Preparation"),
+            }
+
+        # figure_id → [(expression_id, expression_result_id), ...]
+        self._fig_to_results: Dict[str, List] = {}
+        for _, row in self.data["xpatfig_fish.txt"].iterrows():
+            fid = row["Figure ID"]
+            if fid not in self._fig_to_results:
+                self._fig_to_results[fid] = []
+            self._fig_to_results[fid].append((row["Expression ID"], row["Expression Result ID"]))
+
+        # expression_id → first matching xpat_fish row (dict)
+        self._expr_to_xpat: Dict[str, Dict] = {}
+        for _, row in self.data["xpat_fish.txt"].iterrows():
+            eid = row["Expression ID"]
+            if eid not in self._expr_to_xpat:
+                self._expr_to_xpat[eid] = row.to_dict()
+
+        # expression_result_id → [(start_stage_id, anat_super_id, anat_sub_id, expression_found), ...]
+        self._result_to_stage_anat: Dict[str, List] = {}
+        for _, row in self.data["xpat_stage_anatomy.txt"].iterrows():
+            rid = row["Expression Result ID"]
+            if rid not in self._result_to_stage_anat:
+                self._result_to_stage_anat[rid] = []
+            self._result_to_stage_anat[rid].append((
+                row.get("Start Stage ID"),
+                row.get("Anatomy Super Term ID"),
+                row.get("Anatomy Sub Term ID"),
+                row.get("Expression Found"),
+            ))
+
+        # stage_id → {stage_obo_id, stage_name, begin_hours, end_hours}
+        self._stage_id_to_info: Dict[str, Dict] = {}
+        for _, row in self.data["stage_ontology.txt"].iterrows():
+            self._stage_id_to_info[row["Stage ID"]] = {
+                "stage_obo_id": row.get("Stage OBO ID"),
+                "stage_name": row.get("Stage Name"),
+                "begin_hours": row.get("Begin Hours"),
+                "end_hours": row.get("End Hours"),
+            }
+
+        # anatomy_id → anatomy_name
+        self._anat_id_to_name: Dict[str, str] = {}
+        for _, row in self.data["anatomy_item.txt"].iterrows():
+            self._anat_id_to_name[row["Anatomy ID"]] = row.get("Anatomy Name")
+
+        # gene_id (ZFIN ID) → {so_id, ncbi_gene_id}
+        self._gene_id_to_info: Dict[str, Dict] = {}
+        for _, row in self.data["gene.txt"].iterrows():
+            self._gene_id_to_info[row["ZFIN ID"]] = {
+                "so_id": row.get("SO ID"),
+                "ncbi_gene_id": row.get("NCBI Gene ID"),
+            }
+
+        # fish_id → {fish_name, fish_abbreviation, genotype_id}
+        self._fish_id_to_info: Dict[str, Dict] = {}
+        for _, row in self.data["wildtypes_fish.txt"].iterrows():
+            self._fish_id_to_info[row["Fish ID"]] = {
+                "fish_name": row.get("Fish Name"),
+                "fish_abbreviation": row.get("Fish Abbreviation"),
+                "genotype_id": row.get("Genotype ID"),
+            }
+
+        # environment_id → {zeco_term_name, zeco_term_id, chebi_term_name, chebi_term_id}
+        self._env_id_to_info: Dict[str, Dict] = {}
+        for _, row in self.data["xpat_environment_fish.txt"].iterrows():
+            self._env_id_to_info[row["Environment ID"]] = {
+                "zeco_term_name": row.get("ZECO Term Name"),
+                "zeco_term_id": row.get("ZECO Term ID"),
+                "chebi_term_name": row.get("Chebi Term Name"),
+                "chebi_term_id": row.get("Chebi Term ID"),
+            }
+
+        # publication_zfin_id → pubmed_id
+        self._pub_id_to_pubmed: Dict[str, Any] = {}
+        for _, row in self.data["pub_to_pubmed_id_translation.txt"].iterrows():
+            self._pub_id_to_pubmed[row["Publication ZFIN ID"]] = row.get("PubMed ID")
+
+        # gene_id → [{human_symbol, human_name, omim_id, hgnc_id, entrez_gene_id}, ...]
+        self._gene_id_to_orthologs: Dict[str, List] = {}
+        seen_ortho: Dict[str, set] = {}
+        for _, row in self.data["human_orthos.txt"].iterrows():
+            gid = row["ZFIN ID"]
+            sym = row.get("Human Symbol")
+            if not sym:
+                continue
+            if gid not in seen_ortho:
+                seen_ortho[gid] = set()
+                self._gene_id_to_orthologs[gid] = []
+            if sym not in seen_ortho[gid]:
+                seen_ortho[gid].add(sym)
+                self._gene_id_to_orthologs[gid].append({
+                    "human_symbol": sym,
+                    "human_name": row.get("Human Name"),
+                    "omim_id": row.get("OMIM ID"),
+                    "hgnc_id": row.get("HGNC ID"),
+                    "entrez_gene_id": row.get("Gene ID"),
+                })
+
+        # gene_id → [{do_term_name, do_term_id, omim_term_name, omim_id, human_ortholog_symbol}, ...]
+        self._gene_id_to_diseases: Dict[str, List] = {}
+        for _, row in self.data["gene2DiseaseViaOrthology.txt"].iterrows():
+            gid = row["Zebrafish Gene ID"]
+            if gid not in self._gene_id_to_diseases:
+                self._gene_id_to_diseases[gid] = []
+            self._gene_id_to_diseases[gid].append({
+                "do_term_name": row.get("DO Term Name"),
+                "do_term_id": row.get("DO Term ID"),
+                "omim_term_name": row.get("OMIM Term Name"),
+                "omim_id": row.get("OMIM ID"),
+                "human_ortholog_symbol": row.get("Human Ortholog Symbol"),
+            })
+
+        # gene_id → [uniprot_id, ...]
+        self._gene_id_to_uniprot: Dict[str, List] = {}
+        for _, row in self.data["uniprot.txt"].iterrows():
+            gid = row["ZFIN ID"]
+            uid = row.get("UniProt ID")
+            if not uid or pd.isna(uid):
+                continue
+            if gid not in self._gene_id_to_uniprot:
+                self._gene_id_to_uniprot[gid] = []
+            if uid not in self._gene_id_to_uniprot[gid]:
+                self._gene_id_to_uniprot[gid].append(uid)
+
+        print("  ✓ Indexes built")
+
     def get_image_metadata(self, image_id: str) -> Dict[str, Any]:
-        """Extract all metadata for a single image ID."""
+        """Extract all metadata for a single image ID using O(1) dict lookups."""
         result = {
             "image_id": image_id,
             "image_info": {},
@@ -278,179 +421,119 @@ class ZFINImageMetadataExtractor:
             "uniprot_ids": []
         }
 
-        # 1. Get basic image info
-        img_df = self.data["ImageFigures.txt"]
-        img_row = img_df[img_df["Image ID"] == image_id]
-        if img_row.empty:
+        # 1. Basic image info
+        img_info = self._img_to_fig.get(image_id)
+        if not img_info:
             return result
-
-        img_info = img_row.iloc[0]
+        figure_id = img_info["figure_id"]
         result["image_info"] = {
             "image_id": image_id,
-            "figure_id": img_info.get("Figure ID"),
-            "image_preparation": img_info.get("Image Preparation")
+            "figure_id": figure_id,
+            "image_preparation": img_info["image_preparation"],
         }
-        figure_id = img_info.get("Figure ID")
 
-        # 2. Get expression linkage via figure
-        xpatfig_df = self.data["xpatfig_fish.txt"]
-        xpatfig_rows = xpatfig_df[xpatfig_df["Figure ID"] == figure_id]
-        if xpatfig_rows.empty:
+        # 2. Expression linkage via figure
+        # _fig_to_results[figure_id] = [(expression_id, expression_result_id), ...]
+        fig_results = self._fig_to_results.get(figure_id)
+        if not fig_results:
             return result
+        expression_id = fig_results[0][0]
+        expression_result_ids = list({r[1] for r in fig_results})
 
-        expression_id = xpatfig_rows.iloc[0]["Expression ID"]
-        expression_result_ids = xpatfig_rows["Expression Result ID"].unique().tolist()
-
-        # 3. Get expression details
-        xpat_df = self.data["xpat_fish.txt"]
-        xpat_row = xpat_df[xpat_df["Expression ID"] == expression_id]
-        if not xpat_row.empty:
-            xpat_info = xpat_row.iloc[0]
-            result["expression"] = {
-                "expression_id": expression_id,
-                "expression_type": xpat_info.get("Expression Type"),
-                "expression_type_mmo_id": xpat_info.get("Expression Type MMO ID"),
-                "est_id": xpat_info.get("EST ID"),
-                "est_symbol": xpat_info.get("EST Symbol"),
-                "probe_quality": xpat_info.get("Probe Quality")
-            }
-            gene_id = xpat_info.get("Gene ID")
-            fish_id = xpat_info.get("Fish ID")
-            env_id = xpat_info.get("Environment ID")
-            pub_id = xpat_info.get("Publication ID")
-            gene_symbol = xpat_info.get("Gene Symbol")
-        else:
+        # 3. Expression details
+        xpat_info = self._expr_to_xpat.get(expression_id)
+        if not xpat_info:
             return result
+        gene_id     = xpat_info.get("Gene ID")
+        fish_id     = xpat_info.get("Fish ID")
+        env_id      = xpat_info.get("Environment ID")
+        pub_id      = xpat_info.get("Publication ID")
+        gene_symbol = xpat_info.get("Gene Symbol")
+        result["expression"] = {
+            "expression_id": expression_id,
+            "expression_type": xpat_info.get("Expression Type"),
+            "expression_type_mmo_id": xpat_info.get("Expression Type MMO ID"),
+            "est_id": xpat_info.get("EST ID"),
+            "est_symbol": xpat_info.get("EST Symbol"),
+            "probe_quality": xpat_info.get("Probe Quality"),
+        }
 
-        # 4. Get gene details
-        gene_df = self.data["gene.txt"]
-        gene_row = gene_df[gene_df["ZFIN ID"] == gene_id]
-        if not gene_row.empty:
-            gene_info = gene_row.iloc[0]
-            result["gene"] = {
-                "gene_id": gene_id,
-                "gene_symbol": gene_symbol,
-                "so_id": gene_info.get("SO ID"),
-                "ncbi_gene_id": gene_info.get("NCBI Gene ID")
-            }
-        else:
-            result["gene"] = {"gene_id": gene_id, "gene_symbol": gene_symbol}
+        # 4. Gene details
+        gene_info = self._gene_id_to_info.get(gene_id, {})
+        result["gene"] = {
+            "gene_id": gene_id,
+            "gene_symbol": gene_symbol,
+            "so_id": gene_info.get("so_id"),
+            "ncbi_gene_id": gene_info.get("ncbi_gene_id"),
+        }
 
-        # 5. Get fish/strain details
-        fish_df = self.data["wildtypes_fish.txt"]
-        fish_row = fish_df[fish_df["Fish ID"] == fish_id]
-        if not fish_row.empty:
-            fish_info = fish_row.iloc[0]
-            result["fish"] = {
-                "fish_id": fish_id,
-                "fish_name": fish_info.get("Fish Name"),
-                "fish_abbreviation": fish_info.get("Fish Abbreviation"),
-                "genotype_id": fish_info.get("Genotype ID")
-            }
-        else:
-            result["fish"] = {"fish_id": fish_id}
+        # 5. Fish details
+        fish_info = self._fish_id_to_info.get(fish_id, {})
+        result["fish"] = {
+            "fish_id": fish_id,
+            "fish_name": fish_info.get("fish_name"),
+            "fish_abbreviation": fish_info.get("fish_abbreviation"),
+            "genotype_id": fish_info.get("genotype_id"),
+        }
 
-        # 6. Get environment details
-        env_df = self.data["xpat_environment_fish.txt"]
-        env_row = env_df[env_df["Environment ID"] == env_id]
-        if not env_row.empty:
-            env_info = env_row.iloc[0]
-            result["environment"] = {
-                "environment_id": env_id,
-                "zeco_term_name": env_info.get("ZECO Term Name"),
-                "zeco_term_id": env_info.get("ZECO Term ID"),
-                "chebi_term_name": env_info.get("Chebi Term Name"),
-                "chebi_term_id": env_info.get("Chebi Term ID")
-            }
-        else:
-            result["environment"] = {"environment_id": env_id}
+        # 6. Environment details
+        env_info = self._env_id_to_info.get(env_id, {})
+        result["environment"] = {
+            "environment_id": env_id,
+            "zeco_term_name": env_info.get("zeco_term_name"),
+            "zeco_term_id": env_info.get("zeco_term_id"),
+            "chebi_term_name": env_info.get("chebi_term_name"),
+            "chebi_term_id": env_info.get("chebi_term_id"),
+        }
 
-        # 7. Get publication details
-        pub_df = self.data["pub_to_pubmed_id_translation.txt"]
-        pub_row = pub_df[pub_df["Publication ZFIN ID"] == pub_id]
-        pubmed_id = None
-        if not pub_row.empty:
-            pubmed_id = pub_row.iloc[0].get("PubMed ID")
+        # 7. Publication details
         result["publication"] = {
             "publication_id": pub_id,
-            "pubmed_id": pubmed_id
+            "pubmed_id": self._pub_id_to_pubmed.get(pub_id),
         }
 
-        # 8. Get stage and anatomy information
-        stage_anat_df = self.data["xpat_stage_anatomy.txt"]
-        stage_anat_rows = stage_anat_df[stage_anat_df["Expression ID"] == expression_id]
-
-        # Load lookup tables
-        stage_df = self.data["stage_ontology.txt"]
-        anat_df = self.data["anatomy_item.txt"]
-
+        # 8. Stage and anatomy — joined via expression_result_ids (figure-specific).
+        # This is the correctness fix: using expression_result_ids instead of expression_id
+        # gives per-image stage/anatomy data rather than the whole-experiment union.
         stages_seen = set()
         anatomies_seen = set()
+        for rid in expression_result_ids:
+            for (start_sid, anat_super_id, anat_sub_id, expr_found) in \
+                    self._result_to_stage_anat.get(rid, []):
 
-        for _, row in stage_anat_rows.iterrows():
-            # Process stages
-            start_stage_id = row.get("Start Stage ID")
-            end_stage_id = row.get("End Stage ID")
-
-            for stage_id in [start_stage_id, end_stage_id]:
-                if stage_id and stage_id not in stages_seen:
-                    stages_seen.add(stage_id)
-                    stage_row = stage_df[stage_df["Stage ID"] == stage_id]
-                    if not stage_row.empty:
-                        stage_info = stage_row.iloc[0]
+                # Stage — Start Stage ID only (the stage this result was observed at)
+                if start_sid and start_sid not in stages_seen:
+                    stages_seen.add(start_sid)
+                    s = self._stage_id_to_info.get(start_sid)
+                    if s:
                         result["developmental_stages"].append({
-                            "stage_id": stage_id,
-                            "stage_obo_id": stage_info.get("Stage OBO ID"),
-                            "stage_name": stage_info.get("Stage Name"),
-                            "begin_hours": stage_info.get("Begin Hours"),
-                            "end_hours": stage_info.get("End Hours")
+                            "stage_id": start_sid,
+                            "stage_obo_id": s["stage_obo_id"],
+                            "stage_name": s["stage_name"],
+                            "begin_hours": s["begin_hours"],
+                            "end_hours": s["end_hours"],
                         })
 
-            # Process anatomy
-            anat_super_id = row.get("Anatomy Super Term ID")
-            anat_sub_id = row.get("Anatomy Sub Term ID")
-            expression_found = row.get("Expression Found")
+                # Anatomy
+                for anat_id in [anat_super_id, anat_sub_id]:
+                    if anat_id and anat_id not in anatomies_seen:
+                        anatomies_seen.add(anat_id)
+                        anat_name = self._anat_id_to_name.get(anat_id)
+                        if anat_name:
+                            result["anatomical_locations"].append({
+                                "anatomy_id": anat_id,
+                                "anatomy_name": anat_name,
+                                "expression_found": expr_found,
+                            })
 
-            for anat_id in [anat_super_id, anat_sub_id]:
-                if anat_id and anat_id not in anatomies_seen:
-                    anatomies_seen.add(anat_id)
-                    anat_row = anat_df[anat_df["Anatomy ID"] == anat_id]
-                    if not anat_row.empty:
-                        anat_info = anat_row.iloc[0]
-                        result["anatomical_locations"].append({
-                            "anatomy_id": anat_id,
-                            "anatomy_name": anat_info.get("Anatomy Name"),
-                            "expression_found": expression_found
-                        })
+        # 9. Human orthologs
+        result["human_orthologs"] = self._gene_id_to_orthologs.get(gene_id, [])
 
-        # 9. Get human orthologs
-        ortho_df = self.data["human_orthos.txt"]
-        ortho_rows = ortho_df[ortho_df["ZFIN ID"] == gene_id]
-        for _, row in ortho_rows.drop_duplicates(subset=["Human Symbol"]).iterrows():
-            result["human_orthologs"].append({
-                "human_symbol": row.get("Human Symbol"),
-                "human_name": row.get("Human Name"),
-                "omim_id": row.get("OMIM ID"),
-                "hgnc_id": row.get("HGNC ID"),
-                "entrez_gene_id": row.get("Gene ID")
-            })
+        # 10. Disease associations
+        result["disease_associations"] = self._gene_id_to_diseases.get(gene_id, [])
 
-        # 10. Get disease associations
-        disease_df = self.data["gene2DiseaseViaOrthology.txt"]
-        disease_rows = disease_df[disease_df["Zebrafish Gene ID"] == gene_id]
-        for _, row in disease_rows.iterrows():
-            result["disease_associations"].append({
-                "do_term_name": row.get("DO Term Name"),
-                "do_term_id": row.get("DO Term ID"),
-                "omim_term_name": row.get("OMIM Term Name"),
-                "omim_id": row.get("OMIM ID"),
-                "human_ortholog_symbol": row.get("Human Ortholog Symbol")
-            })
-
-        # 11. Get UniProt IDs
-        uniprot_df = self.data["uniprot.txt"]
-        uniprot_rows = uniprot_df[uniprot_df["ZFIN ID"] == gene_id]
-        result["uniprot_ids"] = uniprot_rows["UniProt ID"].dropna().unique().tolist()
+        # 11. UniProt IDs
+        result["uniprot_ids"] = self._gene_id_to_uniprot.get(gene_id, [])
 
         return result
 
