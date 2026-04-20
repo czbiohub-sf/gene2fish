@@ -105,8 +105,17 @@ def select_representative(images: list[dict]) -> dict:
 
 
 def select_top_n(images: list[dict], n: int) -> list[dict]:
-    """Return up to n best-ranked images from a list at the same canonical stage."""
+    """Return up to n best-ranked images from a list at the same canonical stage.
+
+    Priority: whole-mount first, then most anatomy terms, then highest image ID
+    (descending) so that later-acquired images — which tend to show more varied
+    orientations — appear before earlier ones.
+    """
     if not images:
         return []
-    ranked = sorted(images, key=_score_image, reverse=True)
+    ranked = sorted(
+        images,
+        key=lambda img: (_score_image(img), img.get("image_id", "")),
+        reverse=True,
+    )
     return ranked[:n]
