@@ -37,6 +37,21 @@ export function ExpressionGrid({ genes, data, onRemoveGene, nImages }) {
     return map;
   }, [genes, data]);
 
+  // Per-gene max image count across all stages, capped at nImages.
+  // Drives column width so columns are only as wide as their actual content.
+  const colMaxImages = useMemo(() => {
+    const result = {};
+    for (const symbol of genes) {
+      let max = 1;
+      for (const h of Object.keys(lookup[symbol] || {})) {
+        const count = Math.min((lookup[symbol][h] || []).length, nImages);
+        if (count > max) max = count;
+      }
+      result[symbol] = max;
+    }
+    return result;
+  }, [lookup, genes, nImages]);
+
   if (genes.length === 0) {
     return (
       <p className="grid-empty">
@@ -57,7 +72,13 @@ export function ExpressionGrid({ genes, data, onRemoveGene, nImages }) {
             <tr>
               <th className="grid-corner" />
               {genes.map((symbol) => (
-                <th key={symbol} className="col-header">
+                <th
+                  key={symbol}
+                  className="col-header"
+                  style={nImages > 1
+                    ? { width: `calc(var(--cell-size) * ${colMaxImages[symbol]})` }
+                    : undefined}
+                >
                   <div className="col-header-inner">
                     <span className="col-gene-symbol">{symbol}</span>
                     <button
@@ -84,11 +105,20 @@ export function ExpressionGrid({ genes, data, onRemoveGene, nImages }) {
                         key={symbol}
                         images={imgs}
                         nImages={nImages ?? 1}
+                        colMax={colMaxImages[symbol]}
                         onClick={setLightboxImage}
                       />
                     );
                   }
-                  return <td key={symbol} className="empty-cell" />;
+                  return (
+                    <td
+                      key={symbol}
+                      className="empty-cell"
+                      style={nImages > 1
+                        ? { width: `calc(var(--cell-size) * ${colMaxImages[symbol]})` }
+                        : undefined}
+                    />
+                  );
                 })}
               </tr>
             ))}

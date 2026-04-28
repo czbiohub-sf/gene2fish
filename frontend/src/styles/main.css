@@ -67,10 +67,55 @@ body {
 }
 
 .app-footer {
-  padding: 12px 24px;
+  padding: 16px 24px 20px;
   border-top: 1px solid var(--border);
   font-size: 12px;
   color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.footer-license {
+  /* inherits footer font/color */
+}
+
+.footer-references {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.footer-references-label {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.footer-ref-list {
+  list-style: decimal;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  line-height: 1.5;
+}
+
+.footer-ref-list a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.footer-ref-list a:hover {
+  text-decoration: underline;
+}
+
+.footer-creators {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
 }
 
 /* Gene input */
@@ -569,6 +614,15 @@ body {
 
 .meta-value.mono {
   font-family: var(--font-mono);
+}
+
+.meta-value a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.meta-value a:hover {
+  text-decoration: underline;
 }
 
 .meta-list {

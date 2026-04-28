@@ -59,9 +59,33 @@ export function Lightbox({ image, onClose }) {
             <MetaGroup label="EST / probe" value={image.est_symbol} />
             <MetaGroup label="Probe quality" value={image.probe_quality} />
             <MetaGroup label="Fish line" value={image.fish_name} />
-            <MetaGroup label="Publication" value={image.publication_id} mono />
+            {image.publication_id && (
+              <div className="meta-group">
+                <div className="meta-label">Publication</div>
+                <div className="meta-value mono">
+                  <a
+                    href={`https://zfin.org/${image.publication_id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {image.publication_id}
+                  </a>
+                </div>
+              </div>
+            )}
             {image.pubmed_id && (
-              <MetaGroup label="PubMed" value={image.pubmed_id} mono />
+              <div className="meta-group">
+                <div className="meta-label">PubMed</div>
+                <div className="meta-value mono">
+                  <a
+                    href={`https://pubmed.ncbi.nlm.nih.gov/${image.pubmed_id}/`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {image.pubmed_id}
+                  </a>
+                </div>
+              </div>
             )}
             <MetaGroup label="Image ID" value={image.image_id} mono />
             {image.human_orthologs?.length > 0 && (

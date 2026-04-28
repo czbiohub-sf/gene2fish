@@ -1,8 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useImageQueue } from "../hooks/useImageQueue.js";
 
 function SingleImage({ image, onClick, compact, onFail }) {
-  const [src, setSrc] = useState(image.image_url);
+  const [src, setSrc] = useState(null); // null = waiting in queue, not yet requested
   const [failed, setFailed] = useState(false);
+  const enqueue = useImageQueue();
+
+  useEffect(() => {
+    const dequeue = enqueue(setSrc, image.image_url);
+    return dequeue; // remove from queue if unmounted before turn
+  }, [image.image_url]); // re-enqueue if image changes
 
   function handleError(e) {
     if (src === image.image_url && image.image_url_fallback !== image.image_url) {
@@ -19,9 +26,8 @@ function SingleImage({ image, onClick, compact, onFail }) {
   return (
     <img
       className={`cell-img${compact ? " compact" : ""}`}
-      src={src}
+      src={src || undefined} // undefined avoids an empty-string request while queued
       alt={`${image.gene_symbol} at ${image.stage_display_label}`}
-      loading="lazy"
       onError={handleError}
       onClick={(e) => { e.stopPropagation(); onClick(image); }}
       title={[
@@ -69,9 +75,10 @@ function SingleCell({ image, onClick }) {
   );
 }
 
-export function ImageCell({ images, nImages, onClick }) {
+export function ImageCell({ images, nImages, colMax, onClick }) {
   const n = nImages ?? 1;
   const displayImages = images.slice(0, n);
+  const effectiveColMax = colMax ?? n;
 
   if (n === 1) {
     return <SingleCell image={displayImages[0]} onClick={onClick} />;
@@ -80,7 +87,7 @@ export function ImageCell({ images, nImages, onClick }) {
   return (
     <td
       className="image-cell multi"
-      style={{ "--n": n }}
+      style={{ "--n": effectiveColMax }}
     >
       <div className="image-cell-inner multi">
         {displayImages.map((img) => (

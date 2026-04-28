@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { resetQueue } from "./useImageQueue.js";
 
 export function useGeneData(genes, stageMin, stageMax, anatomy, nImages) {
   const [data, setData] = useState({});
@@ -12,6 +13,7 @@ export function useGeneData(genes, stageMin, stageMax, anatomy, nImages) {
     }
 
     let cancelled = false;
+    resetQueue(); // flush any pending loads from a previous search
 
     async function fetchData() {
       setLoading(true);
