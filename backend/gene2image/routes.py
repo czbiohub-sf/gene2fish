@@ -7,7 +7,7 @@ from collections import defaultdict
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from .models import BatchRequest, CanonicalStage, ImageRecord, HumanOrtholog, DiseaseAssociation
-from .stage_utils import CANONICAL_STAGES, get_stage_info, select_representative
+from .stage_utils import CANONICAL_STAGES, get_stage_info, select_representative, select_top_n
 
 router = APIRouter(prefix="/api")
 
@@ -127,8 +127,8 @@ def _filter_records(
     return result
 
 
-def _select_representatives(records: list[dict]) -> list[dict]:
-    """Group records by canonical stage and pick one representative per stage."""
+def _select_representatives(records: list[dict], n: int = 1) -> list[dict]:
+    """Group records by canonical stage and pick up to n ranked images per stage."""
     by_stage: dict[float, list[dict]] = defaultdict(list)
     for r in records:
         ch = r.get("_canonical_hours")
@@ -136,7 +136,7 @@ def _select_representatives(records: list[dict]) -> list[dict]:
             by_stage[ch].append(r)
     result = []
     for hours in sorted(by_stage.keys()):
-        result.append(select_representative(by_stage[hours]))
+        result.extend(select_top_n(by_stage[hours], n))
     return result
 
 
@@ -194,7 +194,7 @@ def batch_gene_images(body: BatchRequest, request: Request) -> dict[str, list[Im
                     break
 
         filtered = _filter_records(records, body.stage_min, body.stage_max, body.anatomy)
-        representatives = _select_representatives(filtered)
+        representatives = _select_representatives(filtered, body.n_images)
         result[symbol] = [_record_to_model(r) for r in representatives]
 
     return result

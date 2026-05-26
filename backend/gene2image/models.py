@@ -54,3 +54,4 @@ class BatchRequest(BaseModel):
     stage_min: float | None = None
     stage_max: float | None = None
     anatomy: str | None = None
+    n_images: int = 1

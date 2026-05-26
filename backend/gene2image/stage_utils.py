@@ -81,6 +81,15 @@ def get_stage_info(canonical_hours: float) -> tuple[str, str]:
     return _HOURS_TO_STAGE[canonical_hours]
 
 
+def _score_image(img: dict) -> tuple[int, int]:
+    """Score an image for ranking: (is_whole_mount, anatomy_term_count)."""
+    is_whole_mount = int(
+        (img.get("image_info") or {}).get("image_preparation", "") == "whole-mount"
+    )
+    anatomy_count = len(img.get("anatomical_locations") or [])
+    return (is_whole_mount, anatomy_count)
+
+
 def select_representative(images: list[dict]) -> dict:
     """Pick the best representative image from a list at the same canonical stage.
 
@@ -92,11 +101,21 @@ def select_representative(images: list[dict]) -> dict:
     if not images:
         raise ValueError("Empty image list")
 
-    def score(img: dict) -> tuple[int, int]:
-        is_whole_mount = int(
-            (img.get("image_info") or {}).get("image_preparation", "") == "whole-mount"
-        )
-        anatomy_count = len(img.get("anatomical_locations") or [])
-        return (is_whole_mount, anatomy_count)
+    return max(images, key=_score_image)
 
-    return max(images, key=score)
+
+def select_top_n(images: list[dict], n: int) -> list[dict]:
+    """Return up to n best-ranked images from a list at the same canonical stage.
+
+    Priority: whole-mount first, then most anatomy terms, then highest image ID
+    (descending) so that later-acquired images — which tend to show more varied
+    orientations — appear before earlier ones.
+    """
+    if not images:
+        return []
+    ranked = sorted(
+        images,
+        key=lambda img: (_score_image(img), img.get("image_id", "")),
+        reverse=True,
+    )
+    return ranked[:n]

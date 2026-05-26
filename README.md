@@ -75,6 +75,18 @@ npm run dev
 4. Use the stage range slider to narrow the timepoint view
 5. Use the anatomy filter to show only images with expression in a specific structure
 
+## Rate limiting
+
+gene2image loads images directly from ZFIN's image server (hotlinking). To avoid
+triggering ZFIN's per-IP rate limit, images are loaded sequentially with a 150 ms
+delay between requests rather than all at once. A grid with 30 images will fully
+load in approximately 4–5 seconds — the grid fills in progressively as each image
+arrives.
+
+If you do hit a rate limit (images stop loading or show as broken), wait a few
+minutes before searching for new genes. Searching for a new gene automatically
+cancels any pending loads from the previous search.
+
 ## Attribution
 
 Images from ZFIN (zfin.org). Thisse et al. in situ hybridization data.

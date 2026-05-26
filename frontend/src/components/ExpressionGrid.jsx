@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { ImageCell } from "./ImageCell.jsx";
 import { Lightbox } from "./Lightbox.jsx";
 
-export function ExpressionGrid({ genes, data, onRemoveGene }) {
+export function ExpressionGrid({ genes, data, onRemoveGene, nImages }) {
   const [lightboxImage, setLightboxImage] = useState(null);
 
   // Collect all canonical stages that appear across any gene, sorted by begin_hours
@@ -21,19 +21,36 @@ export function ExpressionGrid({ genes, data, onRemoveGene }) {
       .map(([hours, label]) => ({ hours, label }));
   }, [genes, data]);
 
-  // Build lookup: gene → begin_hours → ImageRecord
+  // Build lookup: gene → begin_hours → ImageRecord[]
   const lookup = useMemo(() => {
     const map = {};
     for (const symbol of genes) {
       map[symbol] = {};
       for (const img of data[symbol] || []) {
         if (img.stage_begin_hours != null) {
-          map[symbol][img.stage_begin_hours] = img;
+          const h = img.stage_begin_hours;
+          if (!map[symbol][h]) map[symbol][h] = [];
+          map[symbol][h].push(img);
         }
       }
     }
     return map;
   }, [genes, data]);
+
+  // Per-gene max image count across all stages, capped at nImages.
+  // Drives column width so columns are only as wide as their actual content.
+  const colMaxImages = useMemo(() => {
+    const result = {};
+    for (const symbol of genes) {
+      let max = 1;
+      for (const h of Object.keys(lookup[symbol] || {})) {
+        const count = Math.min((lookup[symbol][h] || []).length, nImages);
+        if (count > max) max = count;
+      }
+      result[symbol] = max;
+    }
+    return result;
+  }, [lookup, genes, nImages]);
 
   if (genes.length === 0) {
     return (
@@ -55,7 +72,13 @@ export function ExpressionGrid({ genes, data, onRemoveGene }) {
             <tr>
               <th className="grid-corner" />
               {genes.map((symbol) => (
-                <th key={symbol} className="col-header">
+                <th
+                  key={symbol}
+                  className="col-header"
+                  style={nImages > 1
+                    ? { width: `calc(var(--cell-size) * ${colMaxImages[symbol]})` }
+                    : undefined}
+                >
                   <div className="col-header-inner">
                     <span className="col-gene-symbol">{symbol}</span>
                     <button
@@ -75,17 +98,27 @@ export function ExpressionGrid({ genes, data, onRemoveGene }) {
               <tr key={hours}>
                 <td className="row-header">{label}</td>
                 {genes.map((symbol) => {
-                  const img = lookup[symbol]?.[hours];
-                  if (img) {
+                  const imgs = lookup[symbol]?.[hours];
+                  if (imgs && imgs.length > 0) {
                     return (
                       <ImageCell
                         key={symbol}
-                        image={img}
+                        images={imgs}
+                        nImages={nImages ?? 1}
+                        colMax={colMaxImages[symbol]}
                         onClick={setLightboxImage}
                       />
                     );
                   }
-                  return <td key={symbol} className="empty-cell" />;
+                  return (
+                    <td
+                      key={symbol}
+                      className="empty-cell"
+                      style={nImages > 1
+                        ? { width: `calc(var(--cell-size) * ${colMaxImages[symbol]})` }
+                        : undefined}
+                    />
+                  );
                 })}
               </tr>
             ))}
