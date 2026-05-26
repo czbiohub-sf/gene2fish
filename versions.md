@@ -1,5 +1,40 @@
 # Changelog
 
+## v1.4 — Lightbox keyboard navigation (2026-05-26)
+
+**Branch:** `feature/v1.4-lightbox-nav`
+
+**Feature: Step through images with ← / → from inside the lightbox**
+
+Previously, comparing several images meant closing the lightbox, clicking the
+next image, reading its metadata, closing, clicking the next, and so on. The
+lightbox now supports leafing through images directly: pressing the Right
+arrow advances to the next image, Left arrow goes back, with no need to
+close the modal between images. Two on-screen buttons (`‹` / `›`) on the
+overlay edges do the same thing, and are visibly greyed out (`disabled`) at
+the first and last image so the boundary is discoverable. `Esc` and
+click-outside still close the lightbox as before.
+
+Navigation order matches the visual reading order of the grid: first through
+the 1/3/6/10 images of the current cell, then to the next cell to the right,
+wrapping to the leftmost cell of the next stage row down. The flat ordered
+list is recomputed (via `useMemo`) whenever the grid contents change, so
+filtering by stage range or anatomy automatically constrains navigation to
+currently-visible images.
+
+**Changed files:**
+- `frontend/src/components/ExpressionGrid.jsx` — replaced single-image `lightboxImage` state with `lightboxIndex: number | null`; new `flatImages` `useMemo` walks `rows × genes × cell.slice(0, nImages)` to produce a row-major ordered list; `ImageCell` `onClick` resolves the clicked image to its index via `findIndex(x => x.image_id === img.image_id)`; passes `image`, `onPrev`, `onNext`, `hasPrev`, `hasNext`, `onClose` to `<Lightbox>`
+- `frontend/src/components/Lightbox.jsx` — new props `onPrev`, `onNext`, `hasPrev`, `hasNext`; existing keydown `useEffect` extended with `ArrowLeft`/`ArrowRight` branches (guarded by the `hasPrev`/`hasNext` flags); two new `<button className="lightbox-nav ...">` elements rendered as siblings of `.lightbox-inner` inside the overlay (so they sit on the dark backdrop and are not clipped by `.lightbox-inner`'s `overflow-y: auto`); click handlers use a small `stopAndCall` wrapper to keep clicks from bubbling to the overlay's close handler
+- `frontend/src/styles/main.css` — new `.lightbox-nav`, `.lightbox-nav-prev`, `.lightbox-nav-next` rules: 44px round buttons, vertically centred via `top: 50%; transform: translateY(-50%)`, positioned 24px from the overlay edges, semi-transparent white background with a soft shadow; `:disabled` state at `opacity: 0.3` and `cursor: not-allowed`
+
+**Verified:**
+- Within-cell navigation: with `nImages=6` on a multi-image gene, `→` steps through the cell's images in displayed order, then continues into the next cell to the right
+- Cross-row navigation: at the right edge of a stage row, `→` jumps to the leftmost image of the next stage row down
+- Boundary cue: at the first image the `‹` button is visibly greyed out and `disabled`, and `←` does nothing; same behavior for `›` and `→` at the last image
+- `Esc` and click-outside still close the lightbox
+
+---
+
 ## v1.3 — Anatomy-driven gene discovery & stage dropdown cleanup (2026-05-22)
 
 **Branch:** `feature/v1.3-anatomy-discovery`
