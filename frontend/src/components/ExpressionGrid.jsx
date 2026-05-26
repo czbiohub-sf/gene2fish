@@ -3,7 +3,7 @@ import { ImageCell } from "./ImageCell.jsx";
 import { Lightbox } from "./Lightbox.jsx";
 
 export function ExpressionGrid({ genes, data, onRemoveGene, nImages }) {
-  const [lightboxImage, setLightboxImage] = useState(null);
+  const [lightboxIndex, setLightboxIndex] = useState(null);
 
   // Collect all canonical stages that appear across any gene, sorted by begin_hours
   const rows = useMemo(() => {
@@ -36,6 +36,23 @@ export function ExpressionGrid({ genes, data, onRemoveGene, nImages }) {
     }
     return map;
   }, [genes, data]);
+
+  // Flat row-major list of every image visible in the grid, in reading order
+  // (top stage → left gene → within-cell order, capped at nImages per cell).
+  // Powers ←/→ navigation in the lightbox.
+  const flatImages = useMemo(() => {
+    const result = [];
+    for (const { hours } of rows) {
+      for (const symbol of genes) {
+        const cellImgs = lookup[symbol]?.[hours];
+        if (!cellImgs) continue;
+        for (const img of cellImgs.slice(0, nImages)) {
+          result.push(img);
+        }
+      }
+    }
+    return result;
+  }, [rows, genes, lookup, nImages]);
 
   // Per-gene max image count across all stages, capped at nImages.
   // Drives column width so columns are only as wide as their actual content.
@@ -106,7 +123,10 @@ export function ExpressionGrid({ genes, data, onRemoveGene, nImages }) {
                         images={imgs}
                         nImages={nImages ?? 1}
                         colMax={colMaxImages[symbol]}
-                        onClick={setLightboxImage}
+                        onClick={(img) => {
+                          const idx = flatImages.findIndex((x) => x.image_id === img.image_id);
+                          if (idx !== -1) setLightboxIndex(idx);
+                        }}
                       />
                     );
                   }
@@ -125,8 +145,15 @@ export function ExpressionGrid({ genes, data, onRemoveGene, nImages }) {
           </tbody>
         </table>
       </div>
-      {lightboxImage && (
-        <Lightbox image={lightboxImage} onClose={() => setLightboxImage(null)} />
+      {lightboxIndex != null && flatImages[lightboxIndex] && (
+        <Lightbox
+          image={flatImages[lightboxIndex]}
+          onClose={() => setLightboxIndex(null)}
+          onPrev={() => setLightboxIndex((i) => i - 1)}
+          onNext={() => setLightboxIndex((i) => i + 1)}
+          hasPrev={lightboxIndex > 0}
+          hasNext={lightboxIndex < flatImages.length - 1}
+        />
       )}
     </>
   );

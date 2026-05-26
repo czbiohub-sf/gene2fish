@@ -1,18 +1,35 @@
 import { useEffect } from "react";
 
-export function Lightbox({ image, onClose }) {
+export function Lightbox({ image, onClose, onPrev, onNext, hasPrev, hasNext }) {
   useEffect(() => {
     function handleKey(e) {
       if (e.key === "Escape") onClose();
+      else if (e.key === "ArrowLeft" && hasPrev) onPrev();
+      else if (e.key === "ArrowRight" && hasNext) onNext();
     }
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [onClose]);
+  }, [onClose, onPrev, onNext, hasPrev, hasNext]);
 
   if (!image) return null;
 
+  function stopAndCall(fn) {
+    return (e) => {
+      e.stopPropagation();
+      fn();
+    };
+  }
+
   return (
     <div className="lightbox-overlay" onClick={onClose}>
+      <button
+        className="lightbox-nav lightbox-nav-prev"
+        onClick={stopAndCall(onPrev)}
+        disabled={!hasPrev}
+        aria-label="Previous image"
+      >
+        ‹
+      </button>
       <div className="lightbox-inner" onClick={(e) => e.stopPropagation()}>
         <div className="lightbox-header">
           <span className="lightbox-title">{image.gene_symbol}</span>
@@ -121,6 +138,14 @@ export function Lightbox({ image, onClose }) {
           </div>
         </div>
       </div>
+      <button
+        className="lightbox-nav lightbox-nav-next"
+        onClick={stopAndCall(onNext)}
+        disabled={!hasNext}
+        aria-label="Next image"
+      >
+        ›
+      </button>
     </div>
   );
 }
