@@ -55,6 +55,8 @@ def load_data() -> dict:
 
     gene_index: dict[str, list[dict]] = {}
     anatomy_set: set[str] = set()
+    populated_stage_hours: set[float] = set()
+    anatomy_counts: dict[str, dict[str, int]] = {}
 
     for record in records:
         gene = record.get("gene") or {}
@@ -68,7 +70,10 @@ def load_data() -> dict:
 
         # Pre-compute the canonical stage for this image (single value per image
         # once the extractor correctly assigns per-image stage data).
-        record["_canonical_hours"] = assign_canonical_stage(record)
+        ch = assign_canonical_stage(record)
+        record["_canonical_hours"] = ch
+        if ch is not None:
+            populated_stage_hours.add(ch)
 
         if symbol not in gene_index:
             gene_index[symbol] = []
@@ -78,9 +83,21 @@ def load_data() -> dict:
             name = loc.get("anatomy_name")
             if name:
                 anatomy_set.add(name)
+                key = name.lower()
+                per_gene = anatomy_counts.get(key)
+                if per_gene is None:
+                    per_gene = {}
+                    anatomy_counts[key] = per_gene
+                per_gene[symbol] = per_gene.get(symbol, 0) + 1
 
     gene_list = sorted(gene_index.keys(), key=str.lower)
     anatomy_list = sorted(anatomy_set, key=str.lower)
+
+    # Pre-sort each anatomy's gene list desc by image count, tie-break by symbol.
+    anatomy_index: dict[str, list[tuple[str, int]]] = {
+        k: sorted(v.items(), key=lambda x: (-x[1], x[0].lower()))
+        for k, v in anatomy_counts.items()
+    }
 
     print(f"Indexed {len(gene_list)} genes, {len(anatomy_list)} anatomy terms.")
 
@@ -88,4 +105,6 @@ def load_data() -> dict:
         "gene_index": gene_index,
         "gene_list": gene_list,
         "anatomy_list": anatomy_list,
+        "populated_stage_hours": populated_stage_hours,
+        "anatomy_index": anatomy_index,
     }

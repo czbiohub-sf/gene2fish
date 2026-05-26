@@ -6,7 +6,15 @@ from collections import defaultdict
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
-from .models import BatchRequest, CanonicalStage, ImageRecord, HumanOrtholog, DiseaseAssociation
+from .models import (
+    AnatomyGene,
+    AnatomyGenesResponse,
+    BatchRequest,
+    CanonicalStage,
+    DiseaseAssociation,
+    HumanOrtholog,
+    ImageRecord,
+)
 from .stage_utils import CANONICAL_STAGES, get_stage_info, select_representative, select_top_n
 
 router = APIRouter(prefix="/api")
@@ -99,15 +107,35 @@ def _record_to_model(record: dict) -> ImageRecord:
     )
 
 
+def _record_matches_anatomy(r: dict, anatomy_lower: str) -> bool:
+    """True if any anatomy term on this image contains the search substring."""
+    return any(
+        anatomy_lower in (loc.get("anatomy_name", "").lower())
+        for loc in (r.get("anatomical_locations") or [])
+    )
+
+
 def _filter_records(
     records: list[dict],
     stage_min: float | None,
     stage_max: float | None,
     anatomy: str | None,
 ) -> list[dict]:
-    """Apply stage range and anatomy filters to a list of records."""
-    result = []
+    """Apply stage range and anatomy filters.
+
+    Anatomy is a per-gene gate (marker-discovery semantics): if any image in
+    `records` carries the term, ALL the gene's images pass the anatomy check
+    and the stage filter then trims by canonical_hours. This lets a user
+    spot whether an anatomy-restricted marker also shows up at other stages.
+    Caller is responsible for grouping records by gene before passing them in.
+    """
     anatomy_lower = anatomy.lower() if anatomy else None
+    if anatomy_lower and not any(
+        _record_matches_anatomy(r, anatomy_lower) for r in records
+    ):
+        return []
+
+    result = []
     for r in records:
         ch = r.get("_canonical_hours")
         if ch is None:
@@ -116,13 +144,6 @@ def _filter_records(
             continue
         if stage_max is not None and ch > stage_max:
             continue
-        if anatomy_lower:
-            names = [
-                loc.get("anatomy_name", "").lower()
-                for loc in (r.get("anatomical_locations") or [])
-            ]
-            if not any(anatomy_lower in n for n in names):
-                continue
         result.append(r)
     return result
 
@@ -210,9 +231,30 @@ def search_anatomy(request: Request, q: str = Query(default="")) -> list[str]:
     return matches[:20]
 
 
+@router.get("/anatomy/{anatomy_name}/genes", response_model=AnatomyGenesResponse)
+def get_anatomy_genes(
+    anatomy_name: str,
+    request: Request,
+    limit: int = Query(default=50, ge=1, le=1000),
+) -> AnatomyGenesResponse:
+    # Exact lowercased lookup (the client passes a verbatim term from the
+    # autocomplete dropdown). Note: the image-grid filter in _filter_records
+    # uses substring semantics — that asymmetry is intentional.
+    idx: dict[str, list[tuple[str, int]]] = request.app.state.data["anatomy_index"]
+    pairs = idx.get(anatomy_name.lower())
+    if pairs is None:
+        raise HTTPException(status_code=404, detail="Anatomy term not found")
+    return AnatomyGenesResponse(
+        total=len(pairs),
+        genes=[AnatomyGene(gene_symbol=s, image_count=c) for s, c in pairs[:limit]],
+    )
+
+
 @router.get("/stages", response_model=list[CanonicalStage])
-def get_stages() -> list[CanonicalStage]:
+def get_stages(request: Request) -> list[CanonicalStage]:
+    populated: set[float] = request.app.state.data.get("populated_stage_hours") or set()
     return [
         CanonicalStage(stage_name=name, begin_hours=hours, display_label=label)
         for name, hours, label in CANONICAL_STAGES
+        if hours in populated
     ]

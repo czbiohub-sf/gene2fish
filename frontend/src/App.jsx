@@ -4,6 +4,7 @@ import { useGeneData } from "./hooks/useGeneData.js";
 import { GeneInput } from "./components/GeneInput.jsx";
 import { StageFilter } from "./components/StageFilter.jsx";
 import { AnatomyFilter } from "./components/AnatomyFilter.jsx";
+import { AnatomySuggestedGenes } from "./components/AnatomySuggestedGenes.jsx";
 import { ExpressionGrid } from "./components/ExpressionGrid.jsx";
 import { Attribution } from "./components/Attribution.jsx";
 
@@ -93,6 +94,12 @@ export default function App() {
           </div>
         )}
       </header>
+
+      <AnatomySuggestedGenes
+        anatomy={anatomy}
+        queriedGenes={genes}
+        onAddGene={addGene}
+      />
 
       <main className="app-main">
         <ExpressionGrid
