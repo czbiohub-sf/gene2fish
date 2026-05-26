@@ -641,6 +641,100 @@ body {
   font-size: 11px;
 }
 
+.suggested-genes-wrap {
+  margin: 12px 16px 4px;
+  padding: 8px 10px;
+  background: #fafafa;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+}
+
+.suggested-genes-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: #4b5563;
+  margin-bottom: 6px;
+}
+
+.suggested-genes-title strong {
+  color: #111827;
+  font-weight: 600;
+}
+
+.suggested-genes-count {
+  color: #6b7280;
+}
+
+.suggested-genes-subcount {
+  color: #9ca3af;
+  font-size: 11px;
+}
+
+.suggested-genes-limit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #4b5563;
+}
+
+.suggested-genes-limit select {
+  font-size: 12px;
+  padding: 2px 4px;
+  border: 1px solid #d1d5db;
+  border-radius: 3px;
+  background: white;
+}
+
+.suggested-genes-loading {
+  color: #6b7280;
+  font-style: italic;
+}
+
+.suggested-genes-error {
+  color: #ef4444;
+}
+
+.suggested-genes-strip {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 4px 2px 14px;
+  scrollbar-width: thin;
+}
+
+.suggested-gene-chip {
+  background: #eff6ff;
+  color: #1d4ed8;
+  padding: 4px 9px;
+  border-radius: 3px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  transition: background 0.1s ease;
+}
+
+.suggested-gene-chip:hover:not(:disabled) {
+  background: #dbeafe;
+}
+
+.suggested-gene-chip.added {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.chip-count {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
 .lightbox-zfin-link {
   display: inline-block;
   margin-top: 12px;

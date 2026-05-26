@@ -55,3 +55,13 @@ class BatchRequest(BaseModel):
     stage_max: float | None = None
     anatomy: str | None = None
     n_images: int = 1
+
+
+class AnatomyGene(BaseModel):
+    gene_symbol: str
+    image_count: int
+
+
+class AnatomyGenesResponse(BaseModel):
+    total: int
+    genes: list[AnatomyGene]

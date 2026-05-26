@@ -4,7 +4,7 @@ from __future__ import annotations
 
 # Each entry: (stage_name, begin_hours, display_label)
 CANONICAL_STAGES: list[tuple[str, float, str]] = [
-    ("Zygote:1-cell",               0.00,    "1-cell"),
+    ("Zygote:1-cell",               0.00,    "unspecified"),
     ("Cleavage:2-cell",             0.75,    "2-cell"),
     ("Cleavage:4-cell",             1.00,    "4-cell"),
     ("Cleavage:8-cell",             1.25,    "8-cell"),

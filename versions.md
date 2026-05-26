@@ -1,5 +1,101 @@
 # Changelog
 
+## v1.3 — Anatomy-driven gene discovery & stage dropdown cleanup (2026-05-22)
+
+**Branch:** `feature/v1.3-anatomy-discovery`
+
+**Feature: Anatomy → suggested-genes strip**
+
+Previously the anatomy search box did nothing visible until at least one gene
+had been queried — `useGeneData` skips the API call when `genes.length === 0`,
+so the term silently filtered nothing. Now, picking an anatomy term from the
+autocomplete (e.g. `pronephros`) shows a horizontally-scrollable strip of gene
+chips above the expression grid, listing every gene whose images include that
+anatomy term, sorted by descending image count. Clicking a chip adds the gene
+to the queried set; already-queried chips are dimmed and disabled. A
+"Show Top 50 / Top 100 / All" selector controls strip length (All = server cap
+of 1000). The strip also appears on direct URL load (`?anatomy=pronephros`),
+so shareable links surface it without typing.
+
+The new endpoint uses **exact** anatomy-name match (lowercased), distinct from
+the **substring** filter used by the image-grid filter — intentional asymmetry:
+the dropdown gives the user a verbatim term, and substring would surprisingly
+conflate terms like `brain` with `hindbrain`/`midbrain` in the suggestion view.
+
+**Changed files:**
+- `backend/gene2image/data_loader.py` — accumulate `anatomy_counts: dict[str, dict[str, int]]` in the existing record loop; materialize `anatomy_index: dict[str, list[tuple[str, int]]]` pre-sorted desc by image count, tie-break by symbol; exposed on app state
+- `backend/gene2image/models.py` — new `AnatomyGene` Pydantic model (`gene_symbol`, `image_count`)
+- `backend/gene2image/routes.py` — new `GET /api/anatomy/{anatomy_name}/genes?limit=N` (default 50, max 1000); 404 on unknown term; comment noting the exact-vs-substring asymmetry
+- `frontend/src/hooks/useAnatomyGenes.js` — new; mirrors `useGeneData` pattern (cancelled flag, loading/error state); `useEffect` deps `[anatomy, limit]`
+- `frontend/src/components/AnatomySuggestedGenes.jsx` — new; renders header (title + limit `<select>`) and chip strip; local `limit` state resets to 50 when `anatomy` changes; returns `null` when no anatomy or zero suggestions
+- `frontend/src/styles/main.css` — new `.suggested-genes-wrap` / `-header` / `-strip` / `-chip` / `.chip-count` styles; chips reuse the existing `.meta-tag` `#eff6ff` / `#1d4ed8` palette
+- `frontend/src/App.jsx` — render `<AnatomySuggestedGenes>` between `<header>` and `<main>`, passing `anatomy`, `genes`, `addGene`
+
+**Verified:** `curl /api/anatomy/pronephros/genes?limit=5` returns
+`emilin1a (27), nherf1a (22), lama5 (20), enpp6 (18), glud1a (16)` — matches
+the raw-JSON aggregation exactly. `limit=1000` returns 64 (the full set for
+`pronephros`). 404 returned for unknown terms.
+
+**Feature: Stage dropdown shows only populated stages, "1-cell" → "unspecified"**
+
+The stage filter dropdown previously listed all 37 canonical zebrafish stages
+even though the Thisse dataset only populates 13 of them, making 24 entries
+non-functional. The dropdown now only shows stages that have at least one
+image in the loaded dataset.
+
+The `Zygote:1-cell` display label is renamed to `unspecified` because in
+practice this stage carries default/placeholder annotations from the 2004
+high-throughput Thisse screen (`ZDB-PUB-040907-1` contributes ~90% of
+1-cell records, 4,441 of its 30,199 entries) rather than literal 1-cell-stage
+in situ signal. The underlying stage_name (`Zygote:1-cell`) and begin_hours
+(`0.00`) are unchanged, so it remains first in the dropdown.
+
+**Changed files:**
+- `backend/gene2image/stage_utils.py` — `Zygote:1-cell` display label changed from `"1-cell"` to `"unspecified"`
+- `backend/gene2image/data_loader.py` — collect `populated_stage_hours: set[float]` during load; exposed on app state
+- `backend/gene2image/routes.py` — `/api/stages` filters `CANONICAL_STAGES` to only those whose `begin_hours` are in `populated_stage_hours`; endpoint takes `Request` to read app state
+
+**Verified:** `/api/stages` returns 13 entries instead of 37; first entry has
+`display_label: "unspecified"` and `begin_hours: 0.0`; last entry is
+`Larval:Day 5`.
+
+**Feature: Total-count header on suggested-genes strip**
+
+The strip header previously read e.g. `Genes with expression in brain (50)` —
+where `50` was just the limit slice, not the actual number of genes in the
+dataset annotated with that term. Misleading. Now: `(187, showing 50)` where
+`187` is the true total and `showing N` reflects the limit selector. When
+`Show: All` is picked and everything fits, the `showing N` suffix is omitted.
+
+**Changed files:**
+- `backend/gene2image/models.py` — new `AnatomyGenesResponse` Pydantic model wrapping `{total: int, genes: list[AnatomyGene]}`
+- `backend/gene2image/routes.py` — `GET /api/anatomy/{anatomy_name}/genes` now returns the wrapper instead of a bare list; `total = len(pairs)`, `genes = pairs[:limit]`
+- `frontend/src/hooks/useAnatomyGenes.js` — return shape now `{suggestions, total, loading, error}`; both reset together when anatomy clears
+- `frontend/src/components/AnatomySuggestedGenes.jsx` — header renders `({total}, showing {suggestions.length})` with the "showing N" suffix only when `total > suggestions.length`
+- `frontend/src/styles/main.css` — new `.suggested-genes-subcount` for the muted "showing N" text
+
+**Feature: Marker-discovery anatomy filter (per-gene semantics)**
+
+Previously the anatomy filter was per-image: if only one of a gene's images
+carried the term `pronephric mesoderm`, the grid collapsed to that single
+image. That defeats marker discovery — the user wants to see whether the
+gene also lights up at other developmental stages. Now the filter is a
+per-gene gate: if **any** image of the gene carries the anatomy term, ALL
+of the gene's images pass through (the stage range still trims by hour).
+
+**Changed files:**
+- `backend/gene2image/routes.py` — `_filter_records` refactored: anatomy is now a per-gene gate (early-return `[]` if no record matches), followed by per-image stage-range filtering. New helper `_record_matches_anatomy`. Caller contract (already satisfied by both endpoints) is that `records` is a per-gene list pulled from `gene_index`.
+
+**Verified:** `POST /api/genes/batch` with `{"genes":["emilin1a"],"anatomy":"pronephric mesoderm","n_images":10}` now returns images at 5 stages (1-4 somites, 14-19 somites, 20-25 somites, Prim-15, High-pec) — identical to the no-filter response. With `anatomy:"notarealterm"` the gene returns 0 records (gate still works).
+
+**Fix: Chip strip scrollbar no longer overlaps gene names**
+
+The horizontal scrollbar sat directly under the chips, making gene symbols
+hard to read while scrolling. Bottom padding on `.suggested-genes-strip`
+increased from 2px to 14px ([`frontend/src/styles/main.css`](frontend/src/styles/main.css)).
+
+---
+
 ## v1.2 — Sequential image load queue & full attribution footer (2026-04-27)
 
 **Branch:** `feature/v1.2-image-queue`
