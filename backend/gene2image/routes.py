@@ -165,6 +165,11 @@ def _select_representatives(records: list[dict], n: int = 1) -> list[dict]:
 # Endpoints
 # ---------------------------------------------------------------------------
 
+@router.get("/health")
+def health() -> dict[str, str]:
+    return {"status": "ok"}
+
+
 @router.get("/genes/search")
 def search_genes(request: Request, q: str = Query(default="")) -> list[str]:
     gene_list: list[str] = request.app.state.data["gene_list"]

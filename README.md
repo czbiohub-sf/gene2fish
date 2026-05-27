@@ -67,6 +67,22 @@ npm run dev
 # API calls are proxied to http://localhost:8000
 ```
 
+### Docker
+
+The Docker image builds the Vite frontend and serves it from the FastAPI app on
+the same port as the API.
+
+```bash
+docker build -t gene2image .
+docker run --rm -p 8000:8000 \
+  -e GENE2IMAGE_DATA_DIR=/data \
+  -v /path/to/gene2image_data:/data:ro \
+  gene2image
+```
+
+Open `http://localhost:8000`. The container exposes `/api/health` for
+deployment health checks.
+
 ## Usage
 
 1. Type a gene symbol (e.g. `pacsin2`, `tbxta`, `pax2a`) in the search box and press Enter
