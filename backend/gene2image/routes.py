@@ -263,3 +263,11 @@ def get_stages(request: Request) -> list[CanonicalStage]:
         for name, hours, label in CANONICAL_STAGES
         if hours in populated
     ]
+
+
+@router.api_route(
+    "/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+)
+def api_not_found(path: str) -> None:
+    raise HTTPException(status_code=404, detail=f"API endpoint not found: /api/{path}")

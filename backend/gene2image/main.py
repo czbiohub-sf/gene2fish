@@ -33,7 +33,9 @@ app.include_router(router)
 
 frontend_dir = os.environ.get("GENE2IMAGE_FRONTEND_DIR")
 if frontend_dir:
-    frontend_path = Path(frontend_dir)
-    if not frontend_path.exists():
-        raise RuntimeError(f"GENE2IMAGE_FRONTEND_DIR does not exist: {frontend_dir}")
+    frontend_path = Path(frontend_dir).resolve()
+    if not frontend_path.is_dir():
+        raise RuntimeError(
+            f"GENE2IMAGE_FRONTEND_DIR must be an existing directory: {frontend_dir}"
+        )
     app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
