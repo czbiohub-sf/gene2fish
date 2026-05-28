@@ -269,6 +269,7 @@ def get_stages(request: Request) -> list[CanonicalStage]:
 @router.api_route(
     "/{path:path}",
     methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+    response_model=None,
 )
 def api_not_found(path: str) -> NoReturn:
     raise HTTPException(status_code=404, detail=f"API endpoint not found: /api/{path}")
