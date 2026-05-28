@@ -31,11 +31,16 @@ app.add_middleware(
 
 app.include_router(router)
 
-frontend_dir = os.environ.get("GENE2IMAGE_FRONTEND_DIR")
-if frontend_dir:
+def _maybe_mount_frontend(app: FastAPI) -> None:
+    frontend_dir = os.environ.get("GENE2IMAGE_FRONTEND_DIR")
+    if not frontend_dir:
+        return
     frontend_path = Path(frontend_dir).resolve()
     if not frontend_path.is_dir():
         raise RuntimeError(
             f"GENE2IMAGE_FRONTEND_DIR must be an existing directory: {frontend_dir}"
         )
     app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
+
+
+_maybe_mount_frontend(app)
