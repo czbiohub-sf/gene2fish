@@ -19,9 +19,17 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 RUN pip install --no-cache-dir uv
 
+# Install third-party deps first from the lock so this layer stays cached
+# until uv.lock changes. uv export honors the lock (uv pip install . would not,
+# it re-resolves from pyproject.toml); the pinned requirements give reproducible
+# builds. Source is copied afterward so edits don't bust the dependency layer.
 COPY pyproject.toml uv.lock ./
+RUN uv export --frozen --no-dev --no-emit-project -o requirements.txt \
+    && uv pip install --system --no-cache -r requirements.txt
+
+# Then copy source and install only the local package; deps already installed.
 COPY backend/ ./backend/
-RUN uv pip install --system --no-cache .
+RUN uv pip install --system --no-cache --no-deps .
 
 COPY --from=frontend-build /app/frontend/dist ./frontend/dist
 
