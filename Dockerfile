@@ -1,4 +1,4 @@
-FROM node:20-alpine AS frontend-build
+FROM 533267185808.dkr.ecr.us-west-2.amazonaws.com/docker.io/central/library/node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS frontend-build
 
 WORKDIR /app/frontend
 
@@ -8,7 +8,7 @@ RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
-FROM python:3.11-slim AS runtime
+FROM 533267185808.dkr.ecr.us-west-2.amazonaws.com/docker.io/central/library/python:3.11-slim@sha256:a3ab0b966bc4e91546a033e22093cb840908979487a9fc0e6e38295747e49ac0 AS runtime
 
 WORKDIR /app
 
