@@ -11,6 +11,13 @@ dependencies = [
     "matplotlib>=3.10.8",
 ]
 
+[dependency-groups]
+dev = ["pytest", "httpx"]
+
+[tool.pytest.ini_options]
+pythonpath = ["backend"]
+testpaths = ["backend/tests"]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

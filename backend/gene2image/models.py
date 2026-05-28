@@ -65,3 +65,7 @@ class AnatomyGene(BaseModel):
 class AnatomyGenesResponse(BaseModel):
     total: int
     genes: list[AnatomyGene]
+
+
+class HealthResponse(BaseModel):
+    status: str

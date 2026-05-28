@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from typing import NoReturn
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
@@ -12,6 +13,7 @@ from .models import (
     BatchRequest,
     CanonicalStage,
     DiseaseAssociation,
+    HealthResponse,
     HumanOrtholog,
     ImageRecord,
 )
@@ -26,7 +28,7 @@ router = APIRouter(prefix="/api")
 
 def _build_image_url(pub_id: str, image_id: str) -> tuple[str, str]:
     """Return (annotated_url, plain_url) for an image."""
-    # pub_id format: ZDB-PUB-YYMMDD-N  — year is "20" + chars 2-3 of third segment
+    # pub_id format: ZDB-PUB-YYMMDD-N  — year is "20" + first 2 chars of third segment
     # e.g. ZDB-PUB-010810-1 → "01" → "2001"
     try:
         year = "20" + pub_id.split("-")[2][:2]
@@ -165,6 +167,11 @@ def _select_representatives(records: list[dict], n: int = 1) -> list[dict]:
 # Endpoints
 # ---------------------------------------------------------------------------
 
+@router.get("/health", response_model=HealthResponse)
+def health() -> HealthResponse:
+    return HealthResponse(status="ok")
+
+
 @router.get("/genes/search")
 def search_genes(request: Request, q: str = Query(default="")) -> list[str]:
     gene_list: list[str] = request.app.state.data["gene_list"]
@@ -258,3 +265,12 @@ def get_stages(request: Request) -> list[CanonicalStage]:
         for name, hours, label in CANONICAL_STAGES
         if hours in populated
     ]
+
+
+@router.api_route(
+    "/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+    response_model=None,
+)
+def api_not_found(path: str) -> NoReturn:
+    raise HTTPException(status_code=404, detail=f"API endpoint not found: /api/{path}")
