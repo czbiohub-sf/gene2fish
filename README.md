@@ -80,6 +80,8 @@ docker run --rm -p 8000:8000 \
   gene2image
 ```
 
+`GENE2IMAGE_DATA_DIR` is required — the container exits on startup if it is not set.
+
 Open `http://localhost:8000`. The container exposes `/api/health` for
 deployment health checks.
 
