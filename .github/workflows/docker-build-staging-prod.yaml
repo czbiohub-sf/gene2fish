@@ -1,0 +1,31 @@
+###### Generated using `argus bootstrap` command ######
+name: Docker Image Build - staging/prod
+
+on:
+  - push
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+  issues: write
+
+jobs:
+  staging_prod_argus_builder:
+    uses: chanzuckerberg/github-actions/.github/workflows/argus-docker-build.yaml@v6
+    secrets: inherit
+    with:
+      envs: staging,prod
+      path_filters: '!.infra/**'
+      branches_include: release-please--branches--main
+      force_update_manifests: true
+      arm_runner_labels: "['ubuntu-24.04-arm']"
+      amd_runner_labels: "['ubuntu-latest']"
+      images: |
+        {
+          "gene2fish": {
+            "context": "./",
+            "dockerfile": "./Dockerfile",
+            "platform": "linux/arm64"
+          }
+        }

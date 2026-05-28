@@ -69,25 +69,30 @@ npm run dev
 
 ### Docker
 
-The Docker image builds the Vite frontend and serves it from the FastAPI app on
-the same port as the API.
+The Docker image builds the Vite frontend, bakes the Thisse image index into the
+image at build time (the build runs `zfin_image_metadata_extractor.py`, which
+downloads the ZFIN TSVs — so the build needs network access to zfin.org), and
+serves the SPA from the FastAPI app on the same port as the API.
 
 ```bash
 docker build -t gene2image .
+docker run --rm -p 8000:8000 gene2image
+```
+
+The image is self-contained: `GENE2IMAGE_DATA_DIR` defaults to `/data` inside the
+image, where the prebuilt `image_metadata.json` lives — no data volume needs to be
+mounted. Refresh the baked data by rebuilding. To serve a different dataset, mount
+it and override the env var:
+
+```bash
 docker run --rm -p 8000:8000 \
   -e GENE2IMAGE_DATA_DIR=/data \
   -v /path/to/gene2image_data:/data:ro \
   gene2image
 ```
 
-`GENE2IMAGE_DATA_DIR` is required — the container exits on startup if it is not set.
-
-The container runs as a non-root user (UID 10001). The mounted data directory
-must be readable by that UID — the JSON index written by the extractor is
-world-readable by default, so the read-only mount above works as-is.
-
-Open `http://localhost:8000`. The container exposes `/api/health` for
-deployment health checks.
+The container runs as a non-root user (UID 10001). Open `http://localhost:8000`.
+The container exposes `/api/health` for deployment health checks.
 
 ## Usage
 

@@ -15,9 +15,10 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     GENE2IMAGE_FRONTEND_DIR=/app/frontend/dist \
+    GENE2IMAGE_DATA_DIR=/data \
     PORT=8000
-# GENE2IMAGE_DATA_DIR must be supplied at runtime (-e + mounted volume);
-# the app exits on startup if it is unset. There is no in-image default.
+# The Thisse image index is baked into /data at build time (see below), so
+# GENE2IMAGE_DATA_DIR has an in-image default and no runtime volume is needed.
 
 RUN pip install --no-cache-dir uv
 
@@ -28,6 +29,19 @@ RUN pip install --no-cache-dir uv
 COPY pyproject.toml uv.lock ./
 RUN uv export --frozen --no-dev --no-emit-project -o requirements.txt \
     && uv pip install --system --no-cache -r requirements.txt
+
+# Bake the Thisse image index into /data. The extractor downloads the ZFIN
+# TSVs, joins them, and writes image_metadata.json. Done at build time so the
+# container is self-contained — no runtime data volume to mount; refresh the
+# data by rebuilding. Placed before the source COPY so backend edits don't bust
+# this (network-bound) layer. Intermediate TSVs and the unused .tsv export and
+# the build-only extractor are removed to keep the layer small.
+COPY zfin_image_metadata_extractor.py ./
+RUN mkdir -p /data \
+    && python zfin_image_metadata_extractor.py \
+        --input-dir /tmp/zfin_data \
+        --output-prefix /data/image_metadata \
+    && rm -rf /tmp/zfin_data /data/image_metadata.tsv zfin_image_metadata_extractor.py
 
 # Then copy source and install only the local package; deps already installed.
 COPY backend/ ./backend/
