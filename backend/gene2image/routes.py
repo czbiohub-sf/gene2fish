@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from typing import NoReturn
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
@@ -269,5 +270,5 @@ def get_stages(request: Request) -> list[CanonicalStage]:
     "/{path:path}",
     methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
 )
-def api_not_found(path: str) -> None:
+def api_not_found(path: str) -> NoReturn:
     raise HTTPException(status_code=404, detail=f"API endpoint not found: /api/{path}")
