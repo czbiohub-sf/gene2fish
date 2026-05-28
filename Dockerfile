@@ -16,6 +16,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     GENE2IMAGE_FRONTEND_DIR=/app/frontend/dist \
     PORT=8000
+# GENE2IMAGE_DATA_DIR must be supplied at runtime (-e + mounted volume);
+# the app exits on startup if it is unset. There is no in-image default.
 
 RUN pip install --no-cache-dir uv
 
