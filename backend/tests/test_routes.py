@@ -31,3 +31,12 @@ def test_known_routes_not_shadowed_by_catchall(client):
     assert client.get("/api/health").status_code == 200
     # real route returns 200 (empty data) — never 404 from the catch-all
     assert client.get("/api/stages").status_code != 404
+
+
+def test_catchall_does_not_swallow_options(client):
+    # The catch-all 404 must not claim OPTIONS — let the framework/CORSMiddleware
+    # own it. Otherwise an OPTIONS to an unknown /api/* path returns a 404 JSON
+    # body (a latent CORS-preflight trap) instead of deferring method handling.
+    resp = client.options("/api/does-not-exist")
+    assert resp.status_code != 404
+    assert "API endpoint not found" not in resp.text

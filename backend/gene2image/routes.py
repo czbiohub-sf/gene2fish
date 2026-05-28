@@ -268,7 +268,7 @@ def get_stages(request: Request) -> list[CanonicalStage]:
 
 @router.api_route(
     "/{path:path}",
-    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
     response_model=None,
 )
 def api_not_found(path: str) -> NoReturn:
