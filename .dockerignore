@@ -19,3 +19,7 @@ gene2image_data
 zfin_data
 *.csv
 *.tsv
+.env
+.env.*
+**/.env
+**/.env.*
