@@ -21,6 +21,18 @@ def test_health_returns_ok(client):
     assert resp.json() == {"status": "ok"}
 
 
+def test_health_has_typed_openapi_contract(client):
+    # /health must expose a named ($ref) response schema, not an anonymous
+    # inline object — so a future change to the return shape surfaces as a
+    # breaking-change signal in the OpenAPI diff.
+    schema = client.get("/openapi.json").json()
+    content = schema["paths"]["/api/health"]["get"]["responses"]["200"]["content"]
+    response_schema = content["application/json"]["schema"]
+    assert "$ref" in response_schema
+    model = schema["components"]["schemas"][response_schema["$ref"].split("/")[-1]]
+    assert model["properties"]["status"]["type"] == "string"
+
+
 def test_unknown_api_path_returns_404(client):
     resp = client.get("/api/does-not-exist")
     assert resp.status_code == 404

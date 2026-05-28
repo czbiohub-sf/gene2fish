@@ -13,6 +13,7 @@ from .models import (
     BatchRequest,
     CanonicalStage,
     DiseaseAssociation,
+    HealthResponse,
     HumanOrtholog,
     ImageRecord,
 )
@@ -166,9 +167,9 @@ def _select_representatives(records: list[dict], n: int = 1) -> list[dict]:
 # Endpoints
 # ---------------------------------------------------------------------------
 
-@router.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+@router.get("/health", response_model=HealthResponse)
+def health() -> HealthResponse:
+    return HealthResponse(status="ok")
 
 
 @router.get("/genes/search")
