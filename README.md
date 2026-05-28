@@ -82,6 +82,10 @@ docker run --rm -p 8000:8000 \
 
 `GENE2IMAGE_DATA_DIR` is required — the container exits on startup if it is not set.
 
+The container runs as a non-root user (UID 10001). The mounted data directory
+must be readable by that UID — the JSON index written by the extractor is
+world-readable by default, so the read-only mount above works as-is.
+
 Open `http://localhost:8000`. The container exposes `/api/health` for
 deployment health checks.
 

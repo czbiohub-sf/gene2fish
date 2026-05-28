@@ -25,6 +25,13 @@ RUN uv pip install --system --no-cache .
 
 COPY --from=frontend-build /app/frontend/dist ./frontend/dist
 
+# Drop root: run as a non-privileged user. The app only reads /app and the
+# read-only /data mount, and binds the non-privileged port 8000, so no root
+# capability is needed at runtime.
+RUN useradd --create-home --uid 10001 appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
