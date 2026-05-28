@@ -27,7 +27,7 @@ router = APIRouter(prefix="/api")
 
 def _build_image_url(pub_id: str, image_id: str) -> tuple[str, str]:
     """Return (annotated_url, plain_url) for an image."""
-    # pub_id format: ZDB-PUB-YYMMDD-N  — year is "20" + chars 2-3 of third segment
+    # pub_id format: ZDB-PUB-YYMMDD-N  — year is "20" + first 2 chars of third segment
     # e.g. ZDB-PUB-010810-1 → "01" → "2001"
     try:
         year = "20" + pub_id.split("-")[2][:2]
