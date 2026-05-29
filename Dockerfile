@@ -53,7 +53,7 @@ COPY --from=frontend-build /app/frontend/dist ./frontend/dist
 # (baked in at build time), and binds the non-privileged port 8000, so no root
 # capability is needed at runtime.
 RUN useradd --create-home --uid 10001 appuser \
-    && chown -R appuser:appuser /app
+    && chown -R appuser:appuser /app /data
 USER appuser
 
 EXPOSE 8000
