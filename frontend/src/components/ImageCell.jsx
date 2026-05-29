@@ -7,6 +7,8 @@ function SingleImage({ image, onClick, compact, onFail }) {
   const enqueue = useImageQueue();
 
   useEffect(() => {
+    setSrc(null);
+    setFailed(false);
     const dequeue = enqueue(setSrc, image.image_url);
     return dequeue; // remove from queue if unmounted before turn
   }, [image.image_url]); // re-enqueue if image changes
@@ -23,10 +25,23 @@ function SingleImage({ image, onClick, compact, onFail }) {
 
   if (failed) return null;
 
+  if (!src) {
+    return (
+      <div
+        className={`single-image-placeholder${compact ? " compact" : ""}`}
+        title={[
+          image.stage_display_label,
+          image.anatomy_names?.length ? image.anatomy_names.join(", ") : null,
+          image.image_id,
+        ].filter(Boolean).join(" · ")}
+      />
+    );
+  }
+
   return (
     <img
       className={`cell-img${compact ? " compact" : ""}`}
-      src={src || undefined} // undefined avoids an empty-string request while queued
+      src={src}
       alt={`${image.gene_symbol} at ${image.stage_display_label}`}
       onError={handleError}
       onClick={(e) => { e.stopPropagation(); onClick(image); }}
@@ -41,6 +56,10 @@ function SingleImage({ image, onClick, compact, onFail }) {
 
 function SingleCell({ image, onClick }) {
   const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [image.image_id]);
 
   const tooltipText = [
     image.stage_display_label,
