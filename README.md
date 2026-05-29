@@ -6,7 +6,12 @@ Images are hotlinked directly from ZFIN (zfin.org) under CC BY 4.0. Never downlo
 
 ## Data
 
-The app requires a pre-built JSON index of Thisse images. This file is **not** included in the repository — you must build it yourself by running the extractor (see below).
+> **Using Docker?** You can skip this section. The Docker image bakes the
+> Thisse image index into `/data` at build time, so `docker build && docker run`
+> works with no extra data setup (see [Docker](#docker)). The steps below are for
+> **local development**, where you build the JSON index yourself.
+
+For local development the app requires a pre-built JSON index of Thisse images. This file is **not** included in the repository — you must build it yourself by running the extractor (see below).
 
 Expected location:
 ```
@@ -15,7 +20,7 @@ Expected location:
 
 The backend looks for `image_metadata_v2.json` first and falls back to `image_metadata.json`. Set the `GENE2IMAGE_DATA_DIR` environment variable to the directory containing the file.
 
-## Building the data file
+## Building the data file (local dev)
 
 `zfin_image_metadata_extractor.py` downloads the 13 required TSVs from ZFIN, joins them, and writes `image_metadata.json` + `image_metadata.tsv`. Pick a directory where the data should live (e.g. `~/projects/gene2image_data`) and run the extractor from there:
 
