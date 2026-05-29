@@ -92,9 +92,7 @@ async function mockApi(page) {
     const body = route.request().postDataJSON();
     const response = {};
     for (const gene of body.genes) {
-      if (body.anatomy && gene === "pacsin2") {
-        response[gene] = [];
-      } else if (gene === "pax2a") {
+      if (gene === "pax2a") {
         response[gene] = imagesFor(gene, body.n_images || 1);
       } else if (gene === "pacsin2") {
         response[gene] = imagesFor(gene, 1, stages.slice(0, 5));
@@ -177,6 +175,11 @@ test("adding an anatomy-suggested gene preserves previously visible gene columns
     genes: ["pacsin2", "evx1"],
     anatomy: null,
   });
+  // Anatomy must never leak into the batch payload — every request stays null.
+  expect(batchRequests.length).toBeGreaterThan(0);
+  for (const req of batchRequests) {
+    expect(req.anatomy).toBeNull();
+  }
   await expect(page.locator(".grid-empty")).toHaveCount(0);
 });
 
