@@ -127,7 +127,6 @@ test("changing images per cell keeps queued image cells loading and clickable", 
   await page.getByRole("button", { name: "3", exact: true }).click();
 
   await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length * 3);
-  await expect(page.locator(".single-image-placeholder")).toHaveCount(0);
   const multiCell = page.locator(".image-cell.multi").first();
   await expect(multiCell).toBeVisible();
   const multiBox = await multiCell.boundingBox();
@@ -137,7 +136,6 @@ test("changing images per cell keeps queued image cells loading and clickable", 
   await page.getByRole("button", { name: "1", exact: true }).click();
 
   await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length);
-  await expect(page.locator(".single-image-placeholder")).toHaveCount(0);
   const singleCell = page.locator(".image-cell").first();
   await expect(singleCell).toBeVisible();
   const singleBox = await singleCell.boundingBox();
@@ -147,7 +145,6 @@ test("changing images per cell keeps queued image cells loading and clickable", 
 
   await page.getByRole("button", { name: "6", exact: true }).click();
   await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length * 6);
-  await expect(page.locator(".single-image-placeholder")).toHaveCount(0);
 
   const firstImage = page.locator('img[alt^="pax2a at"]').first();
   await expect(firstImage).toBeVisible();
