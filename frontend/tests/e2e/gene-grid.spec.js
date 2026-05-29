@@ -1,8 +1,5 @@
 import { expect, test } from "@playwright/test";
 
-const png1x1 =
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=";
-
 const stages = [
   { stage_name: "Gastrula:50%-epiboly", begin_hours: 5.25, display_label: "50%-epiboly" },
   { stage_name: "Segmentation:1-4 somites", begin_hours: 10.33, display_label: "1-4 somites" },
@@ -40,6 +37,31 @@ function imagesFor(gene, nPerStage = 1, selectedStages = stages) {
   return selectedStages.flatMap((stage) =>
     Array.from({ length: nPerStage }, (_, i) => image(gene, stage, i + 1))
   );
+}
+
+function svgImage(label) {
+  const encoded = label.replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&apos;",
+  })[c]);
+  return `
+    <svg xmlns="http://www.w3.org/2000/svg" width="240" height="180" viewBox="0 0 240 180">
+      <defs>
+        <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+          <stop offset="0" stop-color="#dbeafe"/>
+          <stop offset="1" stop-color="#fde68a"/>
+        </linearGradient>
+      </defs>
+      <rect width="240" height="180" fill="url(#bg)"/>
+      <ellipse cx="120" cy="92" rx="72" ry="44" fill="#ffffff" opacity="0.72"/>
+      <circle cx="82" cy="84" r="14" fill="#4338ca"/>
+      <path d="M98 88 C130 42, 166 50, 184 82 C158 74, 132 80, 112 112" fill="none" stroke="#7c3aed" stroke-width="9" stroke-linecap="round"/>
+      <text x="120" y="154" text-anchor="middle" font-family="monospace" font-size="16" font-weight="700" fill="#111827">${encoded}</text>
+    </svg>
+  `;
 }
 
 async function mockApi(page) {
@@ -86,9 +108,10 @@ async function mockApi(page) {
   });
 
   await page.route("https://images.example.test/**", async (route) => {
+    const id = route.request().url().split("/").pop()?.replace(".png", "") || "mock-image";
     await route.fulfill({
-      contentType: "image/png",
-      body: Buffer.from(png1x1, "base64"),
+      contentType: "image/svg+xml",
+      body: svgImage(id),
     });
   });
 }
@@ -101,28 +124,44 @@ test("changing images per cell keeps queued image cells loading and clickable", 
   await page.goto("/?genes=pax2a");
 
   await expect(page.getByRole("columnheader").filter({ hasText: "pax2a" })).toBeVisible();
+  await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length);
+
   await page.getByRole("button", { name: "3", exact: true }).click();
 
-  await expect(page.locator(".cell-img")).toHaveCount(stages.length * 3);
+  await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length * 3);
   await expect(page.locator(".single-image-placeholder")).toHaveCount(0);
+  const threeImageCellWidth = (await page.locator(".image-cell.multi").first().boundingBox()).width;
 
   await page.getByRole("button", { name: "1", exact: true }).click();
 
-  await expect(page.locator(".cell-img")).toHaveCount(stages.length);
+  await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length);
   await expect(page.locator(".single-image-placeholder")).toHaveCount(0);
+  const oneImageCellWidth = (await page.locator(".image-cell").first().boundingBox()).width;
+  expect(threeImageCellWidth).toBeGreaterThan(oneImageCellWidth * 2);
 
   await page.getByRole("button", { name: "6", exact: true }).click();
-  const firstQueuedOrLoadedImage = page.locator(".single-image-placeholder, .cell-img").first();
-  await expect(firstQueuedOrLoadedImage).toBeVisible();
-  await firstQueuedOrLoadedImage.click();
+  await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length * 6);
+  await expect(page.locator(".single-image-placeholder")).toHaveCount(0);
+
+  const firstImage = page.locator('img[alt^="pax2a at"]').first();
+  await expect(firstImage).toBeVisible();
+  await firstImage.click();
   await expect(page.locator(".lightbox-overlay")).toBeVisible();
+  await expect(page.locator(".lightbox-title")).toHaveText("pax2a");
 });
 
 test("adding an anatomy-suggested gene preserves previously visible gene columns", async ({ page }) => {
+  const batchRequests = [];
+  page.on("request", (request) => {
+    if (request.url().endsWith("/api/genes/batch")) {
+      batchRequests.push(request.postDataJSON());
+    }
+  });
+
   await page.goto("/?genes=pacsin2");
 
   await expect(page.getByRole("columnheader").filter({ hasText: "pacsin2" })).toBeVisible();
-  await expect(page.locator(".cell-img")).toHaveCount(5);
+  await expect(page.locator('img[alt^="pacsin2 at"]')).toHaveCount(5);
 
   await page.getByPlaceholder("e.g. hindbrain").fill("hindbrain");
   await page.getByText("hindbrain", { exact: true }).click();
@@ -132,6 +171,11 @@ test("adding an anatomy-suggested gene preserves previously visible gene columns
 
   await expect(page.getByRole("columnheader").filter({ hasText: "pacsin2" })).toBeVisible();
   await expect(page.getByRole("columnheader").filter({ hasText: "evx1" })).toBeVisible();
-  await expect(page.locator(".cell-img")).toHaveCount(9);
+  await expect(page.locator('img[alt^="pacsin2 at"]')).toHaveCount(5);
+  await expect(page.locator('img[alt^="evx1 at"]')).toHaveCount(4);
+  expect(batchRequests.at(-1)).toMatchObject({
+    genes: ["pacsin2", "evx1"],
+    anatomy: null,
+  });
   await expect(page.locator(".grid-empty")).toHaveCount(0);
 });
