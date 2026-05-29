@@ -404,3 +404,36 @@ test("suggested-gene chip disables after adding and the gene is not duplicated",
   // not create a second column.
   await expect(page.getByRole("columnheader").filter({ hasText: "evx1" })).toHaveCount(1);
 });
+
+test("anatomy genes 404 silently shows no suggested-genes strip", async ({ page }) => {
+  // Override the default valid stub so the genes endpoint 404s.
+  await page.route("**/api/anatomy/*/genes**", async (route) => {
+    await route.fulfill({ status: 404 });
+  });
+
+  await page.goto("/");
+  await page.getByPlaceholder("e.g. hindbrain").fill("hindbrain");
+  const dropdown = page.locator(".anatomy-filter .autocomplete-dropdown");
+  await expect(dropdown).toBeVisible();
+  await dropdown.getByText("hindbrain", { exact: true }).click();
+
+  // 404 -> suggestions empty, no error -> the strip is not rendered.
+  await expect(page.locator(".suggested-genes-wrap")).toHaveCount(0);
+  await expect(page.locator(".suggested-genes-error")).toHaveCount(0);
+});
+
+test("anatomy genes 500 surfaces an error in the suggested-genes header", async ({ page }) => {
+  await page.route("**/api/anatomy/*/genes**", async (route) => {
+    await route.fulfill({ status: 500, json: { detail: "boom" } });
+  });
+
+  await page.goto("/");
+  await page.getByPlaceholder("e.g. hindbrain").fill("hindbrain");
+  const dropdown = page.locator(".anatomy-filter .autocomplete-dropdown");
+  await expect(dropdown).toBeVisible();
+  await dropdown.getByText("hindbrain", { exact: true }).click();
+
+  // A non-404 failure renders the error span inside the strip header.
+  await expect(page.locator(".suggested-genes-error")).toBeVisible();
+  await expect(page.locator(".suggested-genes-error")).toContainText("Error:");
+});
