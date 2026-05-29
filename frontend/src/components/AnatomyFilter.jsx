@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 function debounce(fn, ms) {
   let timer;
@@ -11,6 +11,7 @@ function debounce(fn, ms) {
 export function AnatomyFilter({ value, onChange }) {
   const [inputVal, setInputVal] = useState(value || "");
   const [suggestions, setSuggestions] = useState([]);
+  const skipNextFetchRef = useRef(false);
 
   const fetchSuggestions = useCallback(
     debounce(async (q) => {
@@ -26,6 +27,10 @@ export function AnatomyFilter({ value, onChange }) {
   );
 
   useEffect(() => {
+    if (skipNextFetchRef.current) {
+      skipNextFetchRef.current = false;
+      return;
+    }
     fetchSuggestions(inputVal);
   }, [inputVal]);
 
@@ -35,12 +40,14 @@ export function AnatomyFilter({ value, onChange }) {
   }, [value]);
 
   function select(term) {
+    skipNextFetchRef.current = true;
     setInputVal(term);
     setSuggestions([]);
     onChange(term);
   }
 
   function clear() {
+    skipNextFetchRef.current = false;
     setInputVal("");
     setSuggestions([]);
     onChange(null);

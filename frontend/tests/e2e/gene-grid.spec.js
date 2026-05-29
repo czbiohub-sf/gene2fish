@@ -179,3 +179,18 @@ test("adding an anatomy-suggested gene preserves previously visible gene columns
   });
   await expect(page.locator(".grid-empty")).toHaveCount(0);
 });
+
+test("anatomy autocomplete closes after selecting a term", async ({ page }) => {
+  await page.goto("/");
+
+  const anatomyInput = page.getByPlaceholder("e.g. hindbrain");
+  await anatomyInput.fill("hindbrain");
+
+  const dropdown = page.locator(".anatomy-filter .autocomplete-dropdown");
+  await expect(dropdown).toBeVisible();
+  await page.locator(".anatomy-filter .autocomplete-item", { hasText: "hindbrain" }).click();
+
+  await expect(anatomyInput).toHaveValue("hindbrain");
+  await expect(dropdown).toHaveCount(0);
+  await expect(page.getByText("Genes with expression in")).toBeVisible();
+});
