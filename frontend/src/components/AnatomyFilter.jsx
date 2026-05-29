@@ -32,7 +32,7 @@ export function AnatomyFilter({ value, onChange }) {
       return;
     }
     fetchSuggestions(inputVal);
-  }, [inputVal]);
+  }, [inputVal, fetchSuggestions]);
 
   // Sync external clear
   useEffect(() => {
