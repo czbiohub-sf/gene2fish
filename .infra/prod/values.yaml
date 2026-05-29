@@ -14,4 +14,5 @@ stack:
       image:
         tag: sha-TO-BE-REPLACED-BY-BUILDER-WORKFLOW
       ingress:
-        host: gene2fish.apps.czbiohub.org
+        rules:
+          - host: gene2fish.apps.czbiohub.org
