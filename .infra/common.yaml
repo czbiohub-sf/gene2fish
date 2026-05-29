@@ -1,0 +1,35 @@
+###### Generated using `argus bootstrap` command ######
+stack:
+  global:
+    replicaCount: 1
+    autoscaling:
+      enabled: false
+    service:
+      port: 8000
+    nodeSelector:
+      kubernetes.io/arch: arm64
+    oidcProxy:
+      enabled: true
+      extraArgs:
+        - "--trusted-ip=204.102.230.5"
+
+  services:
+    gene2fish:
+      image:
+        repository: 533267185808.dkr.ecr.us-west-2.amazonaws.com/core-platform/gene2fish/gene2fish
+      # The app loads the full ~115MB image_metadata.json into memory at
+      # startup and builds in-memory indexes (measured peak ~565MB RSS for
+      # 53k records). 1Gi gives headroom over that plus serving + ZFIN data
+      # growth; 500Mi would OOMKill on startup.
+      resources:
+        limits:
+          cpu: 500m
+          memory: 1Gi
+        requests:
+          cpu: 500m
+          memory: 1Gi
+      ingress:
+        oidcProtected: true
+        paths:
+          - path: /
+            pathType: Prefix

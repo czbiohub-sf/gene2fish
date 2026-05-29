@@ -14,7 +14,7 @@ export default function App() {
   const [urlState, setUrlState] = useUrlState();
   const { genes, stageMin, stageMax, anatomy, nImages } = urlState;
 
-  const { data, loading, error } = useGeneData(genes, stageMin, stageMax, anatomy, nImages);
+  const { data, loading, error } = useGeneData(genes, stageMin, stageMax, nImages);
 
   const addGene = useCallback(
     (symbol) => {
@@ -59,7 +59,7 @@ export default function App() {
   return (
     <div id="root">
       <header className="app-header">
-        <h1>gene2image</h1>
+        <h1>gene2fish</h1>
         <div className="controls">
           <GeneInput onAdd={addGene} />
           <StageFilter

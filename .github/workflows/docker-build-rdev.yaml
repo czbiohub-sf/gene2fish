@@ -1,0 +1,33 @@
+###### Generated using `argus bootstrap` command ######
+name: Docker Image Build - rdev
+
+on:
+  push:
+    branches-ignore: [main, release-please--branches--main]
+  pull_request:
+    types: [ labeled ]
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+  issues: write
+
+jobs:
+  rdev_argus_builder:
+    uses: chanzuckerberg/github-actions/.github/workflows/argus-docker-build.yaml@v6
+    secrets: inherit
+    with:
+      envs: rdev
+      path_filters: '!.infra/**'
+      branches_ignore: main,release-please--branches--main
+      arm_runner_labels: "['ubuntu-24.04-arm']"
+      amd_runner_labels: "['ubuntu-latest']"
+      images: |
+        {
+          "gene2fish": {
+            "context": "./",
+            "dockerfile": "./Dockerfile",
+            "platform": "linux/arm64"
+          }
+        }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 function debounce(fn, ms) {
   let timer;
@@ -11,13 +11,14 @@ function debounce(fn, ms) {
 export function AnatomyFilter({ value, onChange }) {
   const [inputVal, setInputVal] = useState(value || "");
   const [suggestions, setSuggestions] = useState([]);
+  const skipNextFetchRef = useRef(false);
 
   const fetchSuggestions = useCallback(
     debounce(async (q) => {
       if (!q || q.length < 2) { setSuggestions([]); return; }
       try {
         const res = await fetch(`/api/anatomy/search?q=${encodeURIComponent(q)}`);
-        if (res.ok) setSuggestions(await res.json());
+        setSuggestions(res.ok ? await res.json() : []);
       } catch {
         setSuggestions([]);
       }
@@ -26,8 +27,12 @@ export function AnatomyFilter({ value, onChange }) {
   );
 
   useEffect(() => {
+    if (skipNextFetchRef.current) {
+      skipNextFetchRef.current = false;
+      return;
+    }
     fetchSuggestions(inputVal);
-  }, [inputVal]);
+  }, [inputVal, fetchSuggestions]);
 
   // Sync external clear
   useEffect(() => {
@@ -35,12 +40,14 @@ export function AnatomyFilter({ value, onChange }) {
   }, [value]);
 
   function select(term) {
+    skipNextFetchRef.current = true;
     setInputVal(term);
     setSuggestions([]);
     onChange(term);
   }
 
   function clear() {
+    skipNextFetchRef.current = false;
     setInputVal("");
     setSuggestions([]);
     onChange(null);
@@ -48,7 +55,7 @@ export function AnatomyFilter({ value, onChange }) {
 
   return (
     <div className="anatomy-filter">
-      <label>Anatomy</label>
+      <label>Find genes by anatomy</label>
       <div className="anatomy-filter-row">
         <div style={{ position: "relative" }}>
           <input
@@ -75,7 +82,7 @@ export function AnatomyFilter({ value, onChange }) {
           )}
         </div>
         {inputVal && (
-          <button className="anatomy-clear" title="Clear anatomy filter" onClick={clear}>
+          <button className="anatomy-clear" title="Clear anatomy gene search" onClick={clear}>
             ×
           </button>
         )}

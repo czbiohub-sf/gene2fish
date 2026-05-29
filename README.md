@@ -1,4 +1,4 @@
-# gene2image
+# gene2fish
 
 Zebrafish gene expression image browser. Browse Thisse in situ hybridization images from ZFIN by gene symbol and developmental stage.
 
@@ -6,7 +6,12 @@ Images are hotlinked directly from ZFIN (zfin.org) under CC BY 4.0. Never downlo
 
 ## Data
 
-The app requires a pre-built JSON index of Thisse images. This file is **not** included in the repository — you must build it yourself by running the extractor (see below).
+> **Using Docker?** You can skip this section. The Docker image bakes the
+> Thisse image index into `/data` at build time, so `docker build && docker run`
+> works with no extra data setup (see [Docker](#docker)). The steps below are for
+> **local development**, where you build the JSON index yourself.
+
+For local development the app requires a pre-built JSON index of Thisse images. This file is **not** included in the repository — you must build it yourself by running the extractor (see below).
 
 Expected location:
 ```
@@ -15,7 +20,7 @@ Expected location:
 
 The backend looks for `image_metadata_v2.json` first and falls back to `image_metadata.json`. Set the `GENE2IMAGE_DATA_DIR` environment variable to the directory containing the file.
 
-## Building the data file
+## Building the data file (local dev)
 
 `zfin_image_metadata_extractor.py` downloads the 13 required TSVs from ZFIN, joins them, and writes `image_metadata.json` + `image_metadata.tsv`. Pick a directory where the data should live (e.g. `~/projects/gene2image_data`) and run the extractor from there:
 
@@ -37,6 +42,7 @@ Useful flags:
 - `--output-prefix image_metadata_v2` — change output filename (use this to write the `_v2` file the backend prefers)
 - `--input-dir /some/path` — keep the downloaded TSVs somewhere other than `./zfin_data`
 - `--no-download` — fail instead of downloading missing TSVs
+- `--min-records N` — exit non-zero if fewer than `N` records are extracted (default `0`, no check). The Docker build uses this to fail the build rather than bake an empty/partial index from a truncated download or drifted ZFIN file format.
 
 The extractor processes ~180k images/sec and finishes in under a second once the TSVs are present.
 
@@ -69,25 +75,34 @@ npm run dev
 
 ### Docker
 
-The Docker image builds the Vite frontend and serves it from the FastAPI app on
-the same port as the API.
+The Docker image builds the Vite frontend, bakes the Thisse image index into the
+image at build time (the build runs `zfin_image_metadata_extractor.py`, which
+downloads the ZFIN TSVs — so the build needs network access to zfin.org), and
+serves the SPA from the FastAPI app on the same port as the API.
+
+The build runs the extractor with `--min-records 10000`, so a truncated download
+or a drifted ZFIN file format fails the build instead of silently baking an empty
+or partial index (the Thisse set is ~53k records).
 
 ```bash
-docker build -t gene2image .
-docker run --rm -p 8000:8000 \
-  -e GENE2IMAGE_DATA_DIR=/data \
-  -v /path/to/gene2image_data:/data:ro \
-  gene2image
+docker build -t gene2fish .
+docker run --rm -p 8000:8000 gene2fish
 ```
 
-`GENE2IMAGE_DATA_DIR` is required — the container exits on startup if it is not set.
+The image is self-contained: `GENE2IMAGE_DATA_DIR` defaults to `/data` inside the
+image, where the prebuilt `image_metadata.json` lives — no data volume needs to be
+mounted. Refresh the baked data by rebuilding. To serve a different dataset, mount
+it and override the env var:
 
-The container runs as a non-root user (UID 10001). The mounted data directory
-must be readable by that UID — the JSON index written by the extractor is
-world-readable by default, so the read-only mount above works as-is.
+```bash
+docker run --rm -p 8000:8000 \
+  -e GENE2IMAGE_DATA_DIR=/mydata \
+  -v /path/to/gene2image_data:/mydata:ro \
+  gene2fish
+```
 
-Open `http://localhost:8000`. The container exposes `/api/health` for
-deployment health checks.
+The container runs as a non-root user (UID 10001). Open `http://localhost:8000`.
+The container exposes `/api/health` for deployment health checks.
 
 ## Usage
 
@@ -95,7 +110,7 @@ deployment health checks.
 2. The expression grid shows images for each developmental stage where expression data exists
 3. Hover an image for a quick summary; click for full metadata
 4. Use the stage range slider to narrow the timepoint view
-5. Use the anatomy filter to show only images with expression in a specific structure
+5. Use the anatomy gene search to find additional genes expressed in a specific structure; selected genes are added as new columns without filtering images already open in the grid
 
 ## Rate limiting
 

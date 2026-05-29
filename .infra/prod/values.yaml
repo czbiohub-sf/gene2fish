@@ -1,0 +1,17 @@
+###### Generated using `argus bootstrap` command ######
+stack:
+  global:
+    # Prod-only autoscaling (HorizontalPodAutoscaler). Overrides the
+    # autoscaling.enabled: false default in common.yaml.
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 4
+      targetCPUUtilizationPercentage: 70
+      targetMemoryUtilizationPercentage: 70
+  services:
+    gene2fish:
+      image:
+        tag: sha-TO-BE-REPLACED-BY-BUILDER-WORKFLOW
+      ingress:
+        host: gene2fish.apps.czbiohub.org

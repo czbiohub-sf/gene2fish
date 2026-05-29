@@ -1,0 +1,8 @@
+###### Generated using `argus bootstrap` command ######
+stack:
+  services:
+    gene2fish:
+      image:
+        tag: sha-TO-BE-REPLACED-BY-BUILDER-WORKFLOW
+      ingress:
+        host: gene2fish.apps-staging.czbiohub.org

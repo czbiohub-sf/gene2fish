@@ -1,0 +1,6 @@
+###### Generated using `argus bootstrap` command ######
+stack:
+  services:
+    gene2fish:
+      image:
+        tag: sha-7c5870a
