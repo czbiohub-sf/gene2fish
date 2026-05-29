@@ -55,7 +55,7 @@ export function AnatomyFilter({ value, onChange }) {
 
   return (
     <div className="anatomy-filter">
-      <label>Anatomy</label>
+      <label>Find genes by anatomy</label>
       <div className="anatomy-filter-row">
         <div style={{ position: "relative" }}>
           <input
@@ -82,7 +82,7 @@ export function AnatomyFilter({ value, onChange }) {
           )}
         </div>
         {inputVal && (
-          <button className="anatomy-clear" title="Clear anatomy filter" onClick={clear}>
+          <button className="anatomy-clear" title="Clear anatomy gene search" onClick={clear}>
             ×
           </button>
         )}

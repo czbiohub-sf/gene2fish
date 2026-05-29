@@ -16,6 +16,8 @@ export function useGeneData(genes, stageMin, stageMax, nImages) {
     }
 
     let cancelled = false;
+    // Changing images-per-cell should not flush queued image loads; only a new
+    // gene/stage search should cancel the previous queue.
     const searchKey = JSON.stringify({ genes, stageMin, stageMax });
     if (previousSearchKeyRef.current !== searchKey) {
       resetQueue(); // flush pending loads only for a new gene/stage search
@@ -30,6 +32,9 @@ export function useGeneData(genes, stageMin, stageMax, nImages) {
           genes,
           stage_min: stageMin ?? null,
           stage_max: stageMax ?? null,
+          // Anatomy selection drives the suggested-gene strip only. Keep the
+          // open gene columns unfiltered so adding an anatomy-related gene does
+          // not hide images the user already had open.
           anatomy: null,
           n_images: nImages ?? 1,
         };

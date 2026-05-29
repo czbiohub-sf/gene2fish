@@ -183,6 +183,7 @@ test("adding an anatomy-suggested gene preserves previously visible gene columns
 test("anatomy autocomplete closes after selecting a term", async ({ page }) => {
   await page.goto("/");
 
+  await expect(page.getByText("Find genes by anatomy")).toBeVisible();
   const anatomyInput = page.getByPlaceholder("e.g. hindbrain");
   await anatomyInput.fill("hindbrain");
 

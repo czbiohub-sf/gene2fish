@@ -100,7 +100,7 @@ The container exposes `/api/health` for deployment health checks.
 2. The expression grid shows images for each developmental stage where expression data exists
 3. Hover an image for a quick summary; click for full metadata
 4. Use the stage range slider to narrow the timepoint view
-5. Use the anatomy filter to show only images with expression in a specific structure
+5. Use the anatomy gene search to find additional genes expressed in a specific structure; selected genes are added as new columns without filtering images already open in the grid
 
 ## Rate limiting
 
