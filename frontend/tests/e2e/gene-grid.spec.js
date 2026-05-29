@@ -115,6 +115,9 @@ async function mockApi(page) {
 }
 
 test.beforeEach(async ({ page }) => {
+  // Clear any handlers from a prior attempt so retries don't stack duplicate
+  // routes on a reused page.
+  await page.unrouteAll({ behavior: "ignoreErrors" });
   await mockApi(page);
 });
 
