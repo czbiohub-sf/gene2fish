@@ -1,4 +1,4 @@
-# gene2image
+# gene2fish
 
 Zebrafish gene expression image browser. Browse Thisse in situ hybridization images from ZFIN by gene symbol and developmental stage.
 
@@ -80,8 +80,8 @@ downloads the ZFIN TSVs — so the build needs network access to zfin.org), and
 serves the SPA from the FastAPI app on the same port as the API.
 
 ```bash
-docker build -t gene2image .
-docker run --rm -p 8000:8000 gene2image
+docker build -t gene2fish .
+docker run --rm -p 8000:8000 gene2fish
 ```
 
 The image is self-contained: `GENE2IMAGE_DATA_DIR` defaults to `/data` inside the
@@ -93,7 +93,7 @@ it and override the env var:
 docker run --rm -p 8000:8000 \
   -e GENE2IMAGE_DATA_DIR=/mydata \
   -v /path/to/gene2image_data:/mydata:ro \
-  gene2image
+  gene2fish
 ```
 
 The container runs as a non-root user (UID 10001). Open `http://localhost:8000`.
