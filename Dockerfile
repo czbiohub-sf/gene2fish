@@ -36,11 +36,16 @@ RUN uv export --frozen --no-dev --no-emit-project -o requirements.txt \
 # data by rebuilding. Placed before the source COPY so backend edits don't bust
 # this (network-bound) layer. Intermediate TSVs and the unused .tsv export and
 # the build-only extractor are removed to keep the layer small.
+# --min-records gates the bake: a truncated download or drifted ZFIN file format
+# can parse into an empty/partial index that would otherwise ship silently (the
+# app starts healthy but every gene query returns empty). The Thisse set is ~53k
+# records, so a 10k floor fails the build on corruption with ample headroom.
 COPY zfin_image_metadata_extractor.py ./
 RUN mkdir -p /data \
     && python zfin_image_metadata_extractor.py \
         --input-dir /tmp/zfin_data \
         --output-prefix /data/image_metadata \
+        --min-records 10000 \
     && rm -rf /tmp/zfin_data /data/image_metadata.tsv zfin_image_metadata_extractor.py
 
 # Then copy source and install only the local package; deps already installed.

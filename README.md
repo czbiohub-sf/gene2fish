@@ -42,6 +42,7 @@ Useful flags:
 - `--output-prefix image_metadata_v2` — change output filename (use this to write the `_v2` file the backend prefers)
 - `--input-dir /some/path` — keep the downloaded TSVs somewhere other than `./zfin_data`
 - `--no-download` — fail instead of downloading missing TSVs
+- `--min-records N` — exit non-zero if fewer than `N` records are extracted (default `0`, no check). The Docker build uses this to fail the build rather than bake an empty/partial index from a truncated download or drifted ZFIN file format.
 
 The extractor processes ~180k images/sec and finishes in under a second once the TSVs are present.
 
@@ -78,6 +79,10 @@ The Docker image builds the Vite frontend, bakes the Thisse image index into the
 image at build time (the build runs `zfin_image_metadata_extractor.py`, which
 downloads the ZFIN TSVs — so the build needs network access to zfin.org), and
 serves the SPA from the FastAPI app on the same port as the API.
+
+The build runs the extractor with `--min-records 10000`, so a truncated download
+or a drifted ZFIN file format fails the build instead of silently baking an empty
+or partial index (the Thisse set is ~53k records).
 
 ```bash
 docker build -t gene2fish .

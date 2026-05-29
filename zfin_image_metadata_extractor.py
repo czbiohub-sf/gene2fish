@@ -661,6 +661,12 @@ def main():
         "--download-only", action="store_true",
         help="Only download files, don't process images"
     )
+    parser.add_argument(
+        "--min-records", type=int, default=0,
+        help="Fail (exit 1) if fewer than this many records are extracted "
+             "(default: 0, i.e. no check). Used by the Docker build to gate the "
+             "baked index against empty/partial ZFIN data."
+    )
 
     args = parser.parse_args()
 
@@ -706,6 +712,18 @@ def main():
         image_ids = extractor.get_image_ids_for_publications(pub_ids)
 
     results = extractor.extract_all_images(image_ids)
+
+    # Gate the build: a successful download + parse can still yield an empty or
+    # partial result set (load_tsv() swallows format-drift errors into empty
+    # DataFrames, and a cleanly-truncated download looks "present"). Fail loudly
+    # before writing so we never bake an empty/partial index that ships silently.
+    if args.min_records and len(results) < args.min_records:
+        print(
+            f"\n❌ Sanity check failed: extracted {len(results):,} records, "
+            f"expected at least {args.min_records:,}. Refusing to write output "
+            f"(likely a partial download or a drifted ZFIN file format)."
+        )
+        return 1
 
     # Save JSON output
     json_path = f"{args.output_prefix}.json"
