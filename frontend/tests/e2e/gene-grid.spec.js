@@ -198,3 +198,34 @@ test("anatomy autocomplete closes after selecting a term", async ({ page }) => {
   await expect(dropdown).toHaveCount(0);
   await expect(page.getByText("Genes with expression in")).toBeVisible();
 });
+
+test("shows error banner when the batch API fails, then clears on a successful refetch", async ({ page }) => {
+  // Force the batch endpoint to fail. The default mock from beforeEach is
+  // overridden here; the later-registered route wins in Playwright.
+  let failBatch = true;
+  await page.route("**/api/genes/batch", async (route) => {
+    if (failBatch) {
+      await route.fulfill({ status: 500, json: { detail: "boom" } });
+      return;
+    }
+    const body = route.request().postDataJSON();
+    const response = {};
+    for (const gene of body.genes) {
+      response[gene] = gene === "pax2a" ? imagesFor(gene, body.n_images || 1) : [];
+    }
+    await route.fulfill({ json: response });
+  });
+
+  await page.goto("/?genes=pax2a");
+
+  await expect(page.getByText(/Error: API error: 500/)).toBeVisible();
+  await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(0);
+
+  // Recover: let the batch endpoint succeed and trigger a refetch by changing
+  // images-per-cell (n_images is in useGeneData's dependency list).
+  failBatch = false;
+  await page.getByRole("button", { name: "3", exact: true }).click();
+
+  await expect(page.getByText(/Error:/)).toHaveCount(0);
+  await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length * 3);
+});
