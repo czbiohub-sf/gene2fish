@@ -49,8 +49,8 @@ RUN uv pip install --system --no-cache --no-deps .
 
 COPY --from=frontend-build /app/frontend/dist ./frontend/dist
 
-# Drop root: run as a non-privileged user. The app only reads /app and the
-# read-only /data mount, and binds the non-privileged port 8000, so no root
+# Drop root: run as a non-privileged user. The app only reads /app and /data
+# (baked in at build time), and binds the non-privileged port 8000, so no root
 # capability is needed at runtime.
 RUN useradd --create-home --uid 10001 appuser \
     && chown -R appuser:appuser /app
