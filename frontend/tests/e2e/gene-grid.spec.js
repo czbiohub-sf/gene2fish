@@ -188,7 +188,12 @@ test("adding an anatomy-suggested gene preserves previously visible gene columns
   for (const req of batchRequests) {
     expect(req.anatomy).toBeNull();
   }
-  await expect(page.locator(".grid-empty")).toHaveCount(0);
+  // Positive assertion that the grid rendered with exactly the two expected
+  // gene columns. This replaces a weak `.grid-empty` toHaveCount(0) check that
+  // would pass vacuously if the empty-state element were renamed.
+  await expect(
+    page.getByRole("columnheader").filter({ hasText: /pacsin2|evx1/ })
+  ).toHaveCount(2);
 });
 
 test("anatomy autocomplete closes after selecting a term", async ({ page }) => {
