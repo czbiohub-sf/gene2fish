@@ -363,3 +363,41 @@ test("narrowing the stage range refetches and shows only in-range stages", async
   const lastReq = batchRequests.at(-1);
   expect(lastReq).toMatchObject({ stage_min: 10.33, stage_max: 19 });
 });
+
+test("lightbox prev/next navigation respects boundary guards and close", async ({ page }) => {
+  // Two genes so adjacent images in reading order span different gene symbols,
+  // letting us observe the lightbox title change as we navigate.
+  await page.goto("/?genes=pacsin2,evx1");
+
+  await expect(page.getByRole("columnheader").filter({ hasText: "pacsin2" })).toBeVisible();
+  await expect(page.locator(".cell-img").first()).toBeVisible();
+
+  // Reading order starts at pacsin2 (top-left). Open the first image.
+  await page.locator(".cell-img").first().click();
+  const overlay = page.locator(".lightbox-overlay");
+  await expect(overlay).toBeVisible();
+  await expect(page.locator(".lightbox-title")).toHaveText("pacsin2");
+
+  const prev = page.locator(".lightbox-nav-prev");
+  const next = page.locator(".lightbox-nav-next");
+
+  // First image: prev disabled, next enabled.
+  await expect(prev).toBeDisabled();
+  await expect(next).toBeEnabled();
+
+  // Navigate forward until the title changes to the other gene.
+  await next.click();
+  await next.click();
+  await expect(page.locator(".lightbox-title")).toHaveText("evx1");
+
+  // Walk to the last image; next becomes disabled at the boundary.
+  for (let i = 0; i < 10 && (await next.isEnabled()); i++) {
+    await next.click();
+  }
+  await expect(next).toBeDisabled();
+  await expect(prev).toBeEnabled();
+
+  // Close dismisses the overlay.
+  await page.locator(".lightbox-close").click();
+  await expect(overlay).toHaveCount(0);
+});
