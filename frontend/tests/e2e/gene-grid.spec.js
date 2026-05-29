@@ -401,3 +401,27 @@ test("lightbox prev/next navigation respects boundary guards and close", async (
   await page.locator(".lightbox-close").click();
   await expect(overlay).toHaveCount(0);
 });
+
+test("suggested-gene chip disables after adding and the gene is not duplicated", async ({ page }) => {
+  await page.goto("/?genes=pacsin2");
+
+  await expect(page.getByRole("columnheader").filter({ hasText: "pacsin2" })).toBeVisible();
+
+  await page.getByPlaceholder("e.g. hindbrain").fill("hindbrain");
+  const dropdown = page.locator(".anatomy-filter .autocomplete-dropdown");
+  await expect(dropdown).toBeVisible();
+  await dropdown.getByText("hindbrain", { exact: true }).click();
+
+  const chip = page.locator(".suggested-genes-strip .suggested-gene-chip", { hasText: "evx1" });
+  await expect(chip).toBeVisible();
+  await expect(chip).toBeEnabled();
+
+  await chip.click();
+
+  // The same chip is now disabled because evx1 is already a queried gene.
+  await expect(chip).toBeDisabled();
+
+  // evx1 is added exactly once — clicking again (or a dedup regression) must
+  // not create a second column.
+  await expect(page.getByRole("columnheader").filter({ hasText: "evx1" })).toHaveCount(1);
+});
