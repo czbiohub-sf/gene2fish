@@ -25,7 +25,7 @@ body {
   font-family: var(--font-sans);
   background: var(--bg-white);
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1.5;
 }
 
@@ -47,7 +47,7 @@ body {
 
 .app-header h1 {
   font-family: var(--font-mono);
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 700;
   letter-spacing: -0.5px;
   margin-bottom: 12px;
@@ -69,7 +69,7 @@ body {
 .app-footer {
   padding: 16px 24px 20px;
   border-top: 1px solid var(--border);
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   display: flex;
   flex-direction: column;
@@ -90,7 +90,7 @@ body {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-muted);
 }
 
@@ -113,7 +113,7 @@ body {
 }
 
 .footer-creators {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-muted);
   font-style: italic;
 }
@@ -130,7 +130,7 @@ body {
 
 .gene-input {
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 0.8125rem;
   padding: 6px 10px;
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -149,7 +149,7 @@ body {
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-family: var(--font-sans);
 }
 
@@ -174,7 +174,7 @@ body {
 .autocomplete-item {
   padding: 6px 10px;
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 0.8125rem;
   cursor: pointer;
 }
 
@@ -192,7 +192,7 @@ body {
 }
 
 .stage-filter label {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
 }
 
@@ -203,7 +203,7 @@ body {
 }
 
 .stage-filter-selects select {
-  font-size: 12px;
+  font-size: 0.75rem;
   padding: 5px 8px;
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -218,7 +218,7 @@ body {
 }
 
 .stage-filter-selects span {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
 }
 
@@ -231,7 +231,7 @@ body {
 }
 
 .anatomy-filter label {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
 }
 
@@ -242,7 +242,7 @@ body {
 }
 
 .anatomy-input {
-  font-size: 13px;
+  font-size: 0.8125rem;
   padding: 6px 10px;
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -259,7 +259,7 @@ body {
   border: none;
   cursor: pointer;
   color: var(--text-muted);
-  font-size: 16px;
+  font-size: 1rem;
   line-height: 1;
   padding: 2px 4px;
 }
@@ -276,7 +276,7 @@ body {
 }
 
 .n-images-label {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
 }
 
@@ -287,7 +287,7 @@ body {
 
 .n-images-btn {
   padding: 5px 10px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-family: var(--font-mono);
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -312,7 +312,7 @@ body {
 .grid-empty {
   color: var(--text-secondary);
   padding: 40px 0;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .expression-grid-wrapper {
@@ -353,7 +353,7 @@ body {
 
 .col-gene-symbol {
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
 }
 
@@ -362,7 +362,7 @@ body {
   border: none;
   cursor: pointer;
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1;
   padding: 0 2px;
 }
@@ -378,7 +378,7 @@ body {
   text-align: right;
   white-space: nowrap;
   min-width: 140px;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   position: sticky;
   left: 0;
@@ -454,7 +454,7 @@ body {
   border-radius: 0;
   appearance: none;
   cursor: pointer;
-  font-size: 10px;
+  font-size: 0.625rem;
   color: var(--text-muted);
   padding: 0;
 }
@@ -483,7 +483,7 @@ body {
   justify-content: center;
   background: var(--bg-empty);
   border: 1px dashed var(--border-dashed);
-  font-size: 10px;
+  font-size: 0.625rem;
   color: var(--text-muted);
   gap: 4px;
   text-align: center;
@@ -510,7 +510,7 @@ body {
   transform: translateX(-50%);
   background: rgba(17,24,39,0.92);
   color: white;
-  font-size: 11px;
+  font-size: 0.6875rem;
   padding: 6px 10px;
   border-radius: 4px;
   max-width: 280px;
@@ -557,7 +557,7 @@ body {
 
 .lightbox-title {
   font-family: var(--font-mono);
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 700;
 }
 
@@ -565,7 +565,7 @@ body {
   background: none;
   border: none;
   cursor: pointer;
-  font-size: 22px;
+  font-size: 1.375rem;
   color: var(--text-secondary);
   line-height: 1;
 }
@@ -584,7 +584,7 @@ body {
   border: none;
   background: rgba(255, 255, 255, 0.85);
   color: var(--text-primary);
-  font-size: 28px;
+  font-size: 1.75rem;
   line-height: 1;
   cursor: pointer;
   display: flex;
@@ -639,7 +639,7 @@ body {
 }
 
 .meta-label {
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -648,7 +648,7 @@ body {
 }
 
 .meta-value {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-primary);
 }
 
@@ -667,7 +667,7 @@ body {
 
 .meta-list {
   list-style: none;
-  font-size: 12px;
+  font-size: 0.75rem;
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
@@ -678,7 +678,7 @@ body {
   color: #1d4ed8;
   padding: 2px 7px;
   border-radius: 3px;
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 
 .suggested-genes-wrap {
@@ -693,7 +693,7 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: #4b5563;
   margin-bottom: 6px;
 }
@@ -709,19 +709,19 @@ body {
 
 .suggested-genes-subcount {
   color: #9ca3af;
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 
 .suggested-genes-limit {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: #4b5563;
 }
 
 .suggested-genes-limit select {
-  font-size: 12px;
+  font-size: 0.75rem;
   padding: 2px 4px;
   border: 1px solid #d1d5db;
   border-radius: 3px;
@@ -750,7 +750,7 @@ body {
   color: #1d4ed8;
   padding: 4px 9px;
   border-radius: 3px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-family: var(--font-mono);
   border: none;
   cursor: pointer;
@@ -771,7 +771,7 @@ body {
 }
 
 .chip-count {
-  font-size: 10px;
+  font-size: 0.625rem;
   opacity: 0.7;
 }
 
@@ -779,7 +779,7 @@ body {
   display: inline-block;
   margin-top: 12px;
   color: var(--accent);
-  font-size: 12px;
+  font-size: 0.75rem;
   text-decoration: none;
   font-family: var(--font-mono);
 }
