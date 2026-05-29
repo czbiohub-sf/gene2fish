@@ -229,3 +229,22 @@ test("shows error banner when the batch API fails, then clears on a successful r
   await expect(page.getByText(/Error:/)).toHaveCount(0);
   await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length * 3);
 });
+
+test("shows the initial empty-state prompt when no genes are selected", async ({ page }) => {
+  await page.goto("/");
+
+  await expect(
+    page.getByText("Enter a gene symbol above to start browsing expression images.")
+  ).toBeVisible();
+  await expect(page.locator(".expression-grid")).toHaveCount(0);
+});
+
+test("shows a no-results message for a gene with no matching images", async ({ page }) => {
+  // The default batch mock returns [] for unrecognized gene symbols.
+  await page.goto("/?genes=nosuchgene");
+
+  await expect(
+    page.getByText("No expression images found for the selected genes and filters.")
+  ).toBeVisible();
+  await expect(page.locator(".expression-grid")).toHaveCount(0);
+});
