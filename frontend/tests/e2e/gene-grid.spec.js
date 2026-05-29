@@ -170,7 +170,9 @@ test("adding an anatomy-suggested gene preserves previously visible gene columns
   await expect(page.locator('img[alt^="pacsin2 at"]')).toHaveCount(5);
 
   await page.getByPlaceholder("e.g. hindbrain").fill("hindbrain");
-  await page.getByText("hindbrain", { exact: true }).click();
+  const anatomyDropdown = page.locator(".anatomy-filter .autocomplete-dropdown");
+  await expect(anatomyDropdown).toBeVisible();
+  await anatomyDropdown.getByText("hindbrain", { exact: true }).click();
   await expect(page.getByRole("button", { name: /evx1/ })).toBeVisible();
 
   await page.getByRole("button", { name: /evx1/ }).click();
