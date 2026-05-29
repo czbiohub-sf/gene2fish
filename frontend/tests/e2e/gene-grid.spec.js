@@ -211,6 +211,47 @@ test("anatomy autocomplete closes after selecting a term", async ({ page }) => {
   await expect(page.getByText("Genes with expression in")).toBeVisible();
 });
 
+test("anatomy autocomplete suppresses the dropdown for single-character input", async ({ page }) => {
+  const anatomySearchRequests = [];
+  page.on("request", (request) => {
+    if (request.url().includes("/api/anatomy/search")) {
+      anatomySearchRequests.push(request.url());
+    }
+  });
+
+  await page.goto("/");
+
+  const anatomyInput = page.getByPlaceholder("e.g. hindbrain");
+  await anatomyInput.fill("h");
+
+  const dropdown = page.locator(".anatomy-filter .autocomplete-dropdown");
+  // The q.length < 2 guard means no fetch and no dropdown for a single char.
+  await expect(dropdown).toHaveCount(0);
+  expect(anatomySearchRequests).toHaveLength(0);
+
+  // Typing a second character crosses the threshold and opens the dropdown.
+  await anatomyInput.fill("hi");
+  await expect(dropdown).toBeVisible();
+  expect(anatomySearchRequests.length).toBeGreaterThan(0);
+});
+
+test("anatomy clear button resets the input and hides suggested genes", async ({ page }) => {
+  await page.goto("/");
+
+  const anatomyInput = page.getByPlaceholder("e.g. hindbrain");
+  await anatomyInput.fill("hindbrain");
+  const dropdown = page.locator(".anatomy-filter .autocomplete-dropdown");
+  await expect(dropdown).toBeVisible();
+  await dropdown.getByText("hindbrain", { exact: true }).click();
+
+  await expect(page.locator(".suggested-genes-wrap")).toBeVisible();
+
+  await page.locator(".anatomy-filter .anatomy-clear").click();
+
+  await expect(anatomyInput).toHaveValue("");
+  await expect(page.locator(".suggested-genes-wrap")).toHaveCount(0);
+});
+
 test("shows error banner when the batch API fails, then clears on a successful refetch", async ({ page }) => {
   // Force the batch endpoint to fail. The default mock from beforeEach is
   // overridden here; the later-registered route wins in Playwright.
