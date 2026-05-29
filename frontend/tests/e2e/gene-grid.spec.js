@@ -284,3 +284,41 @@ test("shows 'Image unavailable' with a ZFIN link when both image URLs 404", asyn
   // No usable images should remain rendered.
   await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(0);
 });
+
+test("narrowing the stage range refetches and shows only in-range stages", async ({ page }) => {
+  const batchRequests = [];
+  page.on("request", (request) => {
+    if (request.url().endsWith("/api/genes/batch")) {
+      batchRequests.push(request.postDataJSON());
+    }
+  });
+
+  // Override the batch mock to honor the requested stage range so the grid
+  // reflects stage_min/stage_max (the default mock ignores them).
+  await page.route("**/api/genes/batch", async (route) => {
+    const body = route.request().postDataJSON();
+    const lo = body.stage_min ?? -Infinity;
+    const hi = body.stage_max ?? Infinity;
+    const inRange = stages.filter((s) => s.begin_hours >= lo && s.begin_hours <= hi);
+    await route.fulfill({
+      json: { pax2a: imagesFor("pax2a", body.n_images || 1, inRange) },
+    });
+  });
+
+  await page.goto("/?genes=pax2a");
+  await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length);
+
+  // Pick stage_min = 10.33 and stage_max = 19 via the StageFilter selects
+  // (begin_hours 10.33, 16, 19 are in range -> 3 stages).
+  const selects = page.locator(".stage-filter select");
+  await selects.nth(0).selectOption("10.33");
+  await selects.nth(1).selectOption("19");
+
+  await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(3);
+  // Out-of-range stage rows are dropped; an in-range row remains.
+  await expect(page.locator(".row-header", { hasText: "50%-epiboly" })).toHaveCount(0);
+  await expect(page.locator(".row-header", { hasText: "1-4 somites" })).toBeVisible();
+
+  const lastReq = batchRequests.at(-1);
+  expect(lastReq).toMatchObject({ stage_min: 10.33, stage_max: 19 });
+});
