@@ -91,8 +91,8 @@ it and override the env var:
 
 ```bash
 docker run --rm -p 8000:8000 \
-  -e GENE2IMAGE_DATA_DIR=/data \
-  -v /path/to/gene2image_data:/data:ro \
+  -e GENE2IMAGE_DATA_DIR=/mydata \
+  -v /path/to/gene2image_data:/mydata:ro \
   gene2image
 ```
 
