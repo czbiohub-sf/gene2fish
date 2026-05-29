@@ -5,6 +5,10 @@ on:
   pull_request:
     types: [ unlabeled, closed ]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   delete-stack:
     runs-on: ubuntu-latest
