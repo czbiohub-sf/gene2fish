@@ -256,3 +256,27 @@ test("shows a no-results message for a gene with no matching images", async ({ p
   ).toBeVisible();
   await expect(page.locator(".expression-grid")).toHaveCount(0);
 });
+
+test("shows 'Image unavailable' with a ZFIN link when both image URLs 404", async ({ page }) => {
+  // Override the image host so primary AND fallback URLs both fail, exercising
+  // SingleCell's two-step fallback (image_url -> image_url_fallback -> placeholder).
+  await page.route("https://images.example.test/**", async (route) => {
+    await route.fulfill({ status: 404 });
+  });
+
+  // Single image per cell (default) renders SingleCell, which wires onFail.
+  await page.goto("/?genes=pax2a");
+
+  const placeholder = page.locator(".cell-placeholder").first();
+  await expect(placeholder).toBeVisible();
+  await expect(placeholder.getByText("Image unavailable")).toBeVisible();
+
+  const zfinLink = placeholder.getByRole("link");
+  await expect(zfinLink).toHaveAttribute(
+    "href",
+    /^https:\/\/zfin\.org\/ZDB-IMAGE-pax2a/
+  );
+
+  // No usable images should remain rendered.
+  await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(0);
+});
