@@ -39,30 +39,7 @@ function imagesFor(gene, nPerStage = 1, selectedStages = stages) {
   );
 }
 
-function svgImage(label) {
-  const encoded = label.replace(/[&<>"']/g, (c) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    "\"": "&quot;",
-    "'": "&apos;",
-  })[c]);
-  return `
-    <svg xmlns="http://www.w3.org/2000/svg" width="240" height="180" viewBox="0 0 240 180">
-      <defs>
-        <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
-          <stop offset="0" stop-color="#dbeafe"/>
-          <stop offset="1" stop-color="#fde68a"/>
-        </linearGradient>
-      </defs>
-      <rect width="240" height="180" fill="url(#bg)"/>
-      <ellipse cx="120" cy="92" rx="72" ry="44" fill="#ffffff" opacity="0.72"/>
-      <circle cx="82" cy="84" r="14" fill="#4338ca"/>
-      <path d="M98 88 C130 42, 166 50, 184 82 C158 74, 132 80, 112 112" fill="none" stroke="#7c3aed" stroke-width="9" stroke-linecap="round"/>
-      <text x="120" y="154" text-anchor="middle" font-family="monospace" font-size="16" font-weight="700" fill="#111827">${encoded}</text>
-    </svg>
-  `;
-}
+const MOCK_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>';
 
 async function mockApi(page) {
   await page.route("**/api/stages", async (route) => {
@@ -106,10 +83,9 @@ async function mockApi(page) {
   });
 
   await page.route("https://images.example.test/**", async (route) => {
-    const id = route.request().url().split("/").pop()?.replace(".png", "") || "mock-image";
     await route.fulfill({
       contentType: "image/svg+xml",
-      body: svgImage(id),
+      body: MOCK_SVG,
     });
   });
 }
