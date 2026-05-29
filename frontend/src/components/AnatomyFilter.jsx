@@ -18,7 +18,7 @@ export function AnatomyFilter({ value, onChange }) {
       if (!q || q.length < 2) { setSuggestions([]); return; }
       try {
         const res = await fetch(`/api/anatomy/search?q=${encodeURIComponent(q)}`);
-        if (res.ok) setSuggestions(await res.json());
+        setSuggestions(res.ok ? await res.json() : []);
       } catch {
         setSuggestions([]);
       }
