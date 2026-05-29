@@ -451,8 +451,12 @@ body {
   justify-content: center;
   background: var(--bg-empty);
   border: 1px dashed var(--border-dashed);
+  border-radius: 0;
+  appearance: none;
+  cursor: pointer;
   font-size: 10px;
   color: var(--text-muted);
+  padding: 0;
 }
 
 .single-image-placeholder.compact {

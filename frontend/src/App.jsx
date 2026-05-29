@@ -14,7 +14,7 @@ export default function App() {
   const [urlState, setUrlState] = useUrlState();
   const { genes, stageMin, stageMax, anatomy, nImages } = urlState;
 
-  const { data, loading, error } = useGeneData(genes, stageMin, stageMax, anatomy, nImages);
+  const { data, loading, error } = useGeneData(genes, stageMin, stageMax, nImages);
 
   const addGene = useCallback(
     (symbol) => {

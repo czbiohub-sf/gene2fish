@@ -27,8 +27,11 @@ function SingleImage({ image, onClick, compact, onFail }) {
 
   if (!src) {
     return (
-      <div
+      <button
+        type="button"
         className={`single-image-placeholder${compact ? " compact" : ""}`}
+        aria-label={`${image.gene_symbol} at ${image.stage_display_label}`}
+        onClick={(e) => { e.stopPropagation(); onClick(image); }}
         title={[
           image.stage_display_label,
           image.anatomy_names?.length ? image.anatomy_names.join(", ") : null,
