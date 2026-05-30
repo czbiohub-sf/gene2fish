@@ -1,0 +1,45 @@
+# Dependency vulnerability gate (GEN-3). NOT `argus bootstrap`-generated.
+# Fails PRs / scheduled runs on high+critical advisories in the app's shipped
+# dependencies, so a known CVE cannot ship silently (see also .github/dependabot.yml).
+name: Security Audit
+
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly Monday 12:00 UTC — catch CVEs newly disclosed against unchanged deps.
+    - cron: "0 12 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  python-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Export shipped (runtime) deps from the lockfile
+        # Same export the runtime image uses (see Dockerfile) — audit exactly what ships.
+        run: uv export --frozen --no-dev --no-emit-project -o requirements.txt
+      - name: pip-audit
+        # pip-audit has no severity threshold flag: it fails on any known advisory.
+        run: uvx pip-audit -r requirements.txt
+
+  npm-audit:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: npm audit (fail on high + critical)
+        run: npm audit --audit-level=high
