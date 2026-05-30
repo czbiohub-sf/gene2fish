@@ -8,3 +8,21 @@ updates:
     open-pull-requests-limit: 10
     commit-message:
       prefix: "chore: "
+
+  # Manually added (GEN-3) — app dependency CVE monitoring. The block above is
+  # `argus bootstrap`-generated; flag these two entries to the platform team so a
+  # future bootstrap regen does not silently drop them (guarded by test_dependabot.py).
+  - package-ecosystem: "uv" # native uv: reads pyproject.toml + uv.lock
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore: "
+  - package-ecosystem: "npm" # frontend/package.json + package-lock.json
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore: "

@@ -124,6 +124,25 @@ If you do hit a rate limit (images stop loading or show as broken), wait a few
 minutes before searching for new genes. Searching for a new gene automatically
 cancels any pending loads from the previous search.
 
+## Security / dependency auditing
+
+Dependabot watches the app's real dependencies — Python via the native `uv`
+ecosystem (`pyproject.toml` + `uv.lock`) and the frontend via `npm`
+(`frontend/package-lock.json`) — and opens update PRs for CVEs
+(`.github/dependabot.yml`).
+
+CI hard-gates merges: the **Security Audit** workflow
+(`.github/workflows/security-audit.yaml`) fails on high/critical advisories.
+Reproduce the same checks locally:
+
+```bash
+# Python (audits the same runtime deps the image ships)
+uv export --frozen --no-dev --no-emit-project -o /tmp/req.txt && uvx pip-audit -r /tmp/req.txt
+
+# Frontend
+cd frontend && npm audit --audit-level=high
+```
+
 ## Attribution
 
 Images from ZFIN (zfin.org). Thisse et al. in situ hybridization data.
