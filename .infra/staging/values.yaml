@@ -3,7 +3,7 @@ stack:
   services:
     gene2fish:
       image:
-        tag: sha-TO-BE-REPLACED-BY-BUILDER-WORKFLOW
+        tag: sha-33e60b3
       ingress:
         rules:
           - host: gene2fish.apps-staging.czbiohub.org
