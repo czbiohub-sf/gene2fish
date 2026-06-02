@@ -616,9 +616,9 @@ select {
 }
 
 .grid-empty-illustration {
-  width: min(230px, 60vw);
+  width: min(420px, 72vw);
   height: auto;
-  margin-bottom: 4px;
+  margin-bottom: -18px;
 }
 
 .grid-empty h2 {
