@@ -58,12 +58,16 @@ export function GeneInput({ onAdd }) {
 
   return (
     <div className="gene-input-wrapper">
+      <label className="field-label" htmlFor="gene-symbol-input">
+        Search gene
+      </label>
       <div className="gene-input-row">
         <input
+          id="gene-symbol-input"
           ref={inputRef}
           className="gene-input"
           type="text"
-          placeholder="Gene symbol (e.g. shha)"
+          placeholder="Gene symbol (e.g. pax2a)"
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -74,20 +78,23 @@ export function GeneInput({ onAdd }) {
         <button className="gene-input-btn" onClick={() => submit(value)}>
           Add
         </button>
+        {suggestions.length > 0 && (
+          <div className="autocomplete-dropdown">
+            {suggestions.map((s, i) => (
+              <div
+                key={s}
+                className={`autocomplete-item${i === activeIdx ? " active" : ""}`}
+                onMouseDown={() => submit(s)}
+              >
+                {s}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
-      {suggestions.length > 0 && (
-        <div className="autocomplete-dropdown">
-          {suggestions.map((s, i) => (
-            <div
-              key={s}
-              className={`autocomplete-item${i === activeIdx ? " active" : ""}`}
-              onMouseDown={() => submit(s)}
-            >
-              {s}
-            </div>
-          ))}
-        </div>
-      )}
+      <p className="field-helper">
+        Press Enter to add
+      </p>
     </div>
   );
 }

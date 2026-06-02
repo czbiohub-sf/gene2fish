@@ -57,7 +57,7 @@ export function AnatomyFilter({ value, onChange }) {
     <div className="anatomy-filter">
       <label>Find genes by anatomy</label>
       <div className="anatomy-filter-row">
-        <div style={{ position: "relative" }}>
+        <div className="anatomy-input-shell">
           <input
             className="anatomy-input"
             type="text"
@@ -80,12 +80,12 @@ export function AnatomyFilter({ value, onChange }) {
               ))}
             </div>
           )}
+          {inputVal && (
+            <button className="anatomy-clear" title="Clear anatomy gene search" onClick={clear}>
+              ×
+            </button>
+          )}
         </div>
-        {inputVal && (
-          <button className="anatomy-clear" title="Clear anatomy gene search" onClick={clear}>
-            ×
-          </button>
-        )}
       </div>
     </div>
   );
