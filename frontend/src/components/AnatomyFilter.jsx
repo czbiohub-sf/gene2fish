@@ -12,6 +12,7 @@ export function AnatomyFilter({ value, onChange }) {
   const [inputVal, setInputVal] = useState(value || "");
   const [suggestions, setSuggestions] = useState([]);
   const skipNextFetchRef = useRef(false);
+  const previousValueRef = useRef(value || "");
 
   const fetchSuggestions = useCallback(
     debounce(async (q) => {
@@ -34,9 +35,14 @@ export function AnatomyFilter({ value, onChange }) {
     fetchSuggestions(inputVal);
   }, [inputVal, fetchSuggestions]);
 
-  // Sync external clear
+  // Sync external changes from URL/examples while avoiding a redundant autocomplete fetch.
   useEffect(() => {
-    if (!value) setInputVal("");
+    const nextValue = value || "";
+    if (nextValue === previousValueRef.current) return;
+    previousValueRef.current = nextValue;
+    skipNextFetchRef.current = true;
+    setSuggestions([]);
+    setInputVal(nextValue);
   }, [value]);
 
   function select(term) {

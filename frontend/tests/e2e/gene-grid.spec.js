@@ -56,6 +56,15 @@ async function mockApi(page) {
     await route.fulfill({ json: ["hindbrain"] });
   });
 
+  await page.route("**/api/anatomy/*/genes**", async (route) => {
+    await route.fulfill({
+      json: {
+        total: 0,
+        genes: [],
+      },
+    });
+  });
+
   await page.route("**/api/anatomy/hindbrain/genes**", async (route) => {
     await route.fulfill({
       json: {
@@ -265,10 +274,18 @@ test("shows error banner when the batch API fails, then clears on a successful r
 test("shows the initial empty-state prompt when no genes are selected", async ({ page }) => {
   await page.goto("/");
 
-  await expect(
-    page.getByText("Enter a gene symbol above to start browsing expression images.")
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Search gene expression images" })).toBeVisible();
+  await expect(page.getByText("Enter a gene name and select filters")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Example: shha" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Example: liver primordium" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Example: prox1a" })).toBeVisible();
   await expect(page.locator(".expression-grid")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Example: liver primordium" }).click();
+  await expect(page.getByPlaceholder("e.g. hindbrain")).toHaveValue("liver primordium");
+
+  await page.getByRole("button", { name: "Example: shha" }).click();
+  await expect(page).toHaveURL(/genes=shha/);
 });
 
 test("shows a no-results message for a gene with no matching images", async ({ page }) => {

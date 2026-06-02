@@ -138,6 +138,8 @@ export default function App() {
           genes={genes}
           data={data}
           onRemoveGene={removeGene}
+          onAddGene={addGene}
+          onSetAnatomy={setAnatomy}
           nImages={nImages ?? 1}
         />
       </main>

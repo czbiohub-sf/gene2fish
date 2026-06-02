@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="230" height="170" viewBox="0 0 230 170" role="img" aria-labelledby="title desc">
+  <title id="title">Gene expression search illustration</title>
+  <desc id="desc">A magnifying glass over DNA beside a zebrafish.</desc>
+  <g fill="none" fill-rule="evenodd">
+    <circle cx="42" cy="72" r="10" fill="#EAE6FF"/>
+    <circle cx="73" cy="42" r="8" fill="#E9E4FF"/>
+    <circle cx="95" cy="25" r="4" fill="#ECE8FF"/>
+    <circle cx="158" cy="29" r="8" fill="#E9E4FF"/>
+    <circle cx="193" cy="78" r="14" fill="#E6E0FF"/>
+    <circle cx="174" cy="65" r="6" fill="#ECE8FF"/>
+    <circle cx="55" cy="117" r="4" fill="#ECE8FF"/>
+
+    <g transform="rotate(32 86 104)">
+      <rect x="48" y="100" width="17" height="62" rx="8.5" fill="#F6F3FF" stroke="#B8A7FF" stroke-width="3"/>
+    </g>
+
+    <circle cx="111" cy="70" r="45" fill="#F8F6FF" stroke="#C8BCFF" stroke-width="3"/>
+    <circle cx="111" cy="70" r="30" fill="#EEE9FF"/>
+
+    <g stroke="#7657E8" stroke-linecap="round" stroke-width="4">
+      <path d="M96 49c24 13 28 32 8 43"/>
+      <path d="M122 45c-20 15-19 35 4 48"/>
+    </g>
+    <g stroke="#8D78EF" stroke-linecap="round" stroke-width="3">
+      <path d="M101 58l20 10"/>
+      <path d="M99 68l23 12"/>
+      <path d="M103 79l18 9"/>
+    </g>
+
+    <g transform="translate(133 111)">
+      <path d="M6 12c21-15 52-13 78-1-24 15-53 18-78 1Z" fill="#BDB1FF"/>
+      <path d="M78 11l18-10-5 16 5 15-18-9" fill="#BDB1FF"/>
+      <path d="M22 11c18-6 38-5 61 1" stroke="#7D62E8" stroke-linecap="round" stroke-width="3"/>
+      <path d="M26 20c14 4 32 3 54-5" stroke="#9E8AF2" stroke-linecap="round" stroke-width="3"/>
+      <path d="M29 9l-12-7M35 22l-7 9" stroke="#7D62E8" stroke-linecap="round" stroke-width="3"/>
+      <circle cx="18" cy="12" r="2.5" fill="#5E43D1"/>
+    </g>
+  </g>
+</svg>

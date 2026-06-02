@@ -1,8 +1,15 @@
 import { useMemo, useState } from "react";
 import { ImageCell } from "./ImageCell.jsx";
 import { Lightbox } from "./Lightbox.jsx";
+import emptyStateIllustration from "../assets/empty-state-illustration.svg";
 
-export function ExpressionGrid({ genes, data, onRemoveGene, nImages }) {
+const EMPTY_STATE_EXAMPLES = [
+  { label: "Example: shha", type: "gene", value: "shha" },
+  { label: "Example: liver primordium", type: "anatomy", value: "liver primordium" },
+  { label: "Example: prox1a", type: "gene", value: "prox1a" },
+];
+
+export function ExpressionGrid({ genes, data, onRemoveGene, onAddGene, onSetAnatomy, nImages }) {
   const [lightboxIndex, setLightboxIndex] = useState(null);
 
   // Collect all canonical stages that appear across any gene, sorted by begin_hours
@@ -71,14 +78,38 @@ export function ExpressionGrid({ genes, data, onRemoveGene, nImages }) {
 
   if (genes.length === 0) {
     return (
-      <p className="grid-empty">
-        Enter a gene symbol above to start browsing expression images.
-      </p>
+      <section className="grid-empty" aria-labelledby="empty-state-title">
+        <img
+          className="grid-empty-illustration"
+          src={emptyStateIllustration}
+          alt=""
+          aria-hidden="true"
+        />
+        <h2 id="empty-state-title">Search gene expression images</h2>
+        <p>
+          Enter a gene name and select filters to explore expression patterns in zebrafish development.
+        </p>
+        <div className="grid-empty-examples" aria-label="Example searches">
+          {EMPTY_STATE_EXAMPLES.map((example) => (
+            <button
+              key={`${example.type}-${example.value}`}
+              type="button"
+              className={`grid-empty-example ${example.type}`}
+              onClick={() => {
+                if (example.type === "gene") onAddGene(example.value);
+                else onSetAnatomy(example.value);
+              }}
+            >
+              {example.label}
+            </button>
+          ))}
+        </div>
+      </section>
     );
   }
 
   if (rows.length === 0 && genes.length > 0) {
-    return <p className="grid-empty">No expression images found for the selected genes and filters.</p>;
+    return <p className="grid-empty-message">No expression images found for the selected genes and filters.</p>;
   }
 
   return (
