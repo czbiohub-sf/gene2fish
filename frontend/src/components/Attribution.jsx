@@ -70,7 +70,7 @@ export function Attribution() {
       </div>
 
       <div className="footer-creators">
-        Created by Vera Janssen &amp; Leandro Lima
+        Created by Vera Janssen, Leandro Lima &amp; Wellington Rutes
       </div>
     </footer>
   );
