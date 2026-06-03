@@ -210,7 +210,7 @@ test("anatomy autocomplete closes after selecting a term", async ({ page }) => {
 
   await expect(anatomyInput).toHaveValue("hindbrain");
   await expect(dropdown).toHaveCount(0);
-  await expect(page.getByText("Genes with expression in")).toBeVisible();
+  await expect(page.getByText("Matching genes in hindbrain")).toBeVisible();
 });
 
 test("anatomy autocomplete suppresses the dropdown for single-character input", async ({ page }) => {
@@ -326,7 +326,7 @@ test("comparison sidebar shows selected genes, clear all, and maximize controls"
 
   await expect(page.locator(".selected-gene-row", { hasText: "pacsin2" })).toBeVisible();
   await expect(page.locator(".selected-gene-row", { hasText: "evx1" })).toBeVisible();
-  await expect(page.getByText("2 / 6")).toBeVisible();
+  await expect(page.getByText("(2/6)")).toBeVisible();
 
   await page.getByRole("button", { name: "Maximize" }).click();
   await expect(page.locator(".comparison-panel.maximized")).toBeVisible();

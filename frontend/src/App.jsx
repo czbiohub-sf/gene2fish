@@ -1,7 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { useUrlState } from "./hooks/useUrlState.js";
 import { useGeneData } from "./hooks/useGeneData.js";
-import { GeneInput } from "./components/GeneInput.jsx";
 import { StageFilter } from "./components/StageFilter.jsx";
 import { AnatomyFilter } from "./components/AnatomyFilter.jsx";
 import { useAnatomyGenes } from "./hooks/useAnatomyGenes.js";
@@ -126,62 +125,8 @@ export default function App() {
         </div>
       </header>
 
-      <section className="top-panel">
-        <div className="app-shell control-cards">
-          <section className="control-card search-card" aria-labelledby="gene-search-title">
-            <h2 id="gene-search-title" className="visually-hidden">Search gene</h2>
-            <GeneInput onAdd={addGene} />
-          </section>
-
-          <section className="control-card filters-card" aria-labelledby="filters-title">
-            <h2 id="filters-title" className="visually-hidden">Filters</h2>
-            {(loading || error) && (
-              <span className={`request-status${error ? " error" : ""}`}>
-                {error ? `Error: ${error}` : "Loading…"}
-              </span>
-            )}
-            <div className="filters-grid">
-              <StageFilter
-                stageMin={stageMin}
-                stageMax={stageMax}
-                onChange={setStageRange}
-              />
-              <AnatomyFilter value={anatomy} onChange={setAnatomy} />
-              <div className="n-images-toggle">
-                <span className="n-images-label">Images per cell</span>
-                <div className="n-images-buttons">
-                  {N_IMAGE_OPTIONS.map((n) => (
-                    <button
-                      key={n}
-                      className={`n-images-btn${(nImages ?? 1) === n ? " active" : ""}`}
-                      onClick={() => setNImages(n)}
-                    >
-                      {n}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </section>
-        </div>
-      </section>
-
       <main className="app-main app-shell">
-        <div className={`comparison-layout${comparisonMaximized ? " comparison-layout-maximized" : ""}`}>
-          <ComparisonPanel
-            genes={genes}
-            data={data}
-            geneMetaBySymbol={geneMetaBySymbol}
-            stageCount={stageCount}
-            anatomy={anatomy}
-            nImages={nImages ?? 1}
-            matchedGeneCount={anatomyGeneTotal}
-            isMaximized={comparisonMaximized}
-            onToggleMaximize={() => setComparisonMaximized((current) => !current)}
-            onRemoveGene={removeGene}
-            onAddGene={addGene}
-            onSetAnatomy={setAnatomy}
-          />
+        <div className={`comparison-workspace${comparisonMaximized ? " comparison-workspace-maximized" : ""}`}>
           <ComparisonSidebar
             genes={genes}
             geneMetaBySymbol={geneMetaBySymbol}
@@ -195,6 +140,53 @@ export default function App() {
             onRemoveGene={removeGene}
             onClearGenes={clearGenes}
           />
+          <div className="comparison-content">
+            <section className="control-card filters-card" aria-labelledby="filters-title">
+              <h2 id="filters-title" className="visually-hidden">Filters</h2>
+              {(loading || error) && (
+                <span className={`request-status${error ? " error" : ""}`}>
+                  {error ? `Error: ${error}` : "Loading…"}
+                </span>
+              )}
+              <div className="filters-grid">
+                <StageFilter
+                  stageMin={stageMin}
+                  stageMax={stageMax}
+                  onChange={setStageRange}
+                />
+                <AnatomyFilter value={anatomy} onChange={setAnatomy} />
+                <div className="n-images-toggle">
+                  <span className="n-images-label">Images per cell</span>
+                  <div className="n-images-buttons">
+                    {N_IMAGE_OPTIONS.map((n) => (
+                      <button
+                        key={n}
+                        className={`n-images-btn${(nImages ?? 1) === n ? " active" : ""}`}
+                        onClick={() => setNImages(n)}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <ComparisonPanel
+              genes={genes}
+              data={data}
+              geneMetaBySymbol={geneMetaBySymbol}
+              stageCount={stageCount}
+              anatomy={anatomy}
+              nImages={nImages ?? 1}
+              matchedGeneCount={anatomyGeneTotal}
+              isMaximized={comparisonMaximized}
+              onToggleMaximize={() => setComparisonMaximized((current) => !current)}
+              onRemoveGene={removeGene}
+              onAddGene={addGene}
+              onSetAnatomy={setAnatomy}
+            />
+          </div>
         </div>
       </main>
 

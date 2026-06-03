@@ -63,14 +63,40 @@ export function ComparisonSidebar({
   const visibleSuggestions = hasSearch ? searchResults : baseSuggestions;
   const showSuggestionsWrap = hasSearch || suggestionsLoading || suggestionsError || visibleSuggestions.length > 0;
   const isAtLimit = genes.length >= maxGenes;
+  const matchingTitle = anatomy
+    ? `Matching genes in ${anatomy}`
+    : "Suggested genes";
+  const matchingCount = anatomy ? suggestedTotal : visibleSuggestions.length;
 
   return (
-    <aside className="comparison-sidebar" aria-label="Comparison controls">
+    <aside className="comparison-sidebar gene-selection-panel" aria-label="Gene selection">
+      <div className="gene-selection-intro">
+        <h2>Gene selection</h2>
+        <p>Search, add, and manage genes in one place.</p>
+      </div>
+
+      <div className="sidebar-search gene-selection-search">
+        <input
+          type="text"
+          value={query}
+          placeholder="Search and add genes..."
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && query.trim()) {
+              onAddGene(query.trim());
+              setQuery("");
+            }
+          }}
+          aria-label="Search and add genes"
+        />
+        <span aria-hidden="true">⌕</span>
+      </div>
+
       <section className="sidebar-section selected-genes-section">
-        <div className="sidebar-section-header">
+        <div className="sidebar-section-header selected-genes-header">
           <div>
-            <h2>Comparing genes</h2>
-            <span>{genes.length} / {maxGenes}</span>
+            <h3>Selected genes</h3>
+            <span>({genes.length}/{maxGenes})</span>
           </div>
           {genes.length > 0 && (
             <button className="sidebar-clear-btn" type="button" onClick={onClearGenes}>
@@ -108,29 +134,13 @@ export function ComparisonSidebar({
         )}
       </section>
 
-      <section className="sidebar-section add-genes-section">
-        <h2>Add more genes</h2>
-        <div className="sidebar-search">
-          <input
-            type="text"
-            value={query}
-            placeholder="Search gene..."
-            onChange={(e) => setQuery(e.target.value)}
-            aria-label="Search gene to add"
-          />
-          <span aria-hidden="true">⌕</span>
-        </div>
-
+      <section className="sidebar-section matching-genes-section">
+        <h3 className="matching-genes-title">
+          {matchingTitle}
+          {matchingCount > 0 && <span> ({matchingCount})</span>}
+        </h3>
         {showSuggestionsWrap && (
           <div className="suggested-genes-wrap sidebar-suggestions">
-            {anatomy && !hasSearch && !suggestionsError && (
-              <div className="suggested-genes-header">
-                <span className="suggested-genes-title">
-                  Genes with expression in <strong>{anatomy}</strong>
-                  {suggestedTotal > 0 && <span className="suggested-genes-count"> ({suggestedTotal})</span>}
-                </span>
-              </div>
-            )}
             {(suggestionsLoading || searchLoading) && (
               <span className="suggested-genes-loading">Loading…</span>
             )}
@@ -165,8 +175,8 @@ export function ComparisonSidebar({
       </section>
 
       <div className="sidebar-tip-card">
-        <span aria-hidden="true">☼</span>
-        <p><strong>Tip:</strong> Add up to {maxGenes} genes to compare. Columns are scrollable.</p>
+        <span aria-hidden="true">ⓘ</span>
+        <p><strong>Tip:</strong> Search or click + to add up to {maxGenes} genes. Selected genes appear above.</p>
       </div>
     </aside>
   );

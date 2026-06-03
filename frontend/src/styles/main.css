@@ -305,15 +305,26 @@ select {
 }
 
 /* Comparison composition */
-.comparison-layout {
+.comparison-workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-columns: 340px minmax(0, 1fr);
   gap: 18px;
   align-items: start;
 }
 
-.comparison-layout-maximized {
-  display: block;
+.comparison-workspace-maximized {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.comparison-workspace-maximized .gene-selection-panel {
+  display: none;
+}
+
+.comparison-content {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
 }
 
 .comparison-panel,
@@ -433,7 +444,25 @@ select {
   padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 24px;
+}
+
+.gene-selection-intro {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.gene-selection-intro h2 {
+  color: var(--text-primary);
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.gene-selection-intro p {
+  color: var(--text-secondary);
+  font-size: 14px;
 }
 
 .sidebar-section {
@@ -442,9 +471,10 @@ select {
   gap: 14px;
 }
 
-.sidebar-section h2 {
+.sidebar-section h3,
+.matching-genes-title {
   color: var(--text-primary);
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 800;
   line-height: 1.2;
 }
@@ -465,6 +495,15 @@ select {
 .sidebar-section-header span {
   color: var(--text-secondary);
   font-size: 14px;
+}
+
+.matching-genes-title {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.matching-genes-title span {
+  color: var(--text-secondary);
 }
 
 .sidebar-clear-btn {
@@ -560,6 +599,10 @@ select {
 .selected-gene-remove:hover {
   background: var(--bg-hover);
   color: var(--danger);
+}
+
+.matching-genes-section {
+  min-height: 0;
 }
 
 .sidebar-search {
@@ -1464,10 +1507,11 @@ select {
 .sidebar-suggestions .suggested-genes-strip {
   flex-direction: column;
   gap: 0;
-  overflow: visible;
+  overflow-y: auto;
   padding: 0;
   border: 1px solid var(--border);
   border-radius: 4px;
+  max-height: 430px;
 }
 
 .suggested-gene-chip {
@@ -1560,12 +1604,8 @@ select {
     grid-template-columns: minmax(0, 1fr) minmax(220px, 0.7fr);
   }
 
-  .comparison-layout {
+  .comparison-workspace {
     grid-template-columns: 1fr;
-  }
-
-  .comparison-sidebar {
-    order: 2;
   }
 }
 
