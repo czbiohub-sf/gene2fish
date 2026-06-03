@@ -1,21 +1,31 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useUrlState } from "./hooks/useUrlState.js";
 import { useGeneData } from "./hooks/useGeneData.js";
 import { GeneInput } from "./components/GeneInput.jsx";
 import { StageFilter } from "./components/StageFilter.jsx";
 import { AnatomyFilter } from "./components/AnatomyFilter.jsx";
-import { AnatomySuggestedGenes } from "./components/AnatomySuggestedGenes.jsx";
-import { ExpressionGrid } from "./components/ExpressionGrid.jsx";
+import { useAnatomyGenes } from "./hooks/useAnatomyGenes.js";
+import { ComparisonPanel } from "./components/ComparisonPanel.jsx";
+import { ComparisonSidebar } from "./components/ComparisonSidebar.jsx";
 import { Attribution } from "./components/Attribution.jsx";
 
 const N_IMAGE_OPTIONS = [1, 3, 6, 10];
+const MAX_COMPARISON_GENES = 6;
+const GENE_COLORS = ["#6e2bb8", "#514de8", "#10879a", "#ef7d22", "#2f9d68", "#c43d87"];
 
 export default function App() {
   const [urlState, setUrlState] = useUrlState();
   const { genes, stageMin, stageMax, anatomy, nImages } = urlState;
   const [theme, setTheme] = useState("light");
+  const [comparisonMaximized, setComparisonMaximized] = useState(false);
 
   const { data, loading, error } = useGeneData(genes, stageMin, stageMax, nImages);
+  const {
+    suggestions: anatomyGeneSuggestions,
+    total: anatomyGeneTotal,
+    loading: anatomyGeneLoading,
+    error: anatomyGeneError,
+  } = useAnatomyGenes(anatomy, 50);
 
   const addGene = useCallback(
     (symbol) => {
@@ -23,7 +33,9 @@ export default function App() {
       if (!trimmed) return;
       setUrlState((s) => ({
         ...s,
-        genes: s.genes.includes(trimmed) ? s.genes : [...s.genes, trimmed],
+        genes: s.genes.includes(trimmed) || s.genes.length >= MAX_COMPARISON_GENES
+          ? s.genes
+          : [...s.genes, trimmed],
       }));
     },
     [setUrlState]
@@ -32,6 +44,14 @@ export default function App() {
   const removeGene = useCallback(
     (symbol) => {
       setUrlState((s) => ({ ...s, genes: s.genes.filter((g) => g !== symbol) }));
+    },
+    [setUrlState]
+  );
+
+  const clearGenes = useCallback(
+    () => {
+      setUrlState((s) => ({ ...s, genes: [] }));
+      setComparisonMaximized(false);
     },
     [setUrlState]
   );
@@ -56,6 +76,27 @@ export default function App() {
     },
     [setUrlState]
   );
+
+  const stageCount = useMemo(() => {
+    const stages = new Set();
+    for (const symbol of genes) {
+      for (const img of data[symbol] || []) {
+        if (img.stage_begin_hours != null) stages.add(img.stage_begin_hours);
+      }
+    }
+    return stages.size;
+  }, [genes, data]);
+
+  const geneMetaBySymbol = useMemo(() => {
+    const result = {};
+    genes.forEach((symbol, index) => {
+      result[symbol] = {
+        color: GENE_COLORS[index % GENE_COLORS.length],
+        imageCount: (data[symbol] || []).length,
+      };
+    });
+    return result;
+  }, [genes, data]);
 
   return (
     <div className="app-root" data-theme={theme}>
@@ -125,23 +166,36 @@ export default function App() {
         </div>
       </section>
 
-      <div className="app-shell">
-        <AnatomySuggestedGenes
-          anatomy={anatomy}
-          queriedGenes={genes}
-          onAddGene={addGene}
-        />
-      </div>
-
       <main className="app-main app-shell">
-        <ExpressionGrid
-          genes={genes}
-          data={data}
-          onRemoveGene={removeGene}
-          onAddGene={addGene}
-          onSetAnatomy={setAnatomy}
-          nImages={nImages ?? 1}
-        />
+        <div className={`comparison-layout${comparisonMaximized ? " comparison-layout-maximized" : ""}`}>
+          <ComparisonPanel
+            genes={genes}
+            data={data}
+            geneMetaBySymbol={geneMetaBySymbol}
+            stageCount={stageCount}
+            anatomy={anatomy}
+            nImages={nImages ?? 1}
+            matchedGeneCount={anatomyGeneTotal}
+            isMaximized={comparisonMaximized}
+            onToggleMaximize={() => setComparisonMaximized((current) => !current)}
+            onRemoveGene={removeGene}
+            onAddGene={addGene}
+            onSetAnatomy={setAnatomy}
+          />
+          <ComparisonSidebar
+            genes={genes}
+            geneMetaBySymbol={geneMetaBySymbol}
+            maxGenes={MAX_COMPARISON_GENES}
+            anatomy={anatomy}
+            suggestedGenes={anatomyGeneSuggestions}
+            suggestedTotal={anatomyGeneTotal}
+            suggestionsLoading={anatomyGeneLoading}
+            suggestionsError={anatomyGeneError}
+            onAddGene={addGene}
+            onRemoveGene={removeGene}
+            onClearGenes={clearGenes}
+          />
+        </div>
       </main>
 
       <Attribution />

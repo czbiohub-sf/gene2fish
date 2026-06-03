@@ -251,7 +251,8 @@ test("anatomy clear button resets the input and hides suggested genes", async ({
   await page.locator(".anatomy-filter .anatomy-clear").click();
 
   await expect(anatomyInput).toHaveValue("");
-  await expect(page.locator(".suggested-genes-wrap")).toHaveCount(0);
+  await expect(page.getByText("Genes with expression in")).toHaveCount(0);
+  await expect(page.locator(".suggested-genes-error")).toHaveCount(0);
 });
 
 test("shows error banner when the batch API fails, then clears on a successful refetch", async ({ page }) => {
@@ -313,6 +314,31 @@ test("shows a no-results message for a gene with no matching images", async ({ p
     page.getByText("No expression images found for the selected genes and filters.")
   ).toBeVisible();
   await expect(page.locator(".expression-grid")).toHaveCount(0);
+});
+
+test("comparison sidebar shows selected genes, clear all, and maximize controls", async ({ page }) => {
+  await page.goto("/?genes=pacsin2,evx1&anatomy=hindbrain&n_images=3");
+
+  await expect(page.getByRole("heading", { name: /Expression comparison in hindbrain/ })).toBeVisible();
+  await expect(page.getByText("1 genes match your filters")).toBeVisible();
+  await expect(page.getByText(/Comparing 2 selected genes across/)).toBeVisible();
+  await expect(page.getByText("3 images per cell")).toBeVisible();
+
+  await expect(page.locator(".selected-gene-row", { hasText: "pacsin2" })).toBeVisible();
+  await expect(page.locator(".selected-gene-row", { hasText: "evx1" })).toBeVisible();
+  await expect(page.getByText("2 / 6")).toBeVisible();
+
+  await page.getByRole("button", { name: "Maximize" }).click();
+  await expect(page.locator(".comparison-panel.maximized")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Exit maximize" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Exit maximize" }).click();
+  await expect(page.locator(".comparison-panel.maximized")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Clear all" }).click();
+  await expect(page.getByRole("heading", { name: "Search gene expression images" })).toBeVisible();
+  await expect(page.locator(".selected-genes-empty")).toBeVisible();
+  await expect(page).not.toHaveURL(/genes=/);
 });
 
 test("shows 'Image unavailable' with a ZFIN link when both image URLs 404", async ({ page }) => {

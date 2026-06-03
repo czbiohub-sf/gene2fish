@@ -9,7 +9,7 @@ const EMPTY_STATE_EXAMPLES = [
   { label: "Example: prox1a", type: "gene", value: "prox1a" },
 ];
 
-export function ExpressionGrid({ genes, data, onRemoveGene, onAddGene, onSetAnatomy, nImages }) {
+export function ExpressionGrid({ genes, data, onRemoveGene, onAddGene, onSetAnatomy, nImages, geneMetaBySymbol = {} }) {
   const [lightboxIndex, setLightboxIndex] = useState(null);
 
   // Collect all canonical stages that appear across any gene, sorted by begin_hours
@@ -122,26 +122,33 @@ export function ExpressionGrid({ genes, data, onRemoveGene, onAddGene, onSetAnat
           <thead>
             <tr>
               <th className="grid-corner" />
-              {genes.map((symbol) => (
-                <th
-                  key={symbol}
-                  className="col-header"
-                  style={nImages > 1
-                    ? { width: `calc(var(--cell-size) * ${colMaxImages[symbol]})` }
-                    : undefined}
-                >
-                  <div className="col-header-inner">
-                    <span className="col-gene-symbol">{symbol}</span>
-                    <button
-                      className="col-remove-btn"
-                      title={`Remove ${symbol}`}
-                      onClick={() => onRemoveGene(symbol)}
-                    >
-                      ×
-                    </button>
-                  </div>
-                </th>
-              ))}
+              {genes.map((symbol) => {
+                const meta = geneMetaBySymbol[symbol] || {};
+                return (
+                  <th
+                    key={symbol}
+                    className="col-header"
+                    style={nImages > 1
+                      ? { width: `calc(var(--cell-size) * ${colMaxImages[symbol]})` }
+                      : undefined}
+                  >
+                    <div className="col-header-inner">
+                      <span className="gene-color-dot" style={{ "--gene-color": meta.color }} aria-hidden="true" />
+                      <div className="col-gene-label">
+                        <span className="col-gene-symbol">{symbol}</span>
+                        <span className="col-gene-count">{meta.imageCount ?? 0} images</span>
+                      </div>
+                      <button
+                        className="col-remove-btn"
+                        title={`Remove ${symbol}`}
+                        onClick={() => onRemoveGene(symbol)}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
