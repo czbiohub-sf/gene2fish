@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Search icon</title>
+  <desc id="desc">Magnifying glass icon.</desc>
+  <circle cx="28" cy="28" r="17" fill="none" stroke="#6366F1" stroke-width="4" stroke-linecap="round"/>
+  <path d="M41 41l13 13" fill="none" stroke="#06B6D4" stroke-width="4" stroke-linecap="round"/>
+</svg>

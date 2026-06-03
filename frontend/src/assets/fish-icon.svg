@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Fish icon</title>
+  <desc id="desc">Minimal fish outline icon.</desc>
+  <path d="M8 32c12-15 29-15 42 0-13 15-30 15-42 0Z" fill="none" stroke="#6366F1" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M50 32l11-9v18l-11-9Z" fill="none" stroke="#6366F1" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="21" cy="28" r="2.2" fill="#06B6D4"/>
+  <path d="M35 20c8 6 8 18 0 24" fill="none" stroke="#06B6D4" stroke-width="2.5" stroke-linecap="round"/>
+</svg>

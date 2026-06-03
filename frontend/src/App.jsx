@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useUrlState } from "./hooks/useUrlState.js";
 import { useGeneData } from "./hooks/useGeneData.js";
 import { GeneInput } from "./components/GeneInput.jsx";
@@ -13,6 +13,7 @@ const N_IMAGE_OPTIONS = [1, 3, 6, 10];
 export default function App() {
   const [urlState, setUrlState] = useUrlState();
   const { genes, stageMin, stageMax, anatomy, nImages } = urlState;
+  const [theme, setTheme] = useState("light");
 
   const { data, loading, error } = useGeneData(genes, stageMin, stageMax, nImages);
 
@@ -57,55 +58,88 @@ export default function App() {
   );
 
   return (
-    <div id="root">
+    <div className="app-root" data-theme={theme}>
       <header className="app-header">
-        <h1>gene2fish</h1>
-        <div className="controls">
-          <GeneInput onAdd={addGene} />
-          <StageFilter
-            stageMin={stageMin}
-            stageMax={stageMax}
-            onChange={setStageRange}
-          />
-          <AnatomyFilter value={anatomy} onChange={setAnatomy} />
-          <div className="n-images-toggle">
-            <span className="n-images-label">Images per cell</span>
-            <div className="n-images-buttons">
-              {N_IMAGE_OPTIONS.map((n) => (
-                <button
-                  key={n}
-                  className={`n-images-btn${(nImages ?? 1) === n ? " active" : ""}`}
-                  onClick={() => setNImages(n)}
-                >
-                  {n}
-                </button>
-              ))}
-            </div>
-          </div>
+        <div className="app-shell app-header-bar">
+          <a className="brand" href="/" aria-label="gene2fish home">
+            <span className="brand-icon" aria-hidden="true" />
+            <h1>Gene2fish</h1>
+          </a>
+          <nav className="header-links" aria-label="Primary">
+            <a href="https://github.com/czbiohub-sf/gene2fish#readme" target="_blank" rel="noopener noreferrer">
+              About
+            </a>
+            <a href="https://zfin.org" target="_blank" rel="noopener noreferrer">
+              ZFIN <span aria-hidden="true">↗</span>
+            </a>
+            <button
+              className="theme-toggle"
+              type="button"
+              title="Toggle theme"
+              aria-label="Toggle theme"
+              onClick={() => setTheme((current) => current === "light" ? "dark" : "light")}
+            >
+              {theme === "light" ? "◐" : "○"}
+            </button>
+          </nav>
         </div>
-        {loading && (
-          <div style={{ marginTop: 8, fontSize: 12, color: "#6b7280" }}>
-            Loading…
-          </div>
-        )}
-        {error && (
-          <div style={{ marginTop: 8, fontSize: 12, color: "#ef4444" }}>
-            Error: {error}
-          </div>
-        )}
       </header>
 
-      <AnatomySuggestedGenes
-        anatomy={anatomy}
-        queriedGenes={genes}
-        onAddGene={addGene}
-      />
+      <section className="top-panel">
+        <div className="app-shell control-cards">
+          <section className="control-card search-card" aria-labelledby="gene-search-title">
+            <h2 id="gene-search-title" className="visually-hidden">Search gene</h2>
+            <GeneInput onAdd={addGene} />
+          </section>
 
-      <main className="app-main">
+          <section className="control-card filters-card" aria-labelledby="filters-title">
+            <h2 id="filters-title" className="visually-hidden">Filters</h2>
+            {(loading || error) && (
+              <span className={`request-status${error ? " error" : ""}`}>
+                {error ? `Error: ${error}` : "Loading…"}
+              </span>
+            )}
+            <div className="filters-grid">
+              <StageFilter
+                stageMin={stageMin}
+                stageMax={stageMax}
+                onChange={setStageRange}
+              />
+              <AnatomyFilter value={anatomy} onChange={setAnatomy} />
+              <div className="n-images-toggle">
+                <span className="n-images-label">Images per cell</span>
+                <div className="n-images-buttons">
+                  {N_IMAGE_OPTIONS.map((n) => (
+                    <button
+                      key={n}
+                      className={`n-images-btn${(nImages ?? 1) === n ? " active" : ""}`}
+                      onClick={() => setNImages(n)}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <div className="app-shell">
+        <AnatomySuggestedGenes
+          anatomy={anatomy}
+          queriedGenes={genes}
+          onAddGene={addGene}
+        />
+      </div>
+
+      <main className="app-main app-shell">
         <ExpressionGrid
           genes={genes}
           data={data}
           onRemoveGene={removeGene}
+          onAddGene={addGene}
+          onSetAnatomy={setAnatomy}
           nImages={nImages ?? 1}
         />
       </main>

@@ -48,12 +48,21 @@ async function mockApi(page) {
 
   await page.route("**/api/genes/search**", async (route) => {
     const q = new URL(route.request().url()).searchParams.get("q")?.toLowerCase() || "";
-    const genes = ["pacsin2", "pax2a", "evx1"].filter((g) => g.startsWith(q));
+    const genes = ["pacsin2", "pax2a", "evx1", "shhb", "nr5a2", "prox1a"].filter((g) => g.startsWith(q));
     await route.fulfill({ json: genes });
   });
 
   await page.route("**/api/anatomy/search**", async (route) => {
-    await route.fulfill({ json: ["hindbrain"] });
+    await route.fulfill({ json: ["hindbrain", "liver primordium"] });
+  });
+
+  await page.route("**/api/anatomy/*/genes**", async (route) => {
+    await route.fulfill({
+      json: {
+        total: 0,
+        genes: [],
+      },
+    });
   });
 
   await page.route("**/api/anatomy/hindbrain/genes**", async (route) => {
@@ -61,6 +70,18 @@ async function mockApi(page) {
       json: {
         total: 1,
         genes: [{ gene_symbol: "evx1", image_count: 36 }],
+      },
+    });
+  });
+
+  await page.route("**/api/anatomy/liver%20primordium/genes**", async (route) => {
+    await route.fulfill({
+      json: {
+        total: 2,
+        genes: [
+          { gene_symbol: "nr5a2", image_count: 12 },
+          { gene_symbol: "prox1a", image_count: 9 },
+        ],
       },
     });
   });
@@ -75,6 +96,8 @@ async function mockApi(page) {
         response[gene] = imagesFor(gene, 1, stages.slice(0, 5));
       } else if (gene === "evx1") {
         response[gene] = imagesFor(gene, 1, stages.slice(2, 6));
+      } else if (gene === "shhb" || gene === "nr5a2" || gene === "prox1a") {
+        response[gene] = imagesFor(gene, 1, stages.slice(0, 3));
       } else {
         response[gene] = [];
       }
@@ -265,10 +288,21 @@ test("shows error banner when the batch API fails, then clears on a successful r
 test("shows the initial empty-state prompt when no genes are selected", async ({ page }) => {
   await page.goto("/");
 
-  await expect(
-    page.getByText("Enter a gene symbol above to start browsing expression images.")
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Search gene expression images" })).toBeVisible();
+  await expect(page.getByText("Enter a gene name and select filters")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Example: shhb" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Example: liver primordium" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Example: prox1a" })).toBeVisible();
   await expect(page.locator(".expression-grid")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Example: liver primordium" }).click();
+  await expect(page.getByPlaceholder("e.g. hindbrain")).toHaveValue("liver primordium");
+  await expect(page.getByRole("columnheader").filter({ hasText: "nr5a2" })).toBeVisible();
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Example: shhb" }).click();
+  await expect(page).toHaveURL(/genes=shhb/);
+  await expect(page.getByRole("columnheader").filter({ hasText: "shhb" })).toBeVisible();
 });
 
 test("shows a no-results message for a gene with no matching images", async ({ page }) => {

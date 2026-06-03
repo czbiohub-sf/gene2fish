@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Filter icon</title>
+  <desc id="desc">Filter sliders icon.</desc>
+  <g fill="none" stroke="#6366F1" stroke-width="4" stroke-linecap="round">
+    <path d="M12 18h40"/>
+    <path d="M12 32h40"/>
+    <path d="M12 46h40"/>
+  </g>
+  <circle cx="25" cy="18" r="5" fill="#06B6D4"/>
+  <circle cx="41" cy="32" r="5" fill="#06B6D4"/>
+  <circle cx="31" cy="46" r="5" fill="#06B6D4"/>
+</svg>
