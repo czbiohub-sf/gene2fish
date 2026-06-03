@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/czbiohub-sf/gene2fish/compare/v0.1.0...v0.2.0) (2026-06-03)
+
+
+### Features
+
+* build top-level layout and filters ([#25](https://github.com/czbiohub-sf/gene2fish/issues/25)) ([1991080](https://github.com/czbiohub-sf/gene2fish/commit/19910802d54986249e6607769b0abaac1cca98d3))
+
 ## [0.1.0](https://github.com/czbiohub-sf/gene2fish/compare/v0.0.1...v0.1.0) (2026-05-30)
 
 
