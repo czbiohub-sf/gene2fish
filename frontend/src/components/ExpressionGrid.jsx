@@ -4,8 +4,8 @@ import { Lightbox } from "./Lightbox.jsx";
 import emptyStateIllustration from "../assets/empty-state-illustration.png";
 
 const EMPTY_STATE_EXAMPLES = [
-  { label: "Example: shha", type: "gene", value: "shha" },
-  { label: "Example: liver primordium", type: "anatomy", value: "liver primordium" },
+  { label: "Example: shhb", type: "gene", value: "shhb" },
+  { label: "Example: liver primordium", type: "anatomy", value: "liver primordium", gene: "nr5a2" },
   { label: "Example: prox1a", type: "gene", value: "prox1a" },
 ];
 
@@ -97,7 +97,10 @@ export function ExpressionGrid({ genes, data, onRemoveGene, onAddGene, onSetAnat
               className={`grid-empty-example ${example.type}`}
               onClick={() => {
                 if (example.type === "gene") onAddGene(example.value);
-                else onSetAnatomy(example.value);
+                else {
+                  onSetAnatomy(example.value);
+                  if (example.gene) onAddGene(example.gene);
+                }
               }}
             >
               {example.label}
