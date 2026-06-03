@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { ImageCell } from "./ImageCell.jsx";
 import { Lightbox } from "./Lightbox.jsx";
-import emptyStateIllustration from "../assets/empty-state-illustration.svg";
+import emptyStateIllustration from "../assets/empty-state-illustration.png";
 
 const EMPTY_STATE_EXAMPLES = [
   { label: "Example: shha", type: "gene", value: "shha" },
