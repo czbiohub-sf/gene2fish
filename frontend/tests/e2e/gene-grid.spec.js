@@ -207,6 +207,7 @@ test("exports only the expression table as a PNG", async ({ page }) => {
 
   await page.route("**/api/image-proxy**", async (route) => {
     proxiedUrls.push(new URL(route.request().url()).searchParams.get("url"));
+    await new Promise((resolve) => setTimeout(resolve, 50));
     await route.fulfill({
       contentType: "image/png",
       headers: { "Access-Control-Allow-Origin": "*" },
@@ -221,6 +222,8 @@ test("exports only the expression table as a PNG", async ({ page }) => {
 
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Export table PNG" }).click();
+  await expect(page.getByRole("progressbar", { name: "PNG export progress" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Exporting \d+%/ })).toBeDisabled();
   const download = await downloadPromise;
 
   expect(download.suggestedFilename()).toMatch(/^gene2fish-table-pax2a\.png$/);

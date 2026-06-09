@@ -124,7 +124,7 @@ function exportFilename(genes) {
   return `gene2fish-table-${genePart || "expression"}.png`;
 }
 
-export async function exportExpressionTablePng({ rows, genes, lookup, colMaxImages, nImages }) {
+export async function exportExpressionTablePng({ rows, genes, lookup, colMaxImages, nImages, onProgress }) {
   const colors = {
     background: cssVar("--bg-page", "#ffffff"),
     card: cssVar("--bg-card", "#ffffff"),
@@ -134,6 +134,23 @@ export async function exportExpressionTablePng({ rows, genes, lookup, colMaxImag
     secondary: cssVar("--text-secondary", "#4b5563"),
     muted: cssVar("--text-muted", "#9ca3af"),
   };
+
+  const exportImages = [];
+  for (const { hours } of rows) {
+    for (const symbol of genes) {
+      exportImages.push(...(lookup[symbol]?.[hours] || []).slice(0, nImages));
+    }
+  }
+  let completedImages = 0;
+  const totalImages = exportImages.length;
+  onProgress?.(0);
+
+  function reportImageProgress() {
+    completedImages += 1;
+    if (totalImages > 0) {
+      onProgress?.(Math.round((completedImages / totalImages) * 100));
+    }
+  }
 
   const columnWidths = genes.map((symbol) => EXPORT_CELL_SIZE * (colMaxImages[symbol] || 1));
   const width = EXPORT_ROW_HEADER_WIDTH + columnWidths.reduce((sum, w) => sum + w, 0);
@@ -198,6 +215,7 @@ export async function exportExpressionTablePng({ rows, genes, lookup, colMaxImag
           } else {
             drawPlaceholder(ctx, imageX, innerY, imageWidth, innerHeight, "Image unavailable", colors);
           }
+          reportImageProgress();
         }
       }
       x += columnWidth;
@@ -205,5 +223,6 @@ export async function exportExpressionTablePng({ rows, genes, lookup, colMaxImag
   }
 
   const blob = await toBlob(canvas);
+  onProgress?.(100);
   downloadBlob(blob, exportFilename(genes));
 }

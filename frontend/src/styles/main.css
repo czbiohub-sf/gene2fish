@@ -796,6 +796,12 @@ select {
   opacity: 0.65;
 }
 
+.export-table-progress {
+  width: 150px;
+  height: 8px;
+  accent-color: var(--accent);
+}
+
 .export-table-error {
   color: var(--danger);
   font-size: 12px;

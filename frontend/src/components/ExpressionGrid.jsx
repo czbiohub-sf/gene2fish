@@ -13,6 +13,7 @@ const EMPTY_STATE_EXAMPLES = [
 export function ExpressionGrid({ genes, data, onRemoveGene, onAddGene, onSetAnatomy, nImages }) {
   const [lightboxIndex, setLightboxIndex] = useState(null);
   const [exporting, setExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(null);
   const [exportError, setExportError] = useState(null);
 
   // Collect all canonical stages that appear across any gene, sorted by begin_hours
@@ -120,13 +121,22 @@ export function ExpressionGrid({ genes, data, onRemoveGene, onAddGene, onSetAnat
 
   async function exportTable() {
     setExporting(true);
+    setExportProgress(0);
     setExportError(null);
     try {
-      await exportExpressionTablePng({ rows, genes, lookup, colMaxImages, nImages: nImages ?? 1 });
+      await exportExpressionTablePng({
+        rows,
+        genes,
+        lookup,
+        colMaxImages,
+        nImages: nImages ?? 1,
+        onProgress: setExportProgress,
+      });
     } catch (err) {
       setExportError(err.message || "PNG export failed");
     } finally {
       setExporting(false);
+      setExportProgress(null);
     }
   }
 
@@ -139,8 +149,16 @@ export function ExpressionGrid({ genes, data, onRemoveGene, onAddGene, onSetAnat
           onClick={exportTable}
           disabled={exporting}
         >
-          {exporting ? "Exporting…" : "Export table PNG"}
+          {exporting ? `Exporting ${exportProgress ?? 0}%` : "Export table PNG"}
         </button>
+        {exporting && (
+          <progress
+            className="export-table-progress"
+            value={exportProgress ?? 0}
+            max="100"
+            aria-label="PNG export progress"
+          />
+        )}
         {exportError && <span className="export-table-error">{exportError}</span>}
       </div>
       <div className="expression-grid-wrapper">
