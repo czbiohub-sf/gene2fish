@@ -53,7 +53,9 @@ async function mockApi(page) {
   });
 
   await page.route("**/api/anatomy/search**", async (route) => {
-    await route.fulfill({ json: ["heart", "hindbrain", "liver primordium", "pronephros"] });
+    const q = new URL(route.request().url()).searchParams.get("q")?.toLowerCase() || "";
+    const anatomyTerms = ["heart", "hindbrain", "liver primordium", "pronephros"];
+    await route.fulfill({ json: anatomyTerms.filter((term) => term.includes(q)) });
   });
 
   await page.route("**/api/anatomy/*/genes**", async (route) => {
@@ -234,7 +236,7 @@ test("anatomy autocomplete closes after selecting a term", async ({ page }) => {
   await expect(page.getByText("Genes with expression in")).toBeVisible();
 });
 
-test("anatomy autocomplete suppresses the dropdown for single-character input", async ({ page }) => {
+test("anatomy dropdown shows options on focus and filters while typing", async ({ page }) => {
   const anatomySearchRequests = [];
   page.on("request", (request) => {
     if (request.url().includes("/api/anatomy/search")) {
@@ -245,17 +247,17 @@ test("anatomy autocomplete suppresses the dropdown for single-character input", 
   await page.goto("/");
 
   const anatomyInput = page.getByPlaceholder("e.g. hindbrain");
-  await anatomyInput.fill("h");
-
   const dropdown = page.locator(".anatomy-filter .autocomplete-dropdown");
-  // The q.length < 2 guard means no fetch and no dropdown for a single char.
-  await expect(dropdown).toHaveCount(0);
-  expect(anatomySearchRequests).toHaveLength(0);
+  await anatomyInput.click();
 
-  // Typing a second character crosses the threshold and opens the dropdown.
-  await anatomyInput.fill("hi");
   await expect(dropdown).toBeVisible();
+  await expect(dropdown.getByText("heart", { exact: true })).toBeVisible();
+  await expect(dropdown.getByText("pronephros", { exact: true })).toBeVisible();
   expect(anatomySearchRequests.length).toBeGreaterThan(0);
+
+  await anatomyInput.fill("hi");
+  await expect(dropdown.getByText("hindbrain", { exact: true })).toBeVisible();
+  await expect(dropdown.getByText("heart", { exact: true })).toHaveCount(0);
 });
 
 test("anatomy clear button resets the input and hides suggested genes", async ({ page }) => {

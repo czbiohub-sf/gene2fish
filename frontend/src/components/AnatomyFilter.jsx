@@ -13,11 +13,13 @@ export function AnatomyFilter({ value, onChange }) {
   const selectedTermsKey = selectedTerms.join("\n");
   const [inputVal, setInputVal] = useState("");
   const [suggestions, setSuggestions] = useState([]);
+  const [isOpen, setIsOpen] = useState(false);
+  const inputRef = useRef(null);
+  const blurTimeoutRef = useRef(null);
   const previousValueRef = useRef(selectedTermsKey);
 
   const fetchSuggestions = useCallback(
     debounce(async (q) => {
-      if (!q || q.length < 2) { setSuggestions([]); return; }
       try {
         const res = await fetch(`/api/anatomy/search?q=${encodeURIComponent(q)}`);
         setSuggestions(res.ok ? await res.json() : []);
@@ -32,6 +34,12 @@ export function AnatomyFilter({ value, onChange }) {
     fetchSuggestions(inputVal);
   }, [inputVal, fetchSuggestions]);
 
+  const availableSuggestions = suggestions.filter(
+    (suggestion) => !selectedTerms.some(
+      (selected) => selected.toLowerCase() === suggestion.toLowerCase()
+    )
+  );
+
   // Sync external changes from URL/examples while avoiding a redundant autocomplete fetch.
   useEffect(() => {
     const nextValue = selectedTermsKey;
@@ -39,11 +47,14 @@ export function AnatomyFilter({ value, onChange }) {
     previousValueRef.current = nextValue;
     setSuggestions([]);
     setInputVal("");
+    setIsOpen(false);
   }, [selectedTermsKey]);
 
   function select(term) {
+    if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
     setInputVal("");
     setSuggestions([]);
+    setIsOpen(false);
     if (selectedTerms.some((selected) => selected.toLowerCase() === term.toLowerCase())) {
       return;
     }
@@ -55,9 +66,25 @@ export function AnatomyFilter({ value, onChange }) {
   }
 
   function clear() {
+    if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
     setInputVal("");
     setSuggestions([]);
+    setIsOpen(false);
     onChange([]);
+  }
+
+  function toggleDropdown() {
+    if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+    setIsOpen((current) => {
+      const next = !current;
+      if (next) {
+        inputRef.current?.focus();
+        fetchSuggestions(inputVal);
+      } else {
+        inputRef.current?.blur();
+      }
+      return next;
+    });
   }
 
   return (
@@ -86,20 +113,47 @@ export function AnatomyFilter({ value, onChange }) {
             </div>
           )}
           <input
+            ref={inputRef}
             className="anatomy-input"
             type="text"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-expanded={isOpen && availableSuggestions.length > 0}
+            aria-controls="anatomy-options"
             placeholder="e.g. hindbrain"
             value={inputVal}
-            onChange={(e) => setInputVal(e.target.value)}
-            onBlur={() => setTimeout(() => setSuggestions([]), 150)}
+            onChange={(e) => {
+              if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+              setInputVal(e.target.value);
+              setIsOpen(true);
+            }}
+            onFocus={() => {
+              if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+              setIsOpen(true);
+            }}
+            onBlur={() => {
+              blurTimeoutRef.current = setTimeout(() => setIsOpen(false), 150);
+            }}
             autoComplete="off"
           />
-          {suggestions.length > 0 && (
-            <div className="autocomplete-dropdown">
-              {suggestions.map((s) => (
+          <button
+            className="anatomy-dropdown-toggle"
+            type="button"
+            title="Show anatomy options"
+            aria-label="Show anatomy options"
+            aria-expanded={isOpen && availableSuggestions.length > 0}
+            onClick={toggleDropdown}
+          >
+            ▾
+          </button>
+          {isOpen && availableSuggestions.length > 0 && (
+            <div id="anatomy-options" className="autocomplete-dropdown" role="listbox">
+              {availableSuggestions.map((s) => (
                 <div
                   key={s}
                   className="autocomplete-item"
+                  role="option"
+                  aria-selected="false"
                   onMouseDown={() => select(s)}
                 >
                   {s}

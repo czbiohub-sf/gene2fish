@@ -136,3 +136,33 @@ def test_anatomy_genes_support_and_selection(tmp_path, monkeypatch):
             {"gene_symbol": "zic1", "image_count": 2},
         ],
     }
+
+
+def test_anatomy_search_returns_available_options_without_query(tmp_path, monkeypatch):
+    records = [
+        {
+            "gene": {"gene_symbol": "actb2"},
+            "anatomical_locations": [{"anatomy_name": "pronephros"}],
+        },
+        {
+            "gene": {"gene_symbol": "zic1"},
+            "anatomical_locations": [{"anatomy_name": "heart"}],
+        },
+        {
+            "gene": {"gene_symbol": "zic1"},
+            "anatomical_locations": [{"anatomy_name": "hindbrain"}],
+        },
+    ]
+    (tmp_path / "image_metadata.json").write_text(json.dumps(records))
+    monkeypatch.setenv("GENE2IMAGE_DATA_DIR", str(tmp_path))
+
+    from gene2image.main import app
+
+    with TestClient(app) as c:
+        all_options = c.get("/api/anatomy/search?q=")
+        filtered = c.get("/api/anatomy/search?q=brain")
+
+    assert all_options.status_code == 200
+    assert all_options.json() == ["heart", "hindbrain", "pronephros"]
+    assert filtered.status_code == 200
+    assert filtered.json() == ["hindbrain"]

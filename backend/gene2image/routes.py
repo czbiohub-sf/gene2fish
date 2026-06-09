@@ -277,10 +277,10 @@ def batch_gene_images(body: BatchRequest, request: Request) -> dict[str, list[Im
 def search_anatomy(request: Request, q: str = Query(default="")) -> list[str]:
     anatomy_list: list[str] = request.app.state.data["anatomy_list"]
     if not q:
-        return []
+        return anatomy_list
     q_lower = q.lower()
     matches = [a for a in anatomy_list if q_lower in a.lower()]
-    return matches[:20]
+    return matches
 
 
 @router.get("/anatomy/genes", response_model=AnatomyGenesResponse)

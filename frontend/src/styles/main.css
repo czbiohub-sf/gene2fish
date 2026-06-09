@@ -514,6 +514,10 @@ select {
   width: 100%;
 }
 
+.anatomy-input-shell .autocomplete-dropdown {
+  width: 100%;
+}
+
 .anatomy-selected-terms {
   display: flex;
   align-items: center;
@@ -574,7 +578,7 @@ select {
   font-size: 15px;
   font-weight: 700;
   height: 46px;
-  padding: 0 42px 0 16px;
+  padding: 0 76px 0 16px;
   border: 1px solid var(--border);
   border-radius: 4px;
   background: var(--bg-control);
@@ -588,9 +592,30 @@ select {
   border-color: var(--accent);
 }
 
-.anatomy-clear {
+.anatomy-dropdown-toggle {
   position: absolute;
   right: 8px;
+  bottom: 5px;
+  width: 34px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  line-height: 1;
+  font-size: 14px;
+}
+
+.anatomy-dropdown-toggle:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.anatomy-clear {
+  position: absolute;
+  right: 42px;
   bottom: 5px;
   background: transparent;
   border: 1px solid transparent;
