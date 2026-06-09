@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 from collections import defaultdict
+import ssl
 from typing import NoReturn
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlparse
+from urllib.request import Request as UrlRequest
+from urllib.request import urlopen
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 
 from .models import (
     AnatomyGene,
@@ -36,6 +41,39 @@ def _build_image_url(pub_id: str, image_id: str) -> tuple[str, str]:
         year = "2000"
     base = f"https://zfin.org/imageLoadUp/{year}/{pub_id}/{image_id}"
     return f"{base}_annot.jpg", f"{base}.jpg"
+
+
+def _validate_zfin_image_url(url: str) -> None:
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or parsed.netloc != "zfin.org":
+        raise HTTPException(status_code=400, detail="Only zfin.org image URLs are supported")
+    if not parsed.path.startswith("/imageLoadUp/"):
+        raise HTTPException(status_code=400, detail="Only ZFIN imageLoadUp URLs are supported")
+
+
+def _fetch_zfin_image(url: str) -> tuple[bytes, str]:
+    _validate_zfin_image_url(url)
+    request = UrlRequest(url, headers={"User-Agent": "gene2fish image export"})
+    try:
+        with urlopen(request, timeout=15) as resp:
+            media_type = resp.headers.get_content_type() or "image/jpeg"
+            return resp.read(), media_type
+    except HTTPError as err:
+        raise HTTPException(status_code=err.code, detail="ZFIN image not found") from err
+    except URLError as err:
+        if not isinstance(err.reason, ssl.SSLCertVerificationError):
+            raise HTTPException(status_code=502, detail="Unable to fetch ZFIN image") from err
+        context = ssl._create_unverified_context()
+        try:
+            with urlopen(request, timeout=15, context=context) as resp:
+                media_type = resp.headers.get_content_type() or "image/jpeg"
+                return resp.read(), media_type
+        except HTTPError as retry_err:
+            raise HTTPException(status_code=retry_err.code, detail="ZFIN image not found") from retry_err
+        except (TimeoutError, URLError) as retry_err:
+            raise HTTPException(status_code=502, detail="Unable to fetch ZFIN image") from retry_err
+    except TimeoutError as err:
+        raise HTTPException(status_code=502, detail="Unable to fetch ZFIN image") from err
 
 
 def _record_to_model(record: dict) -> ImageRecord:
@@ -225,6 +263,16 @@ def search_genes(request: Request, q: str = Query(default="")) -> list[str]:
     q_lower = q.lower()
     matches = [g for g in gene_list if g.lower().startswith(q_lower)]
     return matches[:20]
+
+
+@router.get("/image-proxy")
+def image_proxy(url: str = Query(...)) -> Response:
+    data, media_type = _fetch_zfin_image(url)
+    return Response(
+        content=data,
+        media_type=media_type,
+        headers={"Access-Control-Allow-Origin": "*"},
+    )
 
 
 @router.get("/genes/{symbol}/images", response_model=list[ImageRecord])

@@ -65,11 +65,23 @@ function loadImage(src) {
   });
 }
 
+function exportImageSrc(src) {
+  try {
+    const url = new URL(src);
+    if (url.hostname === "zfin.org" && url.pathname.startsWith("/imageLoadUp/")) {
+      return `/api/image-proxy?url=${encodeURIComponent(src)}`;
+    }
+  } catch {
+    // Keep relative or malformed URLs unchanged so the normal image error path handles them.
+  }
+  return src;
+}
+
 async function loadBestImage(image) {
-  const primary = await loadImage(image.image_url);
+  const primary = await loadImage(exportImageSrc(image.image_url));
   if (primary) return primary;
   if (image.image_url_fallback && image.image_url_fallback !== image.image_url) {
-    return loadImage(image.image_url_fallback);
+    return loadImage(exportImageSrc(image.image_url_fallback));
   }
   return null;
 }

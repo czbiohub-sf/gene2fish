@@ -183,6 +183,37 @@ test("changing images per cell keeps queued image cells loading and clickable", 
 });
 
 test("exports only the expression table as a PNG", async ({ page }) => {
+  const proxiedUrls = [];
+
+  await page.route("**/api/genes/batch", async (route) => {
+    const body = route.request().postDataJSON();
+    const response = {};
+    for (const gene of body.genes) {
+      response[gene] = imagesFor(gene, body.n_images || 1).map((img) => ({
+        ...img,
+        image_url: `https://zfin.org/imageLoadUp/2005/ZDB-PUB-051025-1/${img.image_id}_annot.jpg`,
+        image_url_fallback: `https://zfin.org/imageLoadUp/2005/ZDB-PUB-051025-1/${img.image_id}.jpg`,
+      }));
+    }
+    await route.fulfill({ json: response });
+  });
+
+  await page.route("https://zfin.org/imageLoadUp/**", async (route) => {
+    await route.fulfill({
+      contentType: "image/png",
+      body: MOCK_PNG,
+    });
+  });
+
+  await page.route("**/api/image-proxy**", async (route) => {
+    proxiedUrls.push(new URL(route.request().url()).searchParams.get("url"));
+    await route.fulfill({
+      contentType: "image/png",
+      headers: { "Access-Control-Allow-Origin": "*" },
+      body: MOCK_PNG,
+    });
+  });
+
   await page.goto("/?genes=pax2a");
 
   await expect(page.getByRole("columnheader").filter({ hasText: "pax2a" })).toBeVisible();
@@ -197,6 +228,8 @@ test("exports only the expression table as a PNG", async ({ page }) => {
   expect(path).toBeTruthy();
   const bytes = await readFile(path);
   expect([...bytes.slice(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+  expect(proxiedUrls.length).toBeGreaterThan(0);
+  expect(proxiedUrls[0]).toContain("https://zfin.org/imageLoadUp/");
 });
 
 test("adding an anatomy-suggested gene preserves previously visible gene columns", async ({ page }) => {

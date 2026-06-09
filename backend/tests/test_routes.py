@@ -47,6 +47,51 @@ def test_known_routes_not_shadowed_by_catchall(client):
     assert client.get("/api/stages").status_code != 404
 
 
+def test_image_proxy_restricts_to_zfin_imageloadup_urls(client):
+    resp = client.get("/api/image-proxy?url=https://example.com/image.jpg")
+    assert resp.status_code == 400
+
+    resp = client.get("/api/image-proxy?url=https://zfin.org/ZDB-IMAGE-123")
+    assert resp.status_code == 400
+
+
+def test_image_proxy_returns_image_bytes(client, monkeypatch):
+    from gene2image import routes
+
+    class Headers:
+        def get_content_type(self):
+            return "image/jpeg"
+
+    class FakeResponse:
+        headers = Headers()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return b"image-bytes"
+
+    def fake_urlopen(request, timeout, context=None):
+        assert request.full_url == "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"
+        assert timeout == 15
+        return FakeResponse()
+
+    monkeypatch.setattr(routes, "urlopen", fake_urlopen)
+
+    resp = client.get(
+        "/api/image-proxy",
+        params={"url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"},
+    )
+
+    assert resp.status_code == 200
+    assert resp.content == b"image-bytes"
+    assert resp.headers["content-type"] == "image/jpeg"
+    assert resp.headers["access-control-allow-origin"] == "*"
+
+
 def test_catchall_does_not_swallow_options(client):
     # The catch-all 404 must not claim OPTIONS — let the framework/CORSMiddleware
     # own it. Otherwise an OPTIONS to an unknown /api/* path returns a 404 JSON
