@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 
 export function useAnatomyGenes(anatomy, limit) {
+  const anatomyTerms = Array.isArray(anatomy) ? anatomy : (anatomy ? [anatomy] : []);
+  const anatomyKey = anatomyTerms.join("\n");
   const [suggestions, setSuggestions] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    if (!anatomy) {
+    if (anatomyTerms.length === 0) {
       setSuggestions([]);
       setTotal(0);
       setError(null);
@@ -20,7 +22,12 @@ export function useAnatomyGenes(anatomy, limit) {
       setLoading(true);
       setError(null);
       try {
-        const url = `/api/anatomy/${encodeURIComponent(anatomy)}/genes?limit=${limit}`;
+        const url = anatomyTerms.length === 1
+          ? `/api/anatomy/${encodeURIComponent(anatomyTerms[0])}/genes?limit=${limit}`
+          : `/api/anatomy/genes?${new URLSearchParams([
+            ...anatomyTerms.map((term) => ["anatomy", term]),
+            ["limit", limit],
+          ]).toString()}`;
         const res = await fetch(url);
         if (!res.ok) {
           if (res.status === 404) {
@@ -48,7 +55,7 @@ export function useAnatomyGenes(anatomy, limit) {
     return () => {
       cancelled = true;
     };
-  }, [anatomy, limit]);
+  }, [anatomyKey, limit]);
 
   return { suggestions, total, loading, error };
 }

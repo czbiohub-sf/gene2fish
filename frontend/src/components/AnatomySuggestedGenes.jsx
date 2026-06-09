@@ -10,19 +10,20 @@ const LIMIT_OPTIONS = [
 const ALL_LIMIT = 1000;
 
 export function AnatomySuggestedGenes({ anatomy, queriedGenes, onAddGene }) {
+  const anatomyTerms = Array.isArray(anatomy) ? anatomy : (anatomy ? [anatomy] : []);
   const [limit, setLimit] = useState(50);
 
   // Reset limit when the anatomy term changes so each new term starts at First 50.
   useEffect(() => {
     setLimit(50);
-  }, [anatomy]);
+  }, [anatomyTerms.join("\n")]);
 
   const effectiveLimit = limit === "all" ? ALL_LIMIT : limit;
   const { suggestions, total, loading, error } = useAnatomyGenes(anatomy, effectiveLimit);
 
   const queriedSet = useMemo(() => new Set(queriedGenes), [queriedGenes]);
 
-  if (!anatomy) return null;
+  if (anatomyTerms.length === 0) return null;
   if (!loading && suggestions.length === 0 && !error) return null;
 
   const showingPartial = !loading && total > suggestions.length;
@@ -31,7 +32,8 @@ export function AnatomySuggestedGenes({ anatomy, queriedGenes, onAddGene }) {
     <div className="suggested-genes-wrap">
       <div className="suggested-genes-header">
         <span className="suggested-genes-title">
-          Genes with expression in <strong>{anatomy}</strong>
+          Genes with expression in{" "}
+          <strong>{anatomyTerms.join(" AND ")}</strong>
           {!loading && total > 0 && (
             <span className="suggested-genes-count">
               {" "}({total}

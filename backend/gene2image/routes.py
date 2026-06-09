@@ -117,6 +117,51 @@ def _record_matches_anatomy(r: dict, anatomy_lower: str) -> bool:
     )
 
 
+def _record_matches_exact_anatomy(r: dict, anatomy_terms_lower: set[str]) -> bool:
+    """True if any anatomy term on this image exactly matches a selected term."""
+    return any(
+        loc.get("anatomy_name", "").lower() in anatomy_terms_lower
+        for loc in (r.get("anatomical_locations") or [])
+    )
+
+
+def _get_anatomy_gene_pairs(
+    anatomy_terms: list[str],
+    request: Request,
+) -> list[tuple[str, int]] | None:
+    """Return alphabetized genes that are present in every selected anatomy term."""
+    terms = []
+    seen = set()
+    for term in anatomy_terms:
+        key = term.strip().lower()
+        if key and key not in seen:
+            terms.append(key)
+            seen.add(key)
+
+    if not terms:
+        return []
+
+    idx: dict[str, list[tuple[str, int]]] = request.app.state.data["anatomy_index"]
+    per_term_symbols = []
+    for term in terms:
+        pairs = idx.get(term)
+        if pairs is None:
+            return None
+        per_term_symbols.append({symbol for symbol, _ in pairs})
+
+    matched_symbols = set.intersection(*per_term_symbols)
+    gene_index: dict[str, list[dict]] = request.app.state.data["gene_index"]
+    pairs = []
+    for symbol in matched_symbols:
+        records = gene_index.get(symbol) or []
+        image_count = sum(
+            1 for record in records if _record_matches_exact_anatomy(record, set(terms))
+        )
+        pairs.append((symbol, image_count))
+
+    return sorted(pairs, key=lambda x: x[0].lower())
+
+
 def _filter_records(
     records: list[dict],
     stage_min: float | None,
@@ -236,6 +281,21 @@ def search_anatomy(request: Request, q: str = Query(default="")) -> list[str]:
     q_lower = q.lower()
     matches = [a for a in anatomy_list if q_lower in a.lower()]
     return matches[:20]
+
+
+@router.get("/anatomy/genes", response_model=AnatomyGenesResponse)
+def get_anatomy_genes_for_terms(
+    request: Request,
+    anatomy: list[str] | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=1000),
+) -> AnatomyGenesResponse:
+    pairs = _get_anatomy_gene_pairs(anatomy or [], request)
+    if pairs is None:
+        raise HTTPException(status_code=404, detail="Anatomy term not found")
+    return AnatomyGenesResponse(
+        total=len(pairs),
+        genes=[AnatomyGene(gene_symbol=s, image_count=c) for s, c in pairs[:limit]],
+    )
 
 
 @router.get("/anatomy/{anatomy_name}/genes", response_model=AnatomyGenesResponse)

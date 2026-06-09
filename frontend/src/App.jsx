@@ -44,8 +44,9 @@ export default function App() {
   );
 
   const setAnatomy = useCallback(
-    (term) => {
-      setUrlState((s) => ({ ...s, anatomy: term }));
+    (terms) => {
+      const nextTerms = Array.isArray(terms) ? terms : (terms ? [terms] : []);
+      setUrlState((s) => ({ ...s, anatomy: nextTerms }));
     },
     [setUrlState]
   );

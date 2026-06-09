@@ -48,12 +48,12 @@ async function mockApi(page) {
 
   await page.route("**/api/genes/search**", async (route) => {
     const q = new URL(route.request().url()).searchParams.get("q")?.toLowerCase() || "";
-    const genes = ["pacsin2", "pax2a", "evx1", "shhb", "nr5a2", "prox1a"].filter((g) => g.startsWith(q));
+    const genes = ["pacsin2", "pax2a", "evx1", "shhb", "nr5a2", "prox1a", "hand2"].filter((g) => g.startsWith(q));
     await route.fulfill({ json: genes });
   });
 
   await page.route("**/api/anatomy/search**", async (route) => {
-    await route.fulfill({ json: ["hindbrain", "liver primordium"] });
+    await route.fulfill({ json: ["heart", "hindbrain", "liver primordium", "pronephros"] });
   });
 
   await page.route("**/api/anatomy/*/genes**", async (route) => {
@@ -86,6 +86,26 @@ async function mockApi(page) {
     });
   });
 
+  await page.route("**/api/anatomy/genes**", async (route) => {
+    const params = new URL(route.request().url()).searchParams;
+    const terms = params.getAll("anatomy").sort();
+    if (terms.join("|") === "heart|pronephros") {
+      await route.fulfill({
+        json: {
+          total: 1,
+          genes: [{ gene_symbol: "hand2", image_count: 18 }],
+        },
+      });
+      return;
+    }
+    await route.fulfill({
+      json: {
+        total: 0,
+        genes: [],
+      },
+    });
+  });
+
   await page.route("**/api/genes/batch", async (route) => {
     const body = route.request().postDataJSON();
     const response = {};
@@ -96,7 +116,7 @@ async function mockApi(page) {
         response[gene] = imagesFor(gene, 1, stages.slice(0, 5));
       } else if (gene === "evx1") {
         response[gene] = imagesFor(gene, 1, stages.slice(2, 6));
-      } else if (gene === "shhb" || gene === "nr5a2" || gene === "prox1a") {
+      } else if (gene === "shhb" || gene === "nr5a2" || gene === "prox1a" || gene === "hand2") {
         response[gene] = imagesFor(gene, 1, stages.slice(0, 3));
       } else {
         response[gene] = [];
@@ -208,7 +228,8 @@ test("anatomy autocomplete closes after selecting a term", async ({ page }) => {
   await expect(dropdown).toBeVisible();
   await page.locator(".anatomy-filter .autocomplete-item", { hasText: "hindbrain" }).click();
 
-  await expect(anatomyInput).toHaveValue("hindbrain");
+  await expect(anatomyInput).toHaveValue("");
+  await expect(page.locator(".anatomy-term-chip", { hasText: "hindbrain" })).toBeVisible();
   await expect(dropdown).toHaveCount(0);
   await expect(page.getByText("Genes with expression in")).toBeVisible();
 });
@@ -251,6 +272,7 @@ test("anatomy clear button resets the input and hides suggested genes", async ({
   await page.locator(".anatomy-filter .anatomy-clear").click();
 
   await expect(anatomyInput).toHaveValue("");
+  await expect(page.locator(".anatomy-term-chip", { hasText: "hindbrain" })).toHaveCount(0);
   await expect(page.locator(".suggested-genes-wrap")).toHaveCount(0);
 });
 
@@ -296,7 +318,7 @@ test("shows the initial empty-state prompt when no genes are selected", async ({
   await expect(page.locator(".expression-grid")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Example: liver primordium" }).click();
-  await expect(page.getByPlaceholder("e.g. hindbrain")).toHaveValue("liver primordium");
+  await expect(page.locator(".anatomy-term-chip", { hasText: "liver primordium" })).toBeVisible();
   await expect(page.getByRole("columnheader").filter({ hasText: "nr5a2" })).toBeVisible();
 
   await page.goto("/");
@@ -399,8 +421,9 @@ test("lightbox prev/next navigation respects boundary guards and close", async (
   await expect(next).toBeEnabled();
 
   // Navigate forward until the title changes to the other gene.
-  await next.click();
-  await next.click();
+  for (let i = 0; i < 10 && (await page.locator(".lightbox-title").textContent()) === "pacsin2"; i++) {
+    await next.click();
+  }
   await expect(page.locator(".lightbox-title")).toHaveText("evx1");
 
   // Walk to the last image; next becomes disabled at the boundary.
@@ -437,6 +460,29 @@ test("suggested-gene chip disables after adding and the gene is not duplicated",
   // evx1 is added exactly once — clicking again (or a dedup regression) must
   // not create a second column.
   await expect(page.getByRole("columnheader").filter({ hasText: "evx1" })).toHaveCount(1);
+});
+
+test("multiple anatomy terms show AND-matched suggested genes", async ({ page }) => {
+  await page.goto("/");
+
+  const anatomyInput = page.getByPlaceholder("e.g. hindbrain");
+  await anatomyInput.fill("heart");
+  let dropdown = page.locator(".anatomy-filter .autocomplete-dropdown");
+  await expect(dropdown).toBeVisible();
+  await dropdown.getByText("heart", { exact: true }).click();
+  await expect(page.locator(".anatomy-term-chip", { hasText: "heart" })).toBeVisible();
+
+  await anatomyInput.fill("pronephros");
+  dropdown = page.locator(".anatomy-filter .autocomplete-dropdown");
+  await expect(dropdown).toBeVisible();
+  await dropdown.getByText("pronephros", { exact: true }).click();
+
+  await expect(page.locator(".anatomy-term-chip", { hasText: "pronephros" })).toBeVisible();
+  await expect(page.getByText("Genes with expression in")).toBeVisible();
+  await expect(page.getByText("heart AND pronephros")).toBeVisible();
+  await expect(page.locator(".suggested-gene-chip", { hasText: "hand2" })).toBeVisible();
+  await expect(page).toHaveURL(/anatomy=heart/);
+  await expect(page).toHaveURL(/anatomy=pronephros/);
 });
 
 test("anatomy genes 404 silently shows no suggested-genes strip", async ({ page }) => {

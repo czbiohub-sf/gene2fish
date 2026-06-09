@@ -9,10 +9,11 @@ function debounce(fn, ms) {
 }
 
 export function AnatomyFilter({ value, onChange }) {
-  const [inputVal, setInputVal] = useState(value || "");
+  const selectedTerms = Array.isArray(value) ? value : (value ? [value] : []);
+  const selectedTermsKey = selectedTerms.join("\n");
+  const [inputVal, setInputVal] = useState("");
   const [suggestions, setSuggestions] = useState([]);
-  const skipNextFetchRef = useRef(false);
-  const previousValueRef = useRef(value || "");
+  const previousValueRef = useRef(selectedTermsKey);
 
   const fetchSuggestions = useCallback(
     debounce(async (q) => {
@@ -28,35 +29,35 @@ export function AnatomyFilter({ value, onChange }) {
   );
 
   useEffect(() => {
-    if (skipNextFetchRef.current) {
-      skipNextFetchRef.current = false;
-      return;
-    }
     fetchSuggestions(inputVal);
   }, [inputVal, fetchSuggestions]);
 
   // Sync external changes from URL/examples while avoiding a redundant autocomplete fetch.
   useEffect(() => {
-    const nextValue = value || "";
+    const nextValue = selectedTermsKey;
     if (nextValue === previousValueRef.current) return;
     previousValueRef.current = nextValue;
-    skipNextFetchRef.current = true;
     setSuggestions([]);
-    setInputVal(nextValue);
-  }, [value]);
+    setInputVal("");
+  }, [selectedTermsKey]);
 
   function select(term) {
-    skipNextFetchRef.current = true;
-    setInputVal(term);
+    setInputVal("");
     setSuggestions([]);
-    onChange(term);
+    if (selectedTerms.some((selected) => selected.toLowerCase() === term.toLowerCase())) {
+      return;
+    }
+    onChange([...selectedTerms, term]);
+  }
+
+  function remove(term) {
+    onChange(selectedTerms.filter((selected) => selected !== term));
   }
 
   function clear() {
-    skipNextFetchRef.current = false;
     setInputVal("");
     setSuggestions([]);
-    onChange(null);
+    onChange([]);
   }
 
   return (
@@ -64,6 +65,26 @@ export function AnatomyFilter({ value, onChange }) {
       <label>Find genes by anatomy</label>
       <div className="anatomy-filter-row">
         <div className="anatomy-input-shell">
+          {selectedTerms.length > 0 && (
+            <div className="anatomy-selected-terms" aria-label="Selected anatomy terms">
+              {selectedTerms.map((term, index) => (
+                <span key={term} className="anatomy-selected-term">
+                  {index > 0 && <span className="anatomy-and" aria-hidden="true">AND</span>}
+                  <span className="anatomy-term-chip">
+                    {term}
+                    <button
+                      type="button"
+                      className="anatomy-term-remove"
+                      title={`Remove ${term}`}
+                      onClick={() => remove(term)}
+                    >
+                      ×
+                    </button>
+                  </span>
+                </span>
+              ))}
+            </div>
+          )}
           <input
             className="anatomy-input"
             type="text"
@@ -86,7 +107,7 @@ export function AnatomyFilter({ value, onChange }) {
               ))}
             </div>
           )}
-          {inputVal && (
+          {(inputVal || selectedTerms.length > 0) && (
             <button className="anatomy-clear" title="Clear anatomy gene search" onClick={clear}>
               ×
             </button>

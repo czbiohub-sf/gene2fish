@@ -95,3 +95,44 @@ def test_anatomy_genes_are_limited_after_alphabetical_sort(tmp_path, monkeypatch
             {"gene_symbol": "neurod1", "image_count": 1},
         ],
     }
+
+
+def test_anatomy_genes_support_and_selection(tmp_path, monkeypatch):
+    records = [
+        {
+            "gene": {"gene_symbol": "zic1"},
+            "anatomical_locations": [{"anatomy_name": "heart"}],
+        },
+        {
+            "gene": {"gene_symbol": "zic1"},
+            "anatomical_locations": [{"anatomy_name": "pronephros"}],
+        },
+        {
+            "gene": {"gene_symbol": "actb2"},
+            "anatomical_locations": [{"anatomy_name": "heart"}],
+        },
+        {
+            "gene": {"gene_symbol": "actb2"},
+            "anatomical_locations": [{"anatomy_name": "pronephros"}],
+        },
+        {
+            "gene": {"gene_symbol": "heartonly"},
+            "anatomical_locations": [{"anatomy_name": "heart"}],
+        },
+    ]
+    (tmp_path / "image_metadata.json").write_text(json.dumps(records))
+    monkeypatch.setenv("GENE2IMAGE_DATA_DIR", str(tmp_path))
+
+    from gene2image.main import app
+
+    with TestClient(app) as c:
+        resp = c.get("/api/anatomy/genes?anatomy=heart&anatomy=pronephros")
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "total": 2,
+        "genes": [
+            {"gene_symbol": "actb2", "image_count": 2},
+            {"gene_symbol": "zic1", "image_count": 2},
+        ],
+    }
