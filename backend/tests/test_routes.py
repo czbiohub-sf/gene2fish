@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -52,3 +54,44 @@ def test_catchall_does_not_swallow_options(client):
     resp = client.options("/api/does-not-exist")
     assert resp.status_code != 404
     assert "API endpoint not found" not in resp.text
+
+
+def test_anatomy_genes_are_limited_after_alphabetical_sort(tmp_path, monkeypatch):
+    records = [
+        {
+            "gene": {"gene_symbol": "zic1"},
+            "anatomical_locations": [{"anatomy_name": "hindbrain"}],
+        },
+        {
+            "gene": {"gene_symbol": "actb2"},
+            "anatomical_locations": [{"anatomy_name": "hindbrain"}],
+        },
+        {
+            "gene": {"gene_symbol": "zic1"},
+            "anatomical_locations": [{"anatomy_name": "hindbrain"}],
+        },
+        {
+            "gene": {"gene_symbol": "neurod1"},
+            "anatomical_locations": [{"anatomy_name": "hindbrain"}],
+        },
+        {
+            "gene": {"gene_symbol": "zic1"},
+            "anatomical_locations": [{"anatomy_name": "hindbrain"}],
+        },
+    ]
+    (tmp_path / "image_metadata.json").write_text(json.dumps(records))
+    monkeypatch.setenv("GENE2IMAGE_DATA_DIR", str(tmp_path))
+
+    from gene2image.main import app
+
+    with TestClient(app) as c:
+        resp = c.get("/api/anatomy/hindbrain/genes?limit=2")
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "total": 3,
+        "genes": [
+            {"gene_symbol": "actb2", "image_count": 1},
+            {"gene_symbol": "neurod1", "image_count": 1},
+        ],
+    }

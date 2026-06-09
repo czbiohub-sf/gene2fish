@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useAnatomyGenes } from "../hooks/useAnatomyGenes.js";
 
 const LIMIT_OPTIONS = [
-  { value: 50, label: "Top 50" },
-  { value: 100, label: "Top 100" },
+  { value: 50, label: "First 50" },
+  { value: 100, label: "First 100" },
   { value: "all", label: "All" },
 ];
 
@@ -12,7 +12,7 @@ const ALL_LIMIT = 1000;
 export function AnatomySuggestedGenes({ anatomy, queriedGenes, onAddGene }) {
   const [limit, setLimit] = useState(50);
 
-  // Reset limit when the anatomy term changes so each new term starts at Top 50.
+  // Reset limit when the anatomy term changes so each new term starts at First 50.
   useEffect(() => {
     setLimit(50);
   }, [anatomy]);
