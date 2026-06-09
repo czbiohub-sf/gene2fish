@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 
 const stages = [
   { stage_name: "Gastrula:50%-epiboly", begin_hours: 5.25, display_label: "50%-epiboly" },
@@ -39,7 +40,10 @@ function imagesFor(gene, nPerStage = 1, selectedStages = stages) {
   );
 }
 
-const MOCK_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>';
+const MOCK_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
+  "base64"
+);
 
 async function mockApi(page) {
   await page.route("**/api/stages", async (route) => {
@@ -129,8 +133,9 @@ async function mockApi(page) {
 
   await page.route("https://images.example.test/**", async (route) => {
     await route.fulfill({
-      contentType: "image/svg+xml",
-      body: MOCK_SVG,
+      contentType: "image/png",
+      headers: { "Access-Control-Allow-Origin": "*" },
+      body: MOCK_PNG,
     });
   });
 }
@@ -175,6 +180,23 @@ test("changing images per cell keeps queued image cells loading and clickable", 
   await firstImage.click();
   await expect(page.locator(".lightbox-overlay")).toBeVisible();
   await expect(page.locator(".lightbox-title")).toHaveText("pax2a");
+});
+
+test("exports only the expression table as a PNG", async ({ page }) => {
+  await page.goto("/?genes=pax2a");
+
+  await expect(page.getByRole("columnheader").filter({ hasText: "pax2a" })).toBeVisible();
+  await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length);
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export table PNG" }).click();
+  const download = await downloadPromise;
+
+  expect(download.suggestedFilename()).toMatch(/^gene2fish-table-pax2a\.png$/);
+  const path = await download.path();
+  expect(path).toBeTruthy();
+  const bytes = await readFile(path);
+  expect([...bytes.slice(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
 });
 
 test("adding an anatomy-suggested gene preserves previously visible gene columns", async ({ page }) => {

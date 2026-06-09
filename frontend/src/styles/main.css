@@ -768,6 +768,39 @@ select {
   background: var(--bg-hover);
 }
 
+.expression-grid-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.export-table-btn {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-control);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 7px 10px;
+}
+
+.export-table-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.export-table-btn:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.export-table-error {
+  color: var(--danger);
+  font-size: 12px;
+}
+
 .expression-grid-wrapper {
   overflow-x: auto;
 }
