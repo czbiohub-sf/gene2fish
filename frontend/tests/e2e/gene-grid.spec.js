@@ -147,6 +147,15 @@ test.beforeEach(async ({ page }) => {
   await mockApi(page);
 });
 
+test("primary nav links to ZebraHub", async ({ page }) => {
+  await page.goto("/");
+
+  await expect(page.getByRole("link", { name: /ZebraHub/ })).toHaveAttribute(
+    "href",
+    "https://zebrahub.sf.czbiohub.org/"
+  );
+});
+
 test("changing images per cell keeps queued image cells loading and clickable", async ({ page }) => {
   await page.goto("/?genes=pax2a");
 
