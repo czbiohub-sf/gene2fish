@@ -545,6 +545,24 @@ test("multiple anatomy terms show AND-matched suggested genes", async ({ page })
   await expect(page).toHaveURL(/anatomy=pronephros/);
 });
 
+test("multiple anatomy terms with no shared genes still show the suggestions panel", async ({ page }) => {
+  await page.goto("/");
+
+  const anatomyInput = page.getByPlaceholder("e.g. hindbrain");
+  await anatomyInput.fill("heart");
+  await page.getByRole("option", { name: "heart", exact: true }).click();
+
+  await anatomyInput.fill("liver primordium");
+  await page.getByRole("option", { name: "liver primordium", exact: true }).click();
+
+  await expect(page.locator(".anatomy-term-chip", { hasText: "heart" })).toBeVisible();
+  await expect(page.locator(".anatomy-term-chip", { hasText: "liver primordium" })).toBeVisible();
+  await expect(page.locator(".suggested-genes-wrap")).toBeVisible();
+  await expect(page.getByText("heart AND liver primordium")).toBeVisible();
+  await expect(page.locator(".suggested-genes-empty")).toHaveText("No genes found.");
+  await expect(page.locator(".suggested-gene-chip")).toHaveCount(0);
+});
+
 test("anatomy genes 404 silently shows no suggested-genes strip", async ({ page }) => {
   // Override the default valid stub so the genes endpoint 404s.
   await page.route("**/api/anatomy/*/genes**", async (route) => {

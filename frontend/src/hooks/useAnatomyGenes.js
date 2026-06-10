@@ -7,12 +7,14 @@ export function useAnatomyGenes(anatomy, limit) {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
     if (anatomyTerms.length === 0) {
       setSuggestions([]);
       setTotal(0);
       setError(null);
+      setNotFound(false);
       return;
     }
 
@@ -21,6 +23,7 @@ export function useAnatomyGenes(anatomy, limit) {
     async function fetchSuggestions() {
       setLoading(true);
       setError(null);
+      setNotFound(false);
       try {
         const url = anatomyTerms.length === 1
           ? `/api/anatomy/${encodeURIComponent(anatomyTerms[0])}/genes?limit=${limit}`
@@ -34,6 +37,7 @@ export function useAnatomyGenes(anatomy, limit) {
             if (!cancelled) {
               setSuggestions([]);
               setTotal(0);
+              setNotFound(true);
             }
             return;
           }
@@ -43,6 +47,7 @@ export function useAnatomyGenes(anatomy, limit) {
         if (!cancelled) {
           setSuggestions(json.genes || []);
           setTotal(json.total || 0);
+          setNotFound(false);
         }
       } catch (err) {
         if (!cancelled) setError(err.message);
@@ -57,5 +62,5 @@ export function useAnatomyGenes(anatomy, limit) {
     };
   }, [anatomyKey, limit]);
 
-  return { suggestions, total, loading, error };
+  return { suggestions, total, loading, error, notFound };
 }

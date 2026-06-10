@@ -19,12 +19,12 @@ export function AnatomySuggestedGenes({ anatomy, queriedGenes, onAddGene }) {
   }, [anatomyTerms.join("\n")]);
 
   const effectiveLimit = limit === "all" ? ALL_LIMIT : limit;
-  const { suggestions, total, loading, error } = useAnatomyGenes(anatomy, effectiveLimit);
+  const { suggestions, total, loading, error, notFound } = useAnatomyGenes(anatomy, effectiveLimit);
 
   const queriedSet = useMemo(() => new Set(queriedGenes), [queriedGenes]);
 
   if (anatomyTerms.length === 0) return null;
-  if (!loading && suggestions.length === 0 && !error) return null;
+  if (notFound) return null;
 
   const showingPartial = !loading && total > suggestions.length;
 
@@ -65,6 +65,9 @@ export function AnatomySuggestedGenes({ anatomy, queriedGenes, onAddGene }) {
         {loading && <span className="suggested-genes-loading">Loading…</span>}
         {error && <span className="suggested-genes-error">Error: {error}</span>}
       </div>
+      {!loading && suggestions.length === 0 && !error && (
+        <span className="suggested-genes-empty">No genes found.</span>
+      )}
       {suggestions.length > 0 && (
         <div className="suggested-genes-strip">
           {suggestions.map((s) => {
