@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/czbiohub-sf/gene2fish/compare/v0.2.0...v0.3.0) (2026-06-12)
+
+
+### Features
+
+* update anatomy filters and table export ([#34](https://github.com/czbiohub-sf/gene2fish/issues/34)) ([b5443b9](https://github.com/czbiohub-sf/gene2fish/commit/b5443b95f1a68203ad30881a5421b6996b563448))
+
 ## [0.2.0](https://github.com/czbiohub-sf/gene2fish/compare/v0.1.0...v0.2.0) (2026-06-03)
 
 
