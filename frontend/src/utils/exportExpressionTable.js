@@ -4,6 +4,7 @@ const EXPORT_HEADER_HEIGHT = 58;
 const EXPORT_CELL_PADDING = 8;
 const EXPORT_IMAGE_GAP = 4;
 const EXPORT_SCALE = 2;
+const EXPORT_IMAGE_LOAD_CONCURRENCY = 6;
 
 function cssVar(name, fallback) {
   const root = document.querySelector(".app-root") || document.documentElement;
@@ -86,6 +87,24 @@ async function loadBestImage(image) {
   return null;
 }
 
+async function preloadImages(images, onImageLoaded) {
+  const loadedImages = new Map();
+  let nextIndex = 0;
+
+  async function loadNext() {
+    while (nextIndex < images.length) {
+      const imageIndex = nextIndex;
+      nextIndex += 1;
+      loadedImages.set(images[imageIndex], await loadBestImage(images[imageIndex]));
+      onImageLoaded?.();
+    }
+  }
+
+  const workerCount = Math.min(EXPORT_IMAGE_LOAD_CONCURRENCY, images.length);
+  await Promise.all(Array.from({ length: workerCount }, loadNext));
+  return loadedImages;
+}
+
 function drawImageContain(ctx, img, x, y, width, height) {
   const ratio = Math.min(width / img.naturalWidth, height / img.naturalHeight);
   const drawWidth = img.naturalWidth * ratio;
@@ -162,6 +181,12 @@ export async function exportExpressionTablePng({ rows, genes, lookup, colMaxImag
   canvas.style.height = `${height}px`;
 
   const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    throw new Error("PNG export failed: canvas rendering is unavailable");
+  }
+
+  const loadedImages = await preloadImages(exportImages, reportImageProgress);
+
   ctx.scale(EXPORT_SCALE, EXPORT_SCALE);
   ctx.fillStyle = colors.background;
   ctx.fillRect(0, 0, width, height);
@@ -208,14 +233,13 @@ export async function exportExpressionTablePng({ rows, genes, lookup, colMaxImag
 
         for (let imageIndex = 0; imageIndex < images.length; imageIndex += 1) {
           const imgData = images[imageIndex];
-          const img = await loadBestImage(imgData);
+          const img = loadedImages.get(imgData);
           const imageX = innerX + imageIndex * (imageWidth + EXPORT_IMAGE_GAP);
           if (img) {
             drawImageContain(ctx, img, imageX, innerY, imageWidth, innerHeight);
           } else {
             drawPlaceholder(ctx, imageX, innerY, imageWidth, innerHeight, "Image unavailable", colors);
           }
-          reportImageProgress();
         }
       }
       x += columnWidth;

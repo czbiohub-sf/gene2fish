@@ -1,4 +1,5 @@
 import json
+from urllib.error import URLError
 
 import pytest
 from fastapi.testclient import TestClient
@@ -90,6 +91,22 @@ def test_image_proxy_returns_image_bytes(client, monkeypatch):
     assert resp.content == b"image-bytes"
     assert resp.headers["content-type"] == "image/jpeg"
     assert resp.headers["access-control-allow-origin"] == "*"
+
+
+def test_image_proxy_returns_502_when_fetch_fails(client, monkeypatch):
+    from gene2image import routes
+
+    def fake_urlopen(request, timeout):
+        raise URLError("certificate verify failed")
+
+    monkeypatch.setattr(routes, "urlopen", fake_urlopen)
+
+    resp = client.get(
+        "/api/image-proxy",
+        params={"url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"},
+    )
+
+    assert resp.status_code == 502
 
 
 def test_catchall_does_not_swallow_options(client):
@@ -205,9 +222,12 @@ def test_anatomy_search_returns_available_options_without_query(tmp_path, monkey
 
     with TestClient(app) as c:
         all_options = c.get("/api/anatomy/search?q=")
+        limited_options = c.get("/api/anatomy/search?q=&limit=2")
         filtered = c.get("/api/anatomy/search?q=brain")
 
     assert all_options.status_code == 200
     assert all_options.json() == ["heart", "hindbrain", "pronephros"]
+    assert limited_options.status_code == 200
+    assert limited_options.json() == ["heart", "hindbrain"]
     assert filtered.status_code == 200
     assert filtered.json() == ["hindbrain"]

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections import defaultdict
-import ssl
 from typing import NoReturn
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
@@ -61,17 +60,7 @@ def _fetch_zfin_image(url: str) -> tuple[bytes, str]:
     except HTTPError as err:
         raise HTTPException(status_code=err.code, detail="ZFIN image not found") from err
     except URLError as err:
-        if not isinstance(err.reason, ssl.SSLCertVerificationError):
-            raise HTTPException(status_code=502, detail="Unable to fetch ZFIN image") from err
-        context = ssl._create_unverified_context()
-        try:
-            with urlopen(request, timeout=15, context=context) as resp:
-                media_type = resp.headers.get_content_type() or "image/jpeg"
-                return resp.read(), media_type
-        except HTTPError as retry_err:
-            raise HTTPException(status_code=retry_err.code, detail="ZFIN image not found") from retry_err
-        except (TimeoutError, URLError) as retry_err:
-            raise HTTPException(status_code=502, detail="Unable to fetch ZFIN image") from retry_err
+        raise HTTPException(status_code=502, detail="Unable to fetch ZFIN image") from err
     except TimeoutError as err:
         raise HTTPException(status_code=502, detail="Unable to fetch ZFIN image") from err
 
@@ -188,12 +177,13 @@ def _get_anatomy_gene_pairs(
         per_term_symbols.append({symbol for symbol, _ in pairs})
 
     matched_symbols = set.intersection(*per_term_symbols)
+    terms_set = set(terms)
     gene_index: dict[str, list[dict]] = request.app.state.data["gene_index"]
     pairs = []
     for symbol in matched_symbols:
         records = gene_index.get(symbol) or []
         image_count = sum(
-            1 for record in records if _record_matches_exact_anatomy(record, set(terms))
+            1 for record in records if _record_matches_exact_anatomy(record, terms_set)
         )
         pairs.append((symbol, image_count))
 
@@ -322,13 +312,17 @@ def batch_gene_images(body: BatchRequest, request: Request) -> dict[str, list[Im
 
 
 @router.get("/anatomy/search")
-def search_anatomy(request: Request, q: str = Query(default="")) -> list[str]:
+def search_anatomy(
+    request: Request,
+    q: str = Query(default=""),
+    limit: int = Query(default=250, ge=1, le=500),
+) -> list[str]:
     anatomy_list: list[str] = request.app.state.data["anatomy_list"]
     if not q:
-        return anatomy_list
+        return anatomy_list[:limit]
     q_lower = q.lower()
     matches = [a for a in anatomy_list if q_lower in a.lower()]
-    return matches
+    return matches[:limit]
 
 
 @router.get("/anatomy/genes", response_model=AnatomyGenesResponse)

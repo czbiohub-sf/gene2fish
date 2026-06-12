@@ -21,7 +21,7 @@ export function AnatomyFilter({ value, onChange }) {
   const fetchSuggestions = useCallback(
     debounce(async (q) => {
       try {
-        const res = await fetch(`/api/anatomy/search?q=${encodeURIComponent(q)}`);
+        const res = await fetch(`/api/anatomy/search?q=${encodeURIComponent(q)}&limit=250`);
         setSuggestions(res.ok ? await res.json() : []);
       } catch {
         setSuggestions([]);
@@ -33,6 +33,10 @@ export function AnatomyFilter({ value, onChange }) {
   useEffect(() => {
     fetchSuggestions(inputVal);
   }, [inputVal, fetchSuggestions]);
+
+  useEffect(() => () => {
+    if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+  }, []);
 
   const availableSuggestions = suggestions.filter(
     (suggestion) => !selectedTerms.some(
