@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 
 const stages = [
   { stage_name: "Gastrula:50%-epiboly", begin_hours: 5.25, display_label: "50%-epiboly" },
@@ -39,7 +40,10 @@ function imagesFor(gene, nPerStage = 1, selectedStages = stages) {
   );
 }
 
-const MOCK_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>';
+const MOCK_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
+  "base64"
+);
 
 async function mockApi(page) {
   await page.route("**/api/stages", async (route) => {
@@ -48,12 +52,14 @@ async function mockApi(page) {
 
   await page.route("**/api/genes/search**", async (route) => {
     const q = new URL(route.request().url()).searchParams.get("q")?.toLowerCase() || "";
-    const genes = ["pacsin2", "pax2a", "evx1", "shhb", "nr5a2", "prox1a"].filter((g) => g.startsWith(q));
+    const genes = ["pacsin2", "pax2a", "evx1", "shhb", "nr5a2", "prox1a", "hand2"].filter((g) => g.startsWith(q));
     await route.fulfill({ json: genes });
   });
 
   await page.route("**/api/anatomy/search**", async (route) => {
-    await route.fulfill({ json: ["hindbrain", "liver primordium"] });
+    const q = new URL(route.request().url()).searchParams.get("q")?.toLowerCase() || "";
+    const anatomyTerms = ["heart", "hindbrain", "liver primordium", "pronephros"];
+    await route.fulfill({ json: anatomyTerms.filter((term) => term.includes(q)) });
   });
 
   await page.route("**/api/anatomy/*/genes**", async (route) => {
@@ -86,6 +92,26 @@ async function mockApi(page) {
     });
   });
 
+  await page.route("**/api/anatomy/genes**", async (route) => {
+    const params = new URL(route.request().url()).searchParams;
+    const terms = params.getAll("anatomy").sort();
+    if (terms.join("|") === "heart|pronephros") {
+      await route.fulfill({
+        json: {
+          total: 1,
+          genes: [{ gene_symbol: "hand2", image_count: 18 }],
+        },
+      });
+      return;
+    }
+    await route.fulfill({
+      json: {
+        total: 0,
+        genes: [],
+      },
+    });
+  });
+
   await page.route("**/api/genes/batch", async (route) => {
     const body = route.request().postDataJSON();
     const response = {};
@@ -96,7 +122,7 @@ async function mockApi(page) {
         response[gene] = imagesFor(gene, 1, stages.slice(0, 5));
       } else if (gene === "evx1") {
         response[gene] = imagesFor(gene, 1, stages.slice(2, 6));
-      } else if (gene === "shhb" || gene === "nr5a2" || gene === "prox1a") {
+      } else if (gene === "shhb" || gene === "nr5a2" || gene === "prox1a" || gene === "hand2") {
         response[gene] = imagesFor(gene, 1, stages.slice(0, 3));
       } else {
         response[gene] = [];
@@ -107,8 +133,9 @@ async function mockApi(page) {
 
   await page.route("https://images.example.test/**", async (route) => {
     await route.fulfill({
-      contentType: "image/svg+xml",
-      body: MOCK_SVG,
+      contentType: "image/png",
+      headers: { "Access-Control-Allow-Origin": "*" },
+      body: MOCK_PNG,
     });
   });
 }
@@ -118,6 +145,15 @@ test.beforeEach(async ({ page }) => {
   // routes on a reused page.
   await page.unrouteAll({ behavior: "ignoreErrors" });
   await mockApi(page);
+});
+
+test("primary nav links to ZebraHub", async ({ page }) => {
+  await page.goto("/");
+
+  await expect(page.getByRole("link", { name: /ZebraHub/ })).toHaveAttribute(
+    "href",
+    "https://zebrahub.sf.czbiohub.org/"
+  );
 });
 
 test("changing images per cell keeps queued image cells loading and clickable", async ({ page }) => {
@@ -153,6 +189,59 @@ test("changing images per cell keeps queued image cells loading and clickable", 
   await firstImage.click();
   await expect(page.locator(".lightbox-overlay")).toBeVisible();
   await expect(page.locator(".lightbox-title")).toHaveText("pax2a");
+});
+
+test("exports only the expression table as a PNG", async ({ page }) => {
+  const proxiedUrls = [];
+
+  await page.route("**/api/genes/batch", async (route) => {
+    const body = route.request().postDataJSON();
+    const response = {};
+    for (const gene of body.genes) {
+      response[gene] = imagesFor(gene, body.n_images || 1).map((img) => ({
+        ...img,
+        image_url: `https://zfin.org/imageLoadUp/2005/ZDB-PUB-051025-1/${img.image_id}_annot.jpg`,
+        image_url_fallback: `https://zfin.org/imageLoadUp/2005/ZDB-PUB-051025-1/${img.image_id}.jpg`,
+      }));
+    }
+    await route.fulfill({ json: response });
+  });
+
+  await page.route("https://zfin.org/imageLoadUp/**", async (route) => {
+    await route.fulfill({
+      contentType: "image/png",
+      body: MOCK_PNG,
+    });
+  });
+
+  await page.route("**/api/image-proxy**", async (route) => {
+    proxiedUrls.push(new URL(route.request().url()).searchParams.get("url"));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    await route.fulfill({
+      contentType: "image/png",
+      headers: { "Access-Control-Allow-Origin": "*" },
+      body: MOCK_PNG,
+    });
+  });
+
+  await page.goto("/?genes=pax2a");
+
+  await expect(page.getByRole("columnheader").filter({ hasText: "pax2a" })).toBeVisible();
+  await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length);
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export table PNG" }).click();
+  await expect(page.getByRole("progressbar", { name: "PNG export progress" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Exporting \d+%/ })).toBeDisabled();
+  const download = await downloadPromise;
+
+  expect(download.suggestedFilename()).toMatch(/^gene2fish-table-pax2a\.png$/);
+  const path = await download.path();
+  expect(path).toBeTruthy();
+  const bytes = await readFile(path);
+  expect([...bytes.slice(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+  expect(proxiedUrls.length).toBeGreaterThan(0);
+  expect(proxiedUrls[0]).toContain("https://zfin.org/imageLoadUp/");
 });
 
 test("adding an anatomy-suggested gene preserves previously visible gene columns", async ({ page }) => {
@@ -208,12 +297,13 @@ test("anatomy autocomplete closes after selecting a term", async ({ page }) => {
   await expect(dropdown).toBeVisible();
   await page.locator(".anatomy-filter .autocomplete-item", { hasText: "hindbrain" }).click();
 
-  await expect(anatomyInput).toHaveValue("hindbrain");
+  await expect(anatomyInput).toHaveValue("");
+  await expect(page.locator(".anatomy-term-chip", { hasText: "hindbrain" })).toBeVisible();
   await expect(dropdown).toHaveCount(0);
   await expect(page.getByText("Genes with expression in")).toBeVisible();
 });
 
-test("anatomy autocomplete suppresses the dropdown for single-character input", async ({ page }) => {
+test("anatomy dropdown shows options on focus and filters while typing", async ({ page }) => {
   const anatomySearchRequests = [];
   page.on("request", (request) => {
     if (request.url().includes("/api/anatomy/search")) {
@@ -224,17 +314,17 @@ test("anatomy autocomplete suppresses the dropdown for single-character input", 
   await page.goto("/");
 
   const anatomyInput = page.getByPlaceholder("e.g. hindbrain");
-  await anatomyInput.fill("h");
-
   const dropdown = page.locator(".anatomy-filter .autocomplete-dropdown");
-  // The q.length < 2 guard means no fetch and no dropdown for a single char.
-  await expect(dropdown).toHaveCount(0);
-  expect(anatomySearchRequests).toHaveLength(0);
+  await anatomyInput.click();
 
-  // Typing a second character crosses the threshold and opens the dropdown.
-  await anatomyInput.fill("hi");
   await expect(dropdown).toBeVisible();
+  await expect(dropdown.getByText("heart", { exact: true })).toBeVisible();
+  await expect(dropdown.getByText("pronephros", { exact: true })).toBeVisible();
   expect(anatomySearchRequests.length).toBeGreaterThan(0);
+
+  await anatomyInput.fill("hi");
+  await expect(dropdown.getByText("hindbrain", { exact: true })).toBeVisible();
+  await expect(dropdown.getByText("heart", { exact: true })).toHaveCount(0);
 });
 
 test("anatomy clear button resets the input and hides suggested genes", async ({ page }) => {
@@ -251,6 +341,7 @@ test("anatomy clear button resets the input and hides suggested genes", async ({
   await page.locator(".anatomy-filter .anatomy-clear").click();
 
   await expect(anatomyInput).toHaveValue("");
+  await expect(page.locator(".anatomy-term-chip", { hasText: "hindbrain" })).toHaveCount(0);
   await expect(page.locator(".suggested-genes-wrap")).toHaveCount(0);
 });
 
@@ -296,7 +387,7 @@ test("shows the initial empty-state prompt when no genes are selected", async ({
   await expect(page.locator(".expression-grid")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Example: liver primordium" }).click();
-  await expect(page.getByPlaceholder("e.g. hindbrain")).toHaveValue("liver primordium");
+  await expect(page.locator(".anatomy-term-chip", { hasText: "liver primordium" })).toBeVisible();
   await expect(page.getByRole("columnheader").filter({ hasText: "nr5a2" })).toBeVisible();
 
   await page.goto("/");
@@ -399,8 +490,9 @@ test("lightbox prev/next navigation respects boundary guards and close", async (
   await expect(next).toBeEnabled();
 
   // Navigate forward until the title changes to the other gene.
-  await next.click();
-  await next.click();
+  for (let i = 0; i < 10 && (await page.locator(".lightbox-title").textContent()) === "pacsin2"; i++) {
+    await next.click();
+  }
   await expect(page.locator(".lightbox-title")).toHaveText("evx1");
 
   // Walk to the last image; next becomes disabled at the boundary.
@@ -437,6 +529,47 @@ test("suggested-gene chip disables after adding and the gene is not duplicated",
   // evx1 is added exactly once — clicking again (or a dedup regression) must
   // not create a second column.
   await expect(page.getByRole("columnheader").filter({ hasText: "evx1" })).toHaveCount(1);
+});
+
+test("multiple anatomy terms show AND-matched suggested genes", async ({ page }) => {
+  await page.goto("/");
+
+  const anatomyInput = page.getByPlaceholder("e.g. hindbrain");
+  await anatomyInput.fill("heart");
+  let dropdown = page.locator(".anatomy-filter .autocomplete-dropdown");
+  await expect(dropdown).toBeVisible();
+  await dropdown.getByText("heart", { exact: true }).click();
+  await expect(page.locator(".anatomy-term-chip", { hasText: "heart" })).toBeVisible();
+
+  await anatomyInput.fill("pronephros");
+  dropdown = page.locator(".anatomy-filter .autocomplete-dropdown");
+  await expect(dropdown).toBeVisible();
+  await dropdown.getByText("pronephros", { exact: true }).click();
+
+  await expect(page.locator(".anatomy-term-chip", { hasText: "pronephros" })).toBeVisible();
+  await expect(page.getByText("Genes with expression in")).toBeVisible();
+  await expect(page.getByText("heart AND pronephros")).toBeVisible();
+  await expect(page.locator(".suggested-gene-chip", { hasText: "hand2" })).toBeVisible();
+  await expect(page).toHaveURL(/anatomy=heart/);
+  await expect(page).toHaveURL(/anatomy=pronephros/);
+});
+
+test("multiple anatomy terms with no shared genes still show the suggestions panel", async ({ page }) => {
+  await page.goto("/");
+
+  const anatomyInput = page.getByPlaceholder("e.g. hindbrain");
+  await anatomyInput.fill("heart");
+  await page.getByRole("option", { name: "heart", exact: true }).click();
+
+  await anatomyInput.fill("liver primordium");
+  await page.getByRole("option", { name: "liver primordium", exact: true }).click();
+
+  await expect(page.locator(".anatomy-term-chip", { hasText: "heart" })).toBeVisible();
+  await expect(page.locator(".anatomy-term-chip", { hasText: "liver primordium" })).toBeVisible();
+  await expect(page.locator(".suggested-genes-wrap")).toBeVisible();
+  await expect(page.getByText("heart AND liver primordium")).toBeVisible();
+  await expect(page.locator(".suggested-genes-empty")).toHaveText("No genes found.");
+  await expect(page.locator(".suggested-gene-chip")).toHaveCount(0);
 });
 
 test("anatomy genes 404 silently shows no suggested-genes strip", async ({ page }) => {

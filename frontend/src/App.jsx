@@ -44,8 +44,9 @@ export default function App() {
   );
 
   const setAnatomy = useCallback(
-    (term) => {
-      setUrlState((s) => ({ ...s, anatomy: term }));
+    (terms) => {
+      const nextTerms = Array.isArray(terms) ? terms : (terms ? [terms] : []);
+      setUrlState((s) => ({ ...s, anatomy: nextTerms }));
     },
     [setUrlState]
   );
@@ -69,8 +70,8 @@ export default function App() {
             <a href="https://github.com/czbiohub-sf/gene2fish#readme" target="_blank" rel="noopener noreferrer">
               About
             </a>
-            <a href="https://zfin.org" target="_blank" rel="noopener noreferrer">
-              ZFIN <span aria-hidden="true">↗</span>
+            <a href="https://zebrahub.sf.czbiohub.org/" target="_blank" rel="noopener noreferrer">
+              ZebraHub <span aria-hidden="true">↗</span>
             </a>
             <button
               className="theme-toggle"

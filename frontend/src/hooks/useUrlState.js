@@ -6,11 +6,12 @@ function parseUrl() {
   const params = new URLSearchParams(window.location.search);
   const genesParam = params.get("genes");
   const nImagesParam = parseInt(params.get("n_images") || "1", 10);
+  const anatomyParams = params.getAll("anatomy").filter(Boolean);
   return {
     genes: genesParam ? genesParam.split(",").filter(Boolean) : [],
     stageMin: params.get("stage_min") ? parseFloat(params.get("stage_min")) : null,
     stageMax: params.get("stage_max") ? parseFloat(params.get("stage_max")) : null,
-    anatomy: params.get("anatomy") || null,
+    anatomy: anatomyParams,
     nImages: VALID_N_IMAGES.includes(nImagesParam) ? nImagesParam : 1,
   };
 }
@@ -30,7 +31,9 @@ export function useUrlState() {
         if (next.genes.length) params.set("genes", next.genes.join(","));
         if (next.stageMin != null) params.set("stage_min", next.stageMin);
         if (next.stageMax != null) params.set("stage_max", next.stageMax);
-        if (next.anatomy) params.set("anatomy", next.anatomy);
+        for (const term of next.anatomy || []) {
+          params.append("anatomy", term);
+        }
         if (next.nImages && next.nImages !== 1) params.set("n_images", next.nImages);
         const search = params.toString();
         window.history.replaceState(null, "", search ? `?${search}` : window.location.pathname);

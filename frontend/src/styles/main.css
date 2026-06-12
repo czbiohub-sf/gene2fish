@@ -514,11 +514,71 @@ select {
   width: 100%;
 }
 
+.anatomy-input-shell .autocomplete-dropdown {
+  width: 100%;
+}
+
+.anatomy-selected-terms {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 6px;
+  min-height: 24px;
+}
+
+.anatomy-selected-term {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.anatomy-and {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.anatomy-term-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 220px;
+  min-height: 24px;
+  padding: 2px 4px 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-control);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.anatomy-term-remove {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.anatomy-term-remove:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
 .anatomy-input {
   font-size: 15px;
   font-weight: 700;
   height: 46px;
-  padding: 0 42px 0 16px;
+  padding: 0 76px 0 16px;
   border: 1px solid var(--border);
   border-radius: 4px;
   background: var(--bg-control);
@@ -532,9 +592,30 @@ select {
   border-color: var(--accent);
 }
 
-.anatomy-clear {
+.anatomy-dropdown-toggle {
   position: absolute;
   right: 8px;
+  bottom: 5px;
+  width: 34px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  line-height: 1;
+  font-size: 14px;
+}
+
+.anatomy-dropdown-toggle:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.anatomy-clear {
+  position: absolute;
+  right: 42px;
   bottom: 5px;
   background: transparent;
   border: 1px solid transparent;
@@ -685,6 +766,45 @@ select {
 .grid-empty-example:hover {
   border-color: var(--accent);
   background: var(--bg-hover);
+}
+
+.expression-grid-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.export-table-btn {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-control);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 7px 10px;
+}
+
+.export-table-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.export-table-btn:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.export-table-progress {
+  width: 150px;
+  height: 8px;
+  accent-color: var(--accent);
+}
+
+.export-table-error {
+  color: var(--danger);
+  font-size: 12px;
 }
 
 .expression-grid-wrapper {

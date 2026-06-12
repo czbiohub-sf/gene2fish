@@ -93,9 +93,9 @@ def load_data() -> dict:
     gene_list = sorted(gene_index.keys(), key=str.lower)
     anatomy_list = sorted(anatomy_set, key=str.lower)
 
-    # Pre-sort each anatomy's gene list desc by image count, tie-break by symbol.
+    # Pre-sort each anatomy's gene list alphabetically by symbol.
     anatomy_index: dict[str, list[tuple[str, int]]] = {
-        k: sorted(v.items(), key=lambda x: (-x[1], x[0].lower()))
+        k: sorted(v.items(), key=lambda x: x[0].lower())
         for k, v in anatomy_counts.items()
     }
 

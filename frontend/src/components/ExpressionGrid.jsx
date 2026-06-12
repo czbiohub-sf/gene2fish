@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { ImageCell } from "./ImageCell.jsx";
 import { Lightbox } from "./Lightbox.jsx";
 import emptyStateIllustration from "../assets/empty-state-illustration.png";
+import { exportExpressionTablePng } from "../utils/exportExpressionTable.js";
 
 const EMPTY_STATE_EXAMPLES = [
   { label: "Example: shhb", type: "gene", value: "shhb" },
@@ -11,6 +12,9 @@ const EMPTY_STATE_EXAMPLES = [
 
 export function ExpressionGrid({ genes, data, onRemoveGene, onAddGene, onSetAnatomy, nImages }) {
   const [lightboxIndex, setLightboxIndex] = useState(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(null);
+  const [exportError, setExportError] = useState(null);
 
   // Collect all canonical stages that appear across any gene, sorted by begin_hours
   const rows = useMemo(() => {
@@ -115,8 +119,48 @@ export function ExpressionGrid({ genes, data, onRemoveGene, onAddGene, onSetAnat
     return <p className="grid-empty-message">No expression images found for the selected genes and filters.</p>;
   }
 
+  async function exportTable() {
+    setExporting(true);
+    setExportProgress(0);
+    setExportError(null);
+    try {
+      await exportExpressionTablePng({
+        rows,
+        genes,
+        lookup,
+        colMaxImages,
+        nImages: nImages ?? 1,
+        onProgress: setExportProgress,
+      });
+    } catch (err) {
+      setExportError(err.message || "PNG export failed");
+    } finally {
+      setExporting(false);
+      setExportProgress(null);
+    }
+  }
+
   return (
     <>
+      <div className="expression-grid-toolbar">
+        <button
+          type="button"
+          className="export-table-btn"
+          onClick={exportTable}
+          disabled={exporting}
+        >
+          {exporting ? `Exporting ${exportProgress ?? 0}%` : "Export table PNG"}
+        </button>
+        {exporting && (
+          <progress
+            className="export-table-progress"
+            value={exportProgress ?? 0}
+            max="100"
+            aria-label="PNG export progress"
+          />
+        )}
+        {exportError && <span className="export-table-error">{exportError}</span>}
+      </div>
       <div className="expression-grid-wrapper">
         <table className="expression-grid">
           <thead>

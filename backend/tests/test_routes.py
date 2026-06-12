@@ -1,3 +1,6 @@
+import json
+from urllib.error import URLError
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -45,6 +48,67 @@ def test_known_routes_not_shadowed_by_catchall(client):
     assert client.get("/api/stages").status_code != 404
 
 
+def test_image_proxy_restricts_to_zfin_imageloadup_urls(client):
+    resp = client.get("/api/image-proxy?url=https://example.com/image.jpg")
+    assert resp.status_code == 400
+
+    resp = client.get("/api/image-proxy?url=https://zfin.org/ZDB-IMAGE-123")
+    assert resp.status_code == 400
+
+
+def test_image_proxy_returns_image_bytes(client, monkeypatch):
+    from gene2image import routes
+
+    class Headers:
+        def get_content_type(self):
+            return "image/jpeg"
+
+    class FakeResponse:
+        headers = Headers()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return b"image-bytes"
+
+    def fake_urlopen(request, timeout, context=None):
+        assert request.full_url == "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"
+        assert timeout == 15
+        return FakeResponse()
+
+    monkeypatch.setattr(routes, "urlopen", fake_urlopen)
+
+    resp = client.get(
+        "/api/image-proxy",
+        params={"url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"},
+    )
+
+    assert resp.status_code == 200
+    assert resp.content == b"image-bytes"
+    assert resp.headers["content-type"] == "image/jpeg"
+    assert resp.headers["access-control-allow-origin"] == "*"
+
+
+def test_image_proxy_returns_502_when_fetch_fails(client, monkeypatch):
+    from gene2image import routes
+
+    def fake_urlopen(request, timeout):
+        raise URLError("certificate verify failed")
+
+    monkeypatch.setattr(routes, "urlopen", fake_urlopen)
+
+    resp = client.get(
+        "/api/image-proxy",
+        params={"url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"},
+    )
+
+    assert resp.status_code == 502
+
+
 def test_catchall_does_not_swallow_options(client):
     # The catch-all 404 must not claim OPTIONS — let the framework/CORSMiddleware
     # own it. Otherwise an OPTIONS to an unknown /api/* path returns a 404 JSON
@@ -52,3 +116,118 @@ def test_catchall_does_not_swallow_options(client):
     resp = client.options("/api/does-not-exist")
     assert resp.status_code != 404
     assert "API endpoint not found" not in resp.text
+
+
+def test_anatomy_genes_are_limited_after_alphabetical_sort(tmp_path, monkeypatch):
+    records = [
+        {
+            "gene": {"gene_symbol": "zic1"},
+            "anatomical_locations": [{"anatomy_name": "hindbrain"}],
+        },
+        {
+            "gene": {"gene_symbol": "actb2"},
+            "anatomical_locations": [{"anatomy_name": "hindbrain"}],
+        },
+        {
+            "gene": {"gene_symbol": "zic1"},
+            "anatomical_locations": [{"anatomy_name": "hindbrain"}],
+        },
+        {
+            "gene": {"gene_symbol": "neurod1"},
+            "anatomical_locations": [{"anatomy_name": "hindbrain"}],
+        },
+        {
+            "gene": {"gene_symbol": "zic1"},
+            "anatomical_locations": [{"anatomy_name": "hindbrain"}],
+        },
+    ]
+    (tmp_path / "image_metadata.json").write_text(json.dumps(records))
+    monkeypatch.setenv("GENE2IMAGE_DATA_DIR", str(tmp_path))
+
+    from gene2image.main import app
+
+    with TestClient(app) as c:
+        resp = c.get("/api/anatomy/hindbrain/genes?limit=2")
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "total": 3,
+        "genes": [
+            {"gene_symbol": "actb2", "image_count": 1},
+            {"gene_symbol": "neurod1", "image_count": 1},
+        ],
+    }
+
+
+def test_anatomy_genes_support_and_selection(tmp_path, monkeypatch):
+    records = [
+        {
+            "gene": {"gene_symbol": "zic1"},
+            "anatomical_locations": [{"anatomy_name": "heart"}],
+        },
+        {
+            "gene": {"gene_symbol": "zic1"},
+            "anatomical_locations": [{"anatomy_name": "pronephros"}],
+        },
+        {
+            "gene": {"gene_symbol": "actb2"},
+            "anatomical_locations": [{"anatomy_name": "heart"}],
+        },
+        {
+            "gene": {"gene_symbol": "actb2"},
+            "anatomical_locations": [{"anatomy_name": "pronephros"}],
+        },
+        {
+            "gene": {"gene_symbol": "heartonly"},
+            "anatomical_locations": [{"anatomy_name": "heart"}],
+        },
+    ]
+    (tmp_path / "image_metadata.json").write_text(json.dumps(records))
+    monkeypatch.setenv("GENE2IMAGE_DATA_DIR", str(tmp_path))
+
+    from gene2image.main import app
+
+    with TestClient(app) as c:
+        resp = c.get("/api/anatomy/genes?anatomy=heart&anatomy=pronephros")
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "total": 2,
+        "genes": [
+            {"gene_symbol": "actb2", "image_count": 2},
+            {"gene_symbol": "zic1", "image_count": 2},
+        ],
+    }
+
+
+def test_anatomy_search_returns_available_options_without_query(tmp_path, monkeypatch):
+    records = [
+        {
+            "gene": {"gene_symbol": "actb2"},
+            "anatomical_locations": [{"anatomy_name": "pronephros"}],
+        },
+        {
+            "gene": {"gene_symbol": "zic1"},
+            "anatomical_locations": [{"anatomy_name": "heart"}],
+        },
+        {
+            "gene": {"gene_symbol": "zic1"},
+            "anatomical_locations": [{"anatomy_name": "hindbrain"}],
+        },
+    ]
+    (tmp_path / "image_metadata.json").write_text(json.dumps(records))
+    monkeypatch.setenv("GENE2IMAGE_DATA_DIR", str(tmp_path))
+
+    from gene2image.main import app
+
+    with TestClient(app) as c:
+        all_options = c.get("/api/anatomy/search?q=")
+        limited_options = c.get("/api/anatomy/search?q=&limit=2")
+        filtered = c.get("/api/anatomy/search?q=brain")
+
+    assert all_options.status_code == 200
+    assert all_options.json() == ["heart", "hindbrain", "pronephros"]
+    assert limited_options.status_code == 200
+    assert limited_options.json() == ["heart", "hindbrain"]
+    assert filtered.status_code == 200
+    assert filtered.json() == ["hindbrain"]
