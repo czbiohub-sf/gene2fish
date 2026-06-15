@@ -227,10 +227,10 @@ select {
 }
 
 .filters-grid {
-  display: grid;
-  grid-template-columns: minmax(560px, 680px) minmax(320px, 1fr) max-content;
-  gap: 24px;
-  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px 24px;
+  align-items: flex-end;
 }
 
 .request-status {
@@ -416,12 +416,14 @@ select {
 .stage-filter {
   display: flex;
   flex-direction: column;
+  flex: 1 1 560px;
+  max-width: 620px;
   min-width: 0;
 }
 
 .stage-filter-selects {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) 28px minmax(220px, 1fr) 32px;
+  grid-template-columns: minmax(0, 1fr) 28px minmax(0, 1fr) 32px;
   gap: 16px;
   align-items: end;
 }
@@ -498,6 +500,7 @@ select {
   position: relative;
   display: flex;
   flex-direction: column;
+  flex: 999 1 360px;
   gap: 7px;
   min-width: 0;
 }
@@ -650,6 +653,7 @@ select {
 .n-images-toggle {
   display: flex;
   flex-direction: column;
+  flex: 0 0 254px;
   gap: 7px;
   min-width: 0;
 }
@@ -1340,7 +1344,7 @@ select {
   text-decoration: underline;
 }
 
-@media (max-width: 1500px) {
+@media (max-width: 1800px) {
   .control-cards {
     grid-template-columns: 1fr;
   }
@@ -1348,7 +1352,16 @@ select {
 
 @media (max-width: 1300px) {
   .filters-grid {
-    grid-template-columns: minmax(0, 1fr) minmax(220px, 0.7fr);
+    gap: 18px;
+  }
+
+  .stage-filter {
+    flex-basis: 460px;
+    max-width: 520px;
+  }
+
+  .anatomy-filter {
+    flex-basis: 300px;
   }
 }
 
@@ -1380,9 +1393,21 @@ select {
     padding: 12px;
   }
 
-  .filters-grid,
   .stage-filter-selects {
     grid-template-columns: 1fr;
+  }
+
+  .filters-grid {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .stage-filter,
+  .anatomy-filter,
+  .n-images-toggle {
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: none;
   }
 
   .gene-input-row {

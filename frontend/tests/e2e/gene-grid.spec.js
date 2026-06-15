@@ -443,6 +443,60 @@ test("filter controls use short labels with full-value tooltips", async ({ page 
   await expect(page.getByRole("button", { name: "3", exact: true })).toHaveAttribute("title", "3 images per cell");
 });
 
+test("filter controls stay inside the filter card at common viewport widths", async ({ page }) => {
+  const widths = [2048, 1800, 1728, 1536, 1510, 1440, 1366, 1280, 1180, 1024, 768, 390];
+
+  for (const width of widths) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/?stage_min=10.33&stage_max=120");
+    await expect(page.locator(".filters-card")).toBeVisible();
+
+    const layout = await page.evaluate(() => {
+      const card = document.querySelector(".filters-card").getBoundingClientRect();
+      const controls = [...document.querySelectorAll(".filters-grid > *")].map((element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          className: element.className,
+          left: rect.left,
+          right: rect.right,
+          width: rect.width,
+        };
+      });
+      const selects = [...document.querySelectorAll(".stage-filter select")].map((element) => {
+        const rect = element.getBoundingClientRect();
+        return rect.width;
+      });
+
+      return {
+        cardLeft: card.left,
+        cardRight: card.right,
+        viewportWidth: document.documentElement.clientWidth,
+        scrollWidth: document.documentElement.scrollWidth,
+        controls,
+        selects,
+      };
+    });
+
+    expect(layout.scrollWidth, `viewport ${width} should not create horizontal page overflow`).toBeLessThanOrEqual(
+      layout.viewportWidth + 1
+    );
+
+    for (const control of layout.controls) {
+      expect(control.left, `${control.className} should not overflow left at ${width}px`).toBeGreaterThanOrEqual(
+        layout.cardLeft - 1
+      );
+      expect(control.right, `${control.className} should not overflow right at ${width}px`).toBeLessThanOrEqual(
+        layout.cardRight + 1
+      );
+      expect(control.width, `${control.className} should remain usable at ${width}px`).toBeGreaterThan(0);
+    }
+
+    for (const selectWidth of layout.selects) {
+      expect(selectWidth, `stage select should remain usable at ${width}px`).toBeGreaterThanOrEqual(140);
+    }
+  }
+});
+
 test("anatomy clear button resets the input and hides suggested genes", async ({ page }) => {
   await page.goto("/");
 
