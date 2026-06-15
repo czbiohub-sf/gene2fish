@@ -191,6 +191,17 @@ test("changing images per cell keeps queued image cells loading and clickable", 
   await expect(page.locator(".lightbox-title")).toHaveText("pax2a");
 });
 
+test("shows no-image labels for empty cells in a mixed gene grid", async ({ page }) => {
+  // The default batch mock returns [] for unrecognized gene symbols.
+  await page.goto("/?genes=a1cf,pax2a");
+
+  await expect(page.getByRole("columnheader").filter({ hasText: "a1cf" })).toBeVisible();
+  await expect(page.getByRole("columnheader").filter({ hasText: "pax2a" })).toBeVisible();
+  await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length);
+  await expect(page.locator(".no-image-cell-text", { hasText: "No image" })).toHaveCount(stages.length);
+  await expect(page.getByText("No expression images found for the selected genes and filters.")).toHaveCount(0);
+});
+
 test("exports only the expression table as a PNG", async ({ page }) => {
   const proxiedUrls = [];
 
