@@ -114,6 +114,7 @@ export default function App() {
                     <button
                       key={n}
                       className={`n-images-btn${(nImages ?? 1) === n ? " active" : ""}`}
+                      title={`${n} image${n === 1 ? "" : "s"} per cell`}
                       onClick={() => setNImages(n)}
                     >
                       {n}

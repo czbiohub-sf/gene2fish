@@ -402,6 +402,9 @@ select {
   font-size: 13px;
   cursor: pointer;
   color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .autocomplete-item:hover,
@@ -557,7 +560,15 @@ select {
   line-height: 1.2;
 }
 
+.anatomy-term-chip-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .anatomy-term-remove {
+  flex: 0 0 auto;
   width: 18px;
   height: 18px;
   padding: 0;

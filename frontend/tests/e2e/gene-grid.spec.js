@@ -63,7 +63,7 @@ async function mockApi(page) {
 
   await page.route("**/api/anatomy/search**", async (route) => {
     const q = new URL(route.request().url()).searchParams.get("q")?.toLowerCase() || "";
-    const anatomyTerms = ["heart", "hindbrain", "liver primordium", "pronephros"];
+    const anatomyTerms = ["heart", "hindbrain", "liver primordium", "optic tectum neuropil region", "pronephros"];
     await route.fulfill({ json: anatomyTerms.filter((term) => term.includes(q)) });
   });
 
@@ -416,6 +416,31 @@ test("anatomy dropdown shows options on focus and filters while typing", async (
   await anatomyInput.fill("hi");
   await expect(dropdown.getByText("hindbrain", { exact: true })).toBeVisible();
   await expect(dropdown.getByText("heart", { exact: true })).toHaveCount(0);
+});
+
+test("filter controls use short labels with full-value tooltips", async ({ page }) => {
+  await page.goto("/");
+
+  const stageSelects = page.locator(".stage-filter select");
+  await expect(stageSelects.nth(0)).toHaveAttribute("title", "Gastrula:50%-epiboly");
+  await expect(stageSelects.nth(1)).toHaveAttribute("title", "Pharyngula:High-pec (42 hpf)");
+
+  const selectedStageText = await stageSelects.nth(0).evaluate((select) => select.selectedOptions[0].textContent);
+  const selectedTimeText = await stageSelects.nth(1).evaluate((select) => select.selectedOptions[0].textContent);
+  expect(selectedStageText).toBe("50%-epiboly");
+  expect(selectedTimeText).toBe("High-pec (42 hpf)");
+
+  await page.getByPlaceholder("e.g. hindbrain").fill("optic");
+  const option = page.locator(".anatomy-filter .autocomplete-item", { hasText: "optic tectum neuropil region" });
+  await expect(option).toHaveAttribute("title", "optic tectum neuropil region");
+  await option.click();
+  await expect(page.locator(".anatomy-term-chip", { hasText: "optic tectum neuropil region" })).toHaveAttribute(
+    "title",
+    "optic tectum neuropil region"
+  );
+
+  await expect(page.getByRole("button", { name: "1", exact: true })).toHaveAttribute("title", "1 image per cell");
+  await expect(page.getByRole("button", { name: "3", exact: true })).toHaveAttribute("title", "3 images per cell");
 });
 
 test("anatomy clear button resets the input and hides suggested genes", async ({ page }) => {
