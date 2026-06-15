@@ -419,7 +419,7 @@ test("anatomy dropdown shows options on focus and filters while typing", async (
 });
 
 test("filter controls use short labels with full-value tooltips", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?genes=pax2a");
 
   const stageSelects = page.locator(".stage-filter select");
   await expect(stageSelects.nth(0)).toHaveAttribute("title", "Gastrula:50%-epiboly");
@@ -439,20 +439,30 @@ test("filter controls use short labels with full-value tooltips", async ({ page 
     "optic tectum neuropil region"
   );
 
-  await expect(page.getByRole("button", { name: "1", exact: true })).toHaveAttribute("title", "1 image per cell");
-  await expect(page.getByRole("button", { name: "3", exact: true })).toHaveAttribute("title", "3 images per cell");
+  await expect(page.locator(".expression-grid-toolbar .n-images-label")).toHaveText("Images per cell");
+  await expect(page.locator(".expression-grid-toolbar").getByRole("button", { name: "1", exact: true })).toHaveAttribute(
+    "title",
+    "1 image per cell"
+  );
+  await expect(page.locator(".expression-grid-toolbar").getByRole("button", { name: "3", exact: true })).toHaveAttribute(
+    "title",
+    "3 images per cell"
+  );
 });
 
 test("filter controls stay inside the filter card at common viewport widths", async ({ page }) => {
   const widths = [2048, 1800, 1728, 1536, 1510, 1440, 1366, 1280, 1180, 1024, 768, 390];
+  const singleRowLaptopWidths = new Set([1440, 1366, 1280]);
 
   for (const width of widths) {
     await page.setViewportSize({ width, height: 900 });
-    await page.goto("/?stage_min=10.33&stage_max=120");
+    await page.goto("/?genes=pax2a&stage_min=10.33&stage_max=120");
     await expect(page.locator(".filters-card")).toBeVisible();
 
     const layout = await page.evaluate(() => {
       const card = document.querySelector(".filters-card").getBoundingClientRect();
+      const searchCard = document.querySelector(".search-card").getBoundingClientRect();
+      const filtersCard = document.querySelector(".filters-card").getBoundingClientRect();
       const controls = [...document.querySelectorAll(".filters-grid > *")].map((element) => {
         const rect = element.getBoundingClientRect();
         return {
@@ -460,6 +470,7 @@ test("filter controls stay inside the filter card at common viewport widths", as
           left: rect.left,
           right: rect.right,
           width: rect.width,
+          top: rect.top,
         };
       });
       const selects = [...document.querySelectorAll(".stage-filter select")].map((element) => {
@@ -472,6 +483,10 @@ test("filter controls stay inside the filter card at common viewport widths", as
         cardRight: card.right,
         viewportWidth: document.documentElement.clientWidth,
         scrollWidth: document.documentElement.scrollWidth,
+        densityInFilters: document.querySelectorAll(".filters-grid .n-images-toggle").length,
+        densityInToolbar: document.querySelectorAll(".expression-grid-toolbar .n-images-toggle").length,
+        searchTop: searchCard.top,
+        filtersTop: filtersCard.top,
         controls,
         selects,
       };
@@ -480,6 +495,9 @@ test("filter controls stay inside the filter card at common viewport widths", as
     expect(layout.scrollWidth, `viewport ${width} should not create horizontal page overflow`).toBeLessThanOrEqual(
       layout.viewportWidth + 1
     );
+    expect(layout.controls).toHaveLength(2);
+    expect(layout.densityInFilters, `density controls should not be in the filter card at ${width}px`).toBe(0);
+    expect(layout.densityInToolbar, `density controls should live in the grid toolbar at ${width}px`).toBe(1);
 
     for (const control of layout.controls) {
       expect(control.left, `${control.className} should not overflow left at ${width}px`).toBeGreaterThanOrEqual(
@@ -493,6 +511,15 @@ test("filter controls stay inside the filter card at common viewport widths", as
 
     for (const selectWidth of layout.selects) {
       expect(selectWidth, `stage select should remain usable at ${width}px`).toBeGreaterThanOrEqual(140);
+    }
+
+    if (singleRowLaptopWidths.has(width)) {
+      const controlTops = layout.controls.map((control) => control.top);
+      expect(
+        Math.max(...controlTops) - Math.min(...controlTops),
+        `filter controls should stay on one row at ${width}px`
+      ).toBeLessThanOrEqual(1);
+      expect(Math.abs(layout.searchTop - layout.filtersTop), `top cards should share a row at ${width}px`).toBeLessThanOrEqual(1);
     }
   }
 });

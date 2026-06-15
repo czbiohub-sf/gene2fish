@@ -181,7 +181,7 @@ select {
 
 .control-cards {
   display: grid;
-  grid-template-columns: minmax(340px, 468px) minmax(0, 1fr);
+  grid-template-columns: minmax(320px, 400px) minmax(0, 1fr);
   gap: 18px;
   align-items: stretch;
 }
@@ -227,10 +227,10 @@ select {
 }
 
 .filters-grid {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(420px, 520px) minmax(280px, 1fr);
   gap: 18px 24px;
-  align-items: flex-end;
+  align-items: end;
 }
 
 .request-status {
@@ -416,8 +416,6 @@ select {
 .stage-filter {
   display: flex;
   flex-direction: column;
-  flex: 1 1 560px;
-  max-width: 620px;
   min-width: 0;
 }
 
@@ -500,7 +498,6 @@ select {
   position: relative;
   display: flex;
   flex-direction: column;
-  flex: 999 1 360px;
   gap: 7px;
   min-width: 0;
 }
@@ -653,7 +650,6 @@ select {
 .n-images-toggle {
   display: flex;
   flex-direction: column;
-  flex: 0 0 254px;
   gap: 7px;
   min-width: 0;
 }
@@ -693,6 +689,17 @@ select {
   background: var(--accent);
   border-color: var(--accent);
   color: white;
+}
+
+.n-images-toggle-inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.n-images-toggle-inline .n-images-label {
+  white-space: nowrap;
 }
 
 /* Expression grid */
@@ -786,9 +793,18 @@ select {
 
 .expression-grid-toolbar {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 16px;
   margin-bottom: 10px;
+}
+
+.expression-grid-toolbar-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .export-table-btn {
@@ -1344,7 +1360,7 @@ select {
   text-decoration: underline;
 }
 
-@media (max-width: 1800px) {
+@media (max-width: 1200px) {
   .control-cards {
     grid-template-columns: 1fr;
   }
@@ -1352,16 +1368,17 @@ select {
 
 @media (max-width: 1300px) {
   .filters-grid {
-    gap: 18px;
+    grid-template-columns: minmax(360px, 480px) minmax(240px, 1fr);
+  }
+}
+
+@media (max-width: 980px) {
+  .filters-grid {
+    grid-template-columns: 1fr;
   }
 
-  .stage-filter {
-    flex-basis: 460px;
-    max-width: 520px;
-  }
-
-  .anatomy-filter {
-    flex-basis: 300px;
+  .n-images-toggle-inline {
+    margin-left: 0;
   }
 }
 
@@ -1397,19 +1414,6 @@ select {
     grid-template-columns: 1fr;
   }
 
-  .filters-grid {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .stage-filter,
-  .anatomy-filter,
-  .n-images-toggle {
-    flex: 1 1 auto;
-    width: 100%;
-    max-width: none;
-  }
-
   .gene-input-row {
     flex-direction: column;
   }
@@ -1418,8 +1422,28 @@ select {
     width: 100%;
   }
 
-  .n-images-toggle {
-    min-width: 0;
+  .filters-grid,
+  .expression-grid-toolbar,
+  .expression-grid-toolbar-actions,
+  .n-images-toggle-inline,
+  .n-images-buttons {
+    width: 100%;
+  }
+
+  .expression-grid-toolbar,
+  .expression-grid-toolbar-actions,
+  .n-images-toggle-inline {
+    align-items: stretch;
+  }
+
+  .n-images-toggle-inline {
+    flex-direction: column;
+    gap: 8px;
+    margin-left: 0;
+  }
+
+  .n-images-buttons {
+    justify-content: space-between;
   }
 
   .app-main {
