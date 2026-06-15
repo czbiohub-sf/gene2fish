@@ -228,7 +228,7 @@ select {
 
 .filters-grid {
   display: grid;
-  grid-template-columns: minmax(700px, 1fr) minmax(280px, 0.75fr) max-content;
+  grid-template-columns: minmax(560px, 680px) minmax(320px, 1fr) max-content;
   gap: 24px;
   align-items: end;
 }
