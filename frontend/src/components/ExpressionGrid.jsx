@@ -80,6 +80,15 @@ export function ExpressionGrid({ genes, data, onRemoveGene, onAddGene, onSetAnat
     return result;
   }, [lookup, genes, nImages]);
 
+  const genesWithoutImages = useMemo(() => {
+    const result = {};
+    for (const symbol of genes) {
+      result[symbol] = Object.prototype.hasOwnProperty.call(data, symbol)
+        && (data[symbol] || []).length === 0;
+    }
+    return result;
+  }, [genes, data]);
+
   if (genes.length === 0) {
     return (
       <section className="grid-empty" aria-labelledby="empty-state-title">
@@ -211,11 +220,15 @@ export function ExpressionGrid({ genes, data, onRemoveGene, onAddGene, onSetAnat
                   return (
                     <td
                       key={symbol}
-                      className="empty-cell"
+                      className={`empty-cell${genesWithoutImages[symbol] ? " no-image-cell" : ""}`}
                       style={nImages > 1
                         ? { width: `calc(var(--cell-size) * ${colMaxImages[symbol]})` }
                         : undefined}
-                    />
+                    >
+                      {genesWithoutImages[symbol] && (
+                        <span className="no-image-cell-text">No image</span>
+                      )}
+                    </td>
                   );
                 })}
               </tr>

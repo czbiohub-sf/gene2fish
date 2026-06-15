@@ -965,6 +965,28 @@ select {
   border: 1px dashed var(--border-dashed);
 }
 
+.no-image-cell {
+  padding: 8px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.no-image-cell-text {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  max-width: 100%;
+  border: 1px solid var(--border-dashed);
+  border-radius: 4px;
+  padding: 4px 7px;
+  background: var(--bg-card);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: normal;
+}
+
 /* Placeholder (404) */
 .cell-placeholder {
   width: calc(var(--cell-size) - 8px);
