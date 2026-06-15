@@ -1056,7 +1056,7 @@ select {
   max-width: 900px;
   width: 100%;
   max-height: 90vh;
-  overflow-y: auto;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
@@ -1067,6 +1067,7 @@ select {
   justify-content: space-between;
   padding: 16px 20px;
   border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
 }
 
 .lightbox-title {
@@ -1130,6 +1131,9 @@ select {
   gap: 24px;
   padding: 20px;
   flex-wrap: wrap;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .lightbox-image-col {

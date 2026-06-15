@@ -240,6 +240,48 @@ test("lightbox links key metadata identifiers", async ({ page }) => {
   );
 });
 
+test("lightbox keeps the header fixed while the modal body scrolls", async ({ page }) => {
+  await page.setViewportSize({ width: 1000, height: 460 });
+  await page.route("**/api/genes/batch", async (route) => {
+    const body = route.request().postDataJSON();
+    const response = {};
+    for (const gene of body.genes) {
+      response[gene] = imagesFor(gene, body.n_images || 1).map((img) => ({
+        ...img,
+        uniprot_ids: Array.from({ length: 40 }, (_, i) => `Q98TZ${i}`),
+        disease_associations: Array.from({ length: 10 }, (_, i) => ({
+          do_term_id: `DOID:${i}`,
+          do_term_name: `Disease association ${i}`,
+        })),
+      }));
+    }
+    await route.fulfill({ json: response });
+  });
+
+  await page.goto("/?genes=pax2a");
+  await page.locator('img[alt^="pax2a at"]').first().click();
+  await expect(page.locator(".lightbox-overlay")).toBeVisible();
+
+  const header = page.locator(".lightbox-header");
+  const body = page.locator(".lightbox-body");
+  const scrollMetrics = await body.evaluate((el) => ({
+    clientHeight: el.clientHeight,
+    scrollHeight: el.scrollHeight,
+  }));
+  expect(scrollMetrics.scrollHeight).toBeGreaterThan(scrollMetrics.clientHeight);
+
+  const before = await header.boundingBox();
+  expect(before).not.toBeNull();
+  await body.evaluate((el) => {
+    el.scrollTop = el.scrollHeight;
+  });
+  const scrolledTop = await body.evaluate((el) => el.scrollTop);
+  expect(scrolledTop).toBeGreaterThan(0);
+  const after = await header.boundingBox();
+  expect(after).not.toBeNull();
+  expect(after.y).toBeCloseTo(before.y, 0);
+});
+
 test("exports only the expression table as a PNG", async ({ page }) => {
   const proxiedUrls = [];
 
