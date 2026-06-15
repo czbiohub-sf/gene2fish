@@ -17,6 +17,8 @@ function image(gene, stage, index = 1) {
     image_url: `https://images.example.test/${id}.png`,
     image_url_fallback: `https://images.example.test/${id}-fallback.png`,
     gene_symbol: gene,
+    gene_id: gene === "pax2a" ? "ZDB-GENE-040426-2596" : `ZDB-GENE-${gene}`,
+    gene_name: gene === "pax2a" ? "paired box 2a" : `${gene} gene`,
     stage_name: stage.stage_name,
     stage_begin_hours: stage.begin_hours,
     stage_display_label: stage.display_label,
@@ -24,12 +26,15 @@ function image(gene, stage, index = 1) {
     image_preparation: "whole-mount",
     figure_id: `FIG-${id}`,
     fish_name: "wild type",
-    human_orthologs: [],
+    human_orthologs: gene === "pax2a"
+      ? [{ human_symbol: "P2RX4", human_name: "purinergic receptor P2X 4" }]
+      : [],
     disease_associations: [],
-    uniprot_ids: [],
+    uniprot_ids: gene === "pax2a" ? ["Q98TZ0"] : [],
     publication_id: "ZDB-PUB-040907-1",
     pubmed_id: "123456",
-    est_symbol: null,
+    est_id: gene === "pax2a" ? "ZDB-CDNA-040425-55286" : null,
+    est_symbol: gene === "pax2a" ? "MGC:55286" : null,
     probe_quality: null,
   };
 }
@@ -200,6 +205,39 @@ test("shows no-image labels for empty cells in a mixed gene grid", async ({ page
   await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length);
   await expect(page.locator(".no-image-cell-text", { hasText: "No image" })).toHaveCount(stages.length);
   await expect(page.getByText("No expression images found for the selected genes and filters.")).toHaveCount(0);
+});
+
+test("lightbox links key metadata identifiers", async ({ page }) => {
+  await page.goto("/?genes=pax2a");
+
+  await page.locator('img[alt^="pax2a at"]').first().click();
+  await expect(page.locator(".lightbox-overlay")).toBeVisible();
+
+  const firstMetaGroup = page.locator(".lightbox-meta-col .meta-group").first();
+  await expect(firstMetaGroup.locator(".meta-label")).toHaveText("Gene");
+  await expect(firstMetaGroup).toContainText("paired box 2a");
+  await expect(firstMetaGroup.getByRole("link", { name: "ZDB-GENE-040426-2596" })).toHaveAttribute(
+    "href",
+    "https://zfin.org/ZDB-GENE-040426-2596"
+  );
+
+  const firstImageId = "ZDB-IMAGE-pax2a-5-25-1";
+  await expect(page.getByRole("link", { name: firstImageId })).toHaveAttribute(
+    "href",
+    `https://zfin.org/${firstImageId}`
+  );
+  await expect(page.getByRole("link", { name: "MGC:55286" })).toHaveAttribute(
+    "href",
+    "https://www.zfin.org/action/quicksearch/prototype?q=MGC%3A55286"
+  );
+  await expect(page.getByRole("link", { name: "Q98TZ0" })).toHaveAttribute(
+    "href",
+    "https://www.uniprot.org/uniparc?query=(dbid:Q98TZ0)"
+  );
+  await expect(page.getByRole("link", { name: "P2RX4" })).toHaveAttribute(
+    "href",
+    "https://www.ncbi.nlm.nih.gov/search/all/?term=P2RX4"
+  );
 });
 
 test("exports only the expression table as a PNG", async ({ page }) => {

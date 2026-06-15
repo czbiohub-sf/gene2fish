@@ -1,5 +1,21 @@
 import { useEffect } from "react";
 
+function zfinUrl(id) {
+  return `https://zfin.org/${id}`;
+}
+
+function zfinQuickSearchUrl(query) {
+  return `https://www.zfin.org/action/quicksearch/prototype?q=${encodeURIComponent(query)}`;
+}
+
+function ncbiSearchUrl(query) {
+  return `https://www.ncbi.nlm.nih.gov/search/all/?term=${encodeURIComponent(query)}`;
+}
+
+function uniprotQueryUrl(id) {
+  return `https://www.uniprot.org/uniparc?query=(dbid:${encodeURIComponent(id)})`;
+}
+
 export function Lightbox({ image, onClose, onPrev, onNext, hasPrev, hasNext }) {
   useEffect(() => {
     function handleKey(e) {
@@ -61,6 +77,7 @@ export function Lightbox({ image, onClose, onPrev, onNext, hasPrev, hasNext }) {
             </div>
           </div>
           <div className="lightbox-meta-col">
+            <GeneMeta image={image} />
             <MetaGroup label="Stage" value={image.stage_display_label} />
             <MetaGroup label="Image preparation" value={image.image_preparation} />
             {image.anatomy_names?.length > 0 && (
@@ -73,7 +90,23 @@ export function Lightbox({ image, onClose, onPrev, onNext, hasPrev, hasNext }) {
                 </ul>
               </div>
             )}
-            <MetaGroup label="EST / probe" value={image.est_symbol} />
+            {(image.est_symbol || image.est_id) && (
+              <div className="meta-group">
+                <div className="meta-label">Clone / probe</div>
+                <div className="meta-value mono">
+                  {image.est_symbol && (
+                    <ExternalLink href={zfinQuickSearchUrl(image.est_symbol)}>
+                      {image.est_symbol}
+                    </ExternalLink>
+                  )}
+                  {image.est_id && (
+                    <span className="meta-secondary">
+                      <ExternalLink href={zfinUrl(image.est_id)}>{image.est_id}</ExternalLink>
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
             <MetaGroup label="Probe quality" value={image.probe_quality} />
             <MetaGroup label="Fish line" value={image.fish_name} />
             {image.publication_id && (
@@ -81,7 +114,7 @@ export function Lightbox({ image, onClose, onPrev, onNext, hasPrev, hasNext }) {
                 <div className="meta-label">Publication</div>
                 <div className="meta-value mono">
                   <a
-                    href={`https://zfin.org/${image.publication_id}`}
+                    href={zfinUrl(image.publication_id)}
                     target="_blank"
                     rel="noopener noreferrer"
                   >
@@ -104,13 +137,20 @@ export function Lightbox({ image, onClose, onPrev, onNext, hasPrev, hasNext }) {
                 </div>
               </div>
             )}
-            <MetaGroup label="Image ID" value={image.image_id} mono />
+            <div className="meta-group">
+              <div className="meta-label">Image ID</div>
+              <div className="meta-value mono">
+                <ExternalLink href={zfinUrl(image.image_id)}>{image.image_id}</ExternalLink>
+              </div>
+            </div>
             {image.human_orthologs?.length > 0 && (
               <div className="meta-group">
                 <div className="meta-label">Human orthologs</div>
                 <ul className="meta-list">
-                  {image.human_orthologs.map((o) => (
-                    <li key={o.human_symbol} className="meta-tag">{o.human_symbol}</li>
+                  {image.human_orthologs.filter((o) => o.human_symbol).map((o) => (
+                    <li key={o.human_symbol} className="meta-tag">
+                      <ExternalLink href={ncbiSearchUrl(o.human_symbol)}>{o.human_symbol}</ExternalLink>
+                    </li>
                   ))}
                 </ul>
               </div>
@@ -130,7 +170,9 @@ export function Lightbox({ image, onClose, onPrev, onNext, hasPrev, hasNext }) {
                 <div className="meta-label">UniProt</div>
                 <ul className="meta-list">
                   {image.uniprot_ids.map((u) => (
-                    <li key={u} className="meta-tag">{u}</li>
+                    <li key={u} className="meta-tag">
+                      <ExternalLink href={uniprotQueryUrl(u)}>{u}</ExternalLink>
+                    </li>
                   ))}
                 </ul>
               </div>
@@ -146,6 +188,33 @@ export function Lightbox({ image, onClose, onPrev, onNext, hasPrev, hasNext }) {
       >
         ›
       </button>
+    </div>
+  );
+}
+
+function ExternalLink({ href, children }) {
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer">
+      {children}
+    </a>
+  );
+}
+
+function GeneMeta({ image }) {
+  const geneName = image.gene_name || image.gene_symbol;
+  if (!geneName && !image.gene_id) return null;
+
+  return (
+    <div className="meta-group">
+      <div className="meta-label">Gene</div>
+      <div className="meta-value">
+        {geneName && <div className="meta-primary">{geneName}</div>}
+        {image.gene_id && (
+          <div className="meta-value mono">
+            <ExternalLink href={zfinUrl(image.gene_id)}>{image.gene_id}</ExternalLink>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

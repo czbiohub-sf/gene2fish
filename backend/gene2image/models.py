@@ -27,6 +27,7 @@ class ImageRecord(BaseModel):
     image_url_fallback: str
     gene_symbol: str
     gene_id: str | None = None
+    gene_name: str | None = None
     stage_name: str | None = None
     stage_begin_hours: float | None = None
     stage_display_label: str | None = None
@@ -39,6 +40,7 @@ class ImageRecord(BaseModel):
     uniprot_ids: list[str] = []
     publication_id: str | None = None
     pubmed_id: str | None = None
+    est_id: str | None = None
     est_symbol: str | None = None
     probe_quality: str | None = None
 
