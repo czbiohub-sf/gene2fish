@@ -17,6 +17,8 @@ function image(gene, stage, index = 1) {
     image_url: `https://images.example.test/${id}.png`,
     image_url_fallback: `https://images.example.test/${id}-fallback.png`,
     gene_symbol: gene,
+    gene_id: gene === "pax2a" ? "ZDB-GENE-040426-2596" : `ZDB-GENE-${gene}`,
+    gene_name: gene === "pax2a" ? "paired box 2a" : `${gene} gene`,
     stage_name: stage.stage_name,
     stage_begin_hours: stage.begin_hours,
     stage_display_label: stage.display_label,
@@ -24,12 +26,15 @@ function image(gene, stage, index = 1) {
     image_preparation: "whole-mount",
     figure_id: `FIG-${id}`,
     fish_name: "wild type",
-    human_orthologs: [],
+    human_orthologs: gene === "pax2a"
+      ? [{ human_symbol: "P2RX4", human_name: "purinergic receptor P2X 4" }]
+      : [],
     disease_associations: [],
-    uniprot_ids: [],
+    uniprot_ids: gene === "pax2a" ? ["Q98TZ0"] : [],
     publication_id: "ZDB-PUB-040907-1",
     pubmed_id: "123456",
-    est_symbol: null,
+    est_id: gene === "pax2a" ? "ZDB-CDNA-040425-55286" : null,
+    est_symbol: gene === "pax2a" ? "MGC:55286" : null,
     probe_quality: null,
   };
 }
@@ -58,7 +63,7 @@ async function mockApi(page) {
 
   await page.route("**/api/anatomy/search**", async (route) => {
     const q = new URL(route.request().url()).searchParams.get("q")?.toLowerCase() || "";
-    const anatomyTerms = ["heart", "hindbrain", "liver primordium", "pronephros"];
+    const anatomyTerms = ["heart", "hindbrain", "liver primordium", "optic tectum neuropil region", "pronephros"];
     await route.fulfill({ json: anatomyTerms.filter((term) => term.includes(q)) });
   });
 
@@ -202,6 +207,81 @@ test("shows no-image labels for empty cells in a mixed gene grid", async ({ page
   await expect(page.getByText("No expression images found for the selected genes and filters.")).toHaveCount(0);
 });
 
+test("lightbox links key metadata identifiers", async ({ page }) => {
+  await page.goto("/?genes=pax2a");
+
+  await page.locator('img[alt^="pax2a at"]').first().click();
+  await expect(page.locator(".lightbox-overlay")).toBeVisible();
+
+  const firstMetaGroup = page.locator(".lightbox-meta-col .meta-group").first();
+  await expect(firstMetaGroup.locator(".meta-label")).toHaveText("Gene");
+  await expect(firstMetaGroup).toContainText("paired box 2a");
+  await expect(firstMetaGroup.getByRole("link", { name: "ZDB-GENE-040426-2596" })).toHaveAttribute(
+    "href",
+    "https://zfin.org/ZDB-GENE-040426-2596"
+  );
+
+  const firstImageId = "ZDB-IMAGE-pax2a-5-25-1";
+  await expect(page.getByRole("link", { name: firstImageId })).toHaveAttribute(
+    "href",
+    `https://zfin.org/${firstImageId}`
+  );
+  await expect(page.getByRole("link", { name: "MGC:55286" })).toHaveAttribute(
+    "href",
+    "https://www.zfin.org/action/quicksearch/prototype?q=MGC%3A55286"
+  );
+  await expect(page.getByRole("link", { name: "Q98TZ0" })).toHaveAttribute(
+    "href",
+    "https://www.uniprot.org/uniparc?query=(dbid:Q98TZ0)"
+  );
+  await expect(page.getByRole("link", { name: "P2RX4" })).toHaveAttribute(
+    "href",
+    "https://www.ncbi.nlm.nih.gov/search/all/?term=P2RX4"
+  );
+});
+
+test("lightbox keeps the header fixed while the modal body scrolls", async ({ page }) => {
+  await page.setViewportSize({ width: 1000, height: 460 });
+  await page.route("**/api/genes/batch", async (route) => {
+    const body = route.request().postDataJSON();
+    const response = {};
+    for (const gene of body.genes) {
+      response[gene] = imagesFor(gene, body.n_images || 1).map((img) => ({
+        ...img,
+        uniprot_ids: Array.from({ length: 40 }, (_, i) => `Q98TZ${i}`),
+        disease_associations: Array.from({ length: 10 }, (_, i) => ({
+          do_term_id: `DOID:${i}`,
+          do_term_name: `Disease association ${i}`,
+        })),
+      }));
+    }
+    await route.fulfill({ json: response });
+  });
+
+  await page.goto("/?genes=pax2a");
+  await page.locator('img[alt^="pax2a at"]').first().click();
+  await expect(page.locator(".lightbox-overlay")).toBeVisible();
+
+  const header = page.locator(".lightbox-header");
+  const body = page.locator(".lightbox-body");
+  const scrollMetrics = await body.evaluate((el) => ({
+    clientHeight: el.clientHeight,
+    scrollHeight: el.scrollHeight,
+  }));
+  expect(scrollMetrics.scrollHeight).toBeGreaterThan(scrollMetrics.clientHeight);
+
+  const before = await header.boundingBox();
+  expect(before).not.toBeNull();
+  await body.evaluate((el) => {
+    el.scrollTop = el.scrollHeight;
+  });
+  const scrolledTop = await body.evaluate((el) => el.scrollTop);
+  expect(scrolledTop).toBeGreaterThan(0);
+  const after = await header.boundingBox();
+  expect(after).not.toBeNull();
+  expect(after.y).toBeCloseTo(before.y, 0);
+});
+
 test("exports only the expression table as a PNG", async ({ page }) => {
   const proxiedUrls = [];
 
@@ -336,6 +416,112 @@ test("anatomy dropdown shows options on focus and filters while typing", async (
   await anatomyInput.fill("hi");
   await expect(dropdown.getByText("hindbrain", { exact: true })).toBeVisible();
   await expect(dropdown.getByText("heart", { exact: true })).toHaveCount(0);
+});
+
+test("filter controls use short labels with full-value tooltips", async ({ page }) => {
+  await page.goto("/?genes=pax2a");
+
+  const stageSelects = page.locator(".stage-filter select");
+  await expect(stageSelects.nth(0)).toHaveAttribute("title", "Gastrula:50%-epiboly");
+  await expect(stageSelects.nth(1)).toHaveAttribute("title", "Pharyngula:High-pec (42 hpf)");
+
+  const selectedStageText = await stageSelects.nth(0).evaluate((select) => select.selectedOptions[0].textContent);
+  const selectedTimeText = await stageSelects.nth(1).evaluate((select) => select.selectedOptions[0].textContent);
+  expect(selectedStageText).toBe("50%-epiboly");
+  expect(selectedTimeText).toBe("High-pec (42 hpf)");
+
+  await page.getByPlaceholder("e.g. hindbrain").fill("optic");
+  const option = page.locator(".anatomy-filter .autocomplete-item", { hasText: "optic tectum neuropil region" });
+  await expect(option).toHaveAttribute("title", "optic tectum neuropil region");
+  await option.click();
+  await expect(page.locator(".anatomy-term-chip", { hasText: "optic tectum neuropil region" })).toHaveAttribute(
+    "title",
+    "optic tectum neuropil region"
+  );
+
+  await expect(page.locator(".expression-grid-toolbar .n-images-label")).toHaveText("Images per cell");
+  await expect(page.locator(".expression-grid-toolbar").getByRole("button", { name: "1", exact: true })).toHaveAttribute(
+    "title",
+    "1 image per cell"
+  );
+  await expect(page.locator(".expression-grid-toolbar").getByRole("button", { name: "3", exact: true })).toHaveAttribute(
+    "title",
+    "3 images per cell"
+  );
+});
+
+test("filter controls stay inside the filter card at common viewport widths", async ({ page }) => {
+  const widths = [2048, 1800, 1728, 1536, 1510, 1440, 1366, 1280, 1180, 1024, 768, 390];
+  const singleRowLaptopWidths = new Set([1440, 1366, 1280]);
+
+  for (const width of widths) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/?genes=pax2a&stage_min=10.33&stage_max=120");
+    await expect(page.locator(".filters-card")).toBeVisible();
+
+    const layout = await page.evaluate(() => {
+      const card = document.querySelector(".filters-card").getBoundingClientRect();
+      const searchCard = document.querySelector(".search-card").getBoundingClientRect();
+      const filtersCard = document.querySelector(".filters-card").getBoundingClientRect();
+      const controls = [...document.querySelectorAll(".filters-grid > *")].map((element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          className: element.className,
+          left: rect.left,
+          right: rect.right,
+          width: rect.width,
+          top: rect.top,
+        };
+      });
+      const selects = [...document.querySelectorAll(".stage-filter select")].map((element) => {
+        const rect = element.getBoundingClientRect();
+        return rect.width;
+      });
+
+      return {
+        cardLeft: card.left,
+        cardRight: card.right,
+        viewportWidth: document.documentElement.clientWidth,
+        scrollWidth: document.documentElement.scrollWidth,
+        densityInFilters: document.querySelectorAll(".filters-grid .n-images-toggle").length,
+        densityInToolbar: document.querySelectorAll(".expression-grid-toolbar .n-images-toggle").length,
+        searchTop: searchCard.top,
+        filtersTop: filtersCard.top,
+        controls,
+        selects,
+      };
+    });
+
+    expect(layout.scrollWidth, `viewport ${width} should not create horizontal page overflow`).toBeLessThanOrEqual(
+      layout.viewportWidth + 1
+    );
+    expect(layout.controls).toHaveLength(2);
+    expect(layout.densityInFilters, `density controls should not be in the filter card at ${width}px`).toBe(0);
+    expect(layout.densityInToolbar, `density controls should live in the grid toolbar at ${width}px`).toBe(1);
+
+    for (const control of layout.controls) {
+      expect(control.left, `${control.className} should not overflow left at ${width}px`).toBeGreaterThanOrEqual(
+        layout.cardLeft - 1
+      );
+      expect(control.right, `${control.className} should not overflow right at ${width}px`).toBeLessThanOrEqual(
+        layout.cardRight + 1
+      );
+      expect(control.width, `${control.className} should remain usable at ${width}px`).toBeGreaterThan(0);
+    }
+
+    for (const selectWidth of layout.selects) {
+      expect(selectWidth, `stage select should remain usable at ${width}px`).toBeGreaterThanOrEqual(140);
+    }
+
+    if (singleRowLaptopWidths.has(width)) {
+      const controlTops = layout.controls.map((control) => control.top);
+      expect(
+        Math.max(...controlTops) - Math.min(...controlTops),
+        `filter controls should stay on one row at ${width}px`
+      ).toBeLessThanOrEqual(1);
+      expect(Math.abs(layout.searchTop - layout.filtersTop), `top cards should share a row at ${width}px`).toBeLessThanOrEqual(1);
+    }
+  }
 });
 
 test("anatomy clear button resets the input and hides suggested genes", async ({ page }) => {

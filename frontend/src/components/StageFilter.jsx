@@ -12,6 +12,25 @@ const FALLBACK_STAGES = [
   { stage_name: "Larval:Day 5", begin_hours: 120, display_label: "Day 5 (120 hpf)" },
 ];
 
+function shortStageLabel(stage) {
+  return stage.display_label || stage.stage_name.split(":").pop();
+}
+
+function fullStageLabel(stage) {
+  if (!stage.display_label) {
+    return stage.stage_name;
+  }
+
+  const [stageGroup, stageName] = stage.stage_name.split(":");
+  if (stageName && stage.display_label.startsWith(stageName)) {
+    return `${stageGroup}:${stage.display_label}`;
+  }
+  if (stage.stage_name.includes(stage.display_label)) {
+    return stage.stage_name;
+  }
+  return `${stage.stage_name} (${stage.display_label})`;
+}
+
 export function StageFilter({ stageMin, stageMax, onChange }) {
   const [stages, setStages] = useState(FALLBACK_STAGES);
 
@@ -29,6 +48,8 @@ export function StageFilter({ stageMin, stageMax, onChange }) {
 
   const selectedMin = stageMin ?? minHours;
   const selectedMax = stageMax ?? maxHours;
+  const selectedMinStage = stages.find((s) => s.begin_hours === selectedMin);
+  const selectedMaxStage = stages.find((s) => s.begin_hours === selectedMax);
 
   function handleMin(e) {
     const val = parseFloat(e.target.value);
@@ -47,10 +68,14 @@ export function StageFilter({ stageMin, stageMax, onChange }) {
       <div className="stage-filter-selects">
         <label className="stage-select-field">
           <span className="field-label">Developmental stage</span>
-          <select value={selectedMin} onChange={handleMin}>
+          <select
+            value={selectedMin}
+            onChange={handleMin}
+            title={selectedMinStage ? fullStageLabel(selectedMinStage) : undefined}
+          >
             {stages.map((s) => (
-              <option key={s.begin_hours} value={s.begin_hours}>
-                {s.stage_name}
+              <option key={s.begin_hours} value={s.begin_hours} title={fullStageLabel(s)}>
+                {shortStageLabel(s)}
               </option>
             ))}
           </select>
@@ -58,10 +83,14 @@ export function StageFilter({ stageMin, stageMax, onChange }) {
         <span className="range-arrow" aria-hidden="true">→</span>
         <label className="stage-select-field">
           <span className="field-label">Time point</span>
-          <select value={selectedMax} onChange={handleMax}>
+          <select
+            value={selectedMax}
+            onChange={handleMax}
+            title={selectedMaxStage ? fullStageLabel(selectedMaxStage) : undefined}
+          >
             {stages.map((s) => (
-              <option key={s.begin_hours} value={s.begin_hours}>
-                {s.display_label}
+              <option key={s.begin_hours} value={s.begin_hours} title={fullStageLabel(s)}>
+                {shortStageLabel(s)}
               </option>
             ))}
           </select>

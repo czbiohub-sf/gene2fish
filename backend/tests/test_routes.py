@@ -231,3 +231,54 @@ def test_anatomy_search_returns_available_options_without_query(tmp_path, monkey
     assert limited_options.json() == ["heart", "hindbrain"]
     assert filtered.status_code == 200
     assert filtered.json() == ["hindbrain"]
+
+
+def test_gene_batch_includes_lightbox_identifier_metadata(tmp_path, monkeypatch):
+    records = [
+        {
+            "image_id": "ZDB-IMAGE-060216-708",
+            "image_info": {
+                "image_id": "ZDB-IMAGE-060216-708",
+                "figure_id": "ZDB-FIG-1",
+                "image_preparation": "whole-mount",
+            },
+            "expression": {
+                "est_id": "ZDB-CDNA-040425-55286",
+                "est_symbol": "MGC:55286",
+                "probe_quality": "1",
+            },
+            "gene": {
+                "gene_id": "ZDB-GENE-040426-2596",
+                "gene_symbol": "pacsin2",
+                "gene_name": "protein kinase C and casein kinase substrate in neurons 2",
+            },
+            "developmental_stages": [
+                {
+                    "stage_name": "Gastrula:50%-epiboly",
+                    "begin_hours": "5.25",
+                    "end_hours": "5.66",
+                }
+            ],
+            "publication": {
+                "publication_id": "ZDB-PUB-040907-1",
+                "pubmed_id": "123456",
+            },
+            "fish": {"fish_name": "wild type"},
+            "human_orthologs": [{"human_symbol": "PACSIN2"}],
+            "uniprot_ids": ["F1QC13"],
+        }
+    ]
+    (tmp_path / "image_metadata.json").write_text(json.dumps(records))
+    monkeypatch.setenv("GENE2IMAGE_DATA_DIR", str(tmp_path))
+
+    from gene2image.main import app
+
+    with TestClient(app) as c:
+        resp = c.post("/api/genes/batch", json={"genes": ["pacsin2"]})
+
+    assert resp.status_code == 200
+    image = resp.json()["pacsin2"][0]
+    assert image["gene_id"] == "ZDB-GENE-040426-2596"
+    assert image["gene_name"] == "protein kinase C and casein kinase substrate in neurons 2"
+    assert image["est_id"] == "ZDB-CDNA-040425-55286"
+    assert image["est_symbol"] == "MGC:55286"
