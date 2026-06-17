@@ -228,7 +228,7 @@ select {
 
 .filters-grid {
   display: grid;
-  grid-template-columns: minmax(420px, 520px) minmax(280px, 1fr);
+  grid-template-columns: minmax(420px, 2fr) minmax(280px, 1fr);
   gap: 18px 24px;
   align-items: end;
 }
@@ -1368,7 +1368,7 @@ select {
 
 @media (max-width: 1300px) {
   .filters-grid {
-    grid-template-columns: minmax(360px, 480px) minmax(240px, 1fr);
+    grid-template-columns: minmax(360px, 2fr) minmax(240px, 1fr);
   }
 }
 
