@@ -101,7 +101,8 @@ export function ExpressionGrid({ genes, data, onRemoveGene, onAddGene, onSetAnat
         />
         <h2 id="empty-state-title">Search gene expression images</h2>
         <p>
-          Enter a gene name and select filters to explore expression patterns in zebrafish development.
+          Search one gene to explore its expression patterns in zebrafish development — or add
+          several genes to compare them side by side. Use the filters to focus on specific stages.
         </p>
         <div className="grid-empty-examples" aria-label="Example searches">
           {EMPTY_STATE_EXAMPLES.map((example) => (
