@@ -925,6 +925,9 @@ select {
 
 .image-cell:hover {
   background: var(--bg-hover);
+  /* Lift the hovered cell above the sticky headers so its tooltip,
+     which pops above the cell, is not covered by the column header. */
+  z-index: 20;
 }
 
 .image-cell-inner {
@@ -1068,6 +1071,14 @@ select {
 
 .image-cell:hover .cell-tooltip {
   display: block;
+}
+
+/* The first body row sits right under the sticky header, at the top edge of
+   the scroll container (which clips overflow). Flip its tooltip to open below
+   the cell so it isn't cut off or hidden behind the column header. */
+.expression-grid tbody tr:first-child .cell-tooltip {
+  bottom: auto;
+  top: calc(100% + 4px);
 }
 
 /* Lightbox */
