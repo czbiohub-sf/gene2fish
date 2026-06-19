@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/czbiohub-sf/gene2fish/compare/v0.3.0...v0.3.1) (2026-06-19)
+
+
+### Bug Fixes
+
+* show no-image feedback in empty gene cells ([#37](https://github.com/czbiohub-sf/gene2fish/issues/37)) ([3eb93bd](https://github.com/czbiohub-sf/gene2fish/commit/3eb93bd4e99b767df05500ebed7ec1b0c429c993))
+
 ## [0.3.0](https://github.com/czbiohub-sf/gene2fish/compare/v0.2.0...v0.3.0) (2026-06-12)
 
 
