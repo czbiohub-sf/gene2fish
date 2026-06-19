@@ -8,8 +8,6 @@ import { AnatomySuggestedGenes } from "./components/AnatomySuggestedGenes.jsx";
 import { ExpressionGrid } from "./components/ExpressionGrid.jsx";
 import { Attribution } from "./components/Attribution.jsx";
 
-const N_IMAGE_OPTIONS = [1, 3, 6, 10];
-
 export default function App() {
   const [urlState, setUrlState] = useUrlState();
   const { genes, stageMin, stageMax, anatomy, nImages } = urlState;
@@ -107,20 +105,6 @@ export default function App() {
                 onChange={setStageRange}
               />
               <AnatomyFilter value={anatomy} onChange={setAnatomy} />
-              <div className="n-images-toggle">
-                <span className="n-images-label">Images per cell</span>
-                <div className="n-images-buttons">
-                  {N_IMAGE_OPTIONS.map((n) => (
-                    <button
-                      key={n}
-                      className={`n-images-btn${(nImages ?? 1) === n ? " active" : ""}`}
-                      onClick={() => setNImages(n)}
-                    >
-                      {n}
-                    </button>
-                  ))}
-                </div>
-              </div>
             </div>
           </section>
         </div>
@@ -142,6 +126,7 @@ export default function App() {
           onAddGene={addGene}
           onSetAnatomy={setAnatomy}
           nImages={nImages ?? 1}
+          onSetNImages={setNImages}
         />
       </main>
 

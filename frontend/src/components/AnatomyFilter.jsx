@@ -101,8 +101,8 @@ export function AnatomyFilter({ value, onChange }) {
               {selectedTerms.map((term, index) => (
                 <span key={term} className="anatomy-selected-term">
                   {index > 0 && <span className="anatomy-and" aria-hidden="true">AND</span>}
-                  <span className="anatomy-term-chip">
-                    {term}
+                  <span className="anatomy-term-chip" title={term}>
+                    <span className="anatomy-term-chip-text">{term}</span>
                     <button
                       type="button"
                       className="anatomy-term-remove"
@@ -156,6 +156,7 @@ export function AnatomyFilter({ value, onChange }) {
                 <div
                   key={s}
                   className="autocomplete-item"
+                  title={s}
                   role="option"
                   aria-selected="false"
                   onMouseDown={() => select(s)}

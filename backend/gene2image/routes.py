@@ -119,6 +119,7 @@ def _record_to_model(record: dict) -> ImageRecord:
         image_url_fallback=image_url_fallback,
         gene_symbol=gene.get("gene_symbol", ""),
         gene_id=gene.get("gene_id"),
+        gene_name=gene.get("gene_name"),
         stage_name=stage_name,
         stage_begin_hours=canonical_hours,
         stage_display_label=stage_display_label,
@@ -131,6 +132,7 @@ def _record_to_model(record: dict) -> ImageRecord:
         uniprot_ids=uniprot_ids,
         publication_id=pub_id or None,
         pubmed_id=str(pub["pubmed_id"]) if pub.get("pubmed_id") is not None else None,
+        est_id=expression.get("est_id"),
         est_symbol=expression.get("est_symbol"),
         probe_quality=expression.get("probe_quality"),
     )

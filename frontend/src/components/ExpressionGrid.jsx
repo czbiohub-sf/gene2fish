@@ -9,8 +9,9 @@ const EMPTY_STATE_EXAMPLES = [
   { label: "Example: liver primordium", type: "anatomy", value: "liver primordium", gene: "nr5a2" },
   { label: "Example: prox1a", type: "gene", value: "prox1a" },
 ];
+const N_IMAGE_OPTIONS = [1, 3, 6, 10];
 
-export function ExpressionGrid({ genes, data, onRemoveGene, onAddGene, onSetAnatomy, nImages }) {
+export function ExpressionGrid({ genes, data, onRemoveGene, onAddGene, onSetAnatomy, nImages, onSetNImages }) {
   const [lightboxIndex, setLightboxIndex] = useState(null);
   const [exporting, setExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(null);
@@ -80,6 +81,15 @@ export function ExpressionGrid({ genes, data, onRemoveGene, onAddGene, onSetAnat
     return result;
   }, [lookup, genes, nImages]);
 
+  const genesWithoutImages = useMemo(() => {
+    const result = {};
+    for (const symbol of genes) {
+      result[symbol] = Object.prototype.hasOwnProperty.call(data, symbol)
+        && (data[symbol] || []).length === 0;
+    }
+    return result;
+  }, [genes, data]);
+
   if (genes.length === 0) {
     return (
       <section className="grid-empty" aria-labelledby="empty-state-title">
@@ -91,7 +101,8 @@ export function ExpressionGrid({ genes, data, onRemoveGene, onAddGene, onSetAnat
         />
         <h2 id="empty-state-title">Search gene expression images</h2>
         <p>
-          Enter a gene name and select filters to explore expression patterns in zebrafish development.
+          Search one gene to explore its expression patterns in zebrafish development — or add
+          several genes to compare them side by side. Use the filters to focus on specific stages.
         </p>
         <div className="grid-empty-examples" aria-label="Example searches">
           {EMPTY_STATE_EXAMPLES.map((example) => (
@@ -115,10 +126,6 @@ export function ExpressionGrid({ genes, data, onRemoveGene, onAddGene, onSetAnat
     );
   }
 
-  if (rows.length === 0 && genes.length > 0) {
-    return <p className="grid-empty-message">No expression images found for the selected genes and filters.</p>;
-  }
-
   async function exportTable() {
     setExporting(true);
     setExportProgress(0);
@@ -140,89 +147,117 @@ export function ExpressionGrid({ genes, data, onRemoveGene, onAddGene, onSetAnat
     }
   }
 
+  const hasRows = rows.length > 0;
+
   return (
     <>
       <div className="expression-grid-toolbar">
-        <button
-          type="button"
-          className="export-table-btn"
-          onClick={exportTable}
-          disabled={exporting}
-        >
-          {exporting ? `Exporting ${exportProgress ?? 0}%` : "Export table PNG"}
-        </button>
-        {exporting && (
-          <progress
-            className="export-table-progress"
-            value={exportProgress ?? 0}
-            max="100"
-            aria-label="PNG export progress"
-          />
-        )}
-        {exportError && <span className="export-table-error">{exportError}</span>}
-      </div>
-      <div className="expression-grid-wrapper">
-        <table className="expression-grid">
-          <thead>
-            <tr>
-              <th className="grid-corner" />
-              {genes.map((symbol) => (
-                <th
-                  key={symbol}
-                  className="col-header"
-                  style={nImages > 1
-                    ? { width: `calc(var(--cell-size) * ${colMaxImages[symbol]})` }
-                    : undefined}
-                >
-                  <div className="col-header-inner">
-                    <span className="col-gene-symbol">{symbol}</span>
-                    <button
-                      className="col-remove-btn"
-                      title={`Remove ${symbol}`}
-                      onClick={() => onRemoveGene(symbol)}
-                    >
-                      ×
-                    </button>
-                  </div>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(({ hours, label }) => (
-              <tr key={hours}>
-                <td className="row-header">{label}</td>
-                {genes.map((symbol) => {
-                  const imgs = lookup[symbol]?.[hours];
-                  if (imgs && imgs.length > 0) {
-                    return (
-                      <ImageCell
-                        key={symbol}
-                        images={imgs}
-                        nImages={nImages ?? 1}
-                        colMax={colMaxImages[symbol]}
-                        onClick={(img) => {
-                          const idx = flatImages.findIndex((x) => x.image_id === img.image_id);
-                          if (idx !== -1) setLightboxIndex(idx);
-                        }}
-                      />
-                    );
-                  }
-                  return (
-                    <td
-                      key={symbol}
-                      className="empty-cell"
-                      style={nImages > 1
-                        ? { width: `calc(var(--cell-size) * ${colMaxImages[symbol]})` }
-                        : undefined}
-                    />
-                  );
-                })}
-              </tr>
+        <div className="expression-grid-toolbar-actions">
+          <button
+            type="button"
+            className="export-table-btn"
+            onClick={exportTable}
+            disabled={exporting || !hasRows}
+          >
+            {exporting ? `Exporting ${exportProgress ?? 0}%` : "Export table PNG"}
+          </button>
+          {exporting && hasRows && (
+            <progress
+              className="export-table-progress"
+              value={exportProgress ?? 0}
+              max="100"
+              aria-label="PNG export progress"
+            />
+          )}
+          {exportError && <span className="export-table-error">{exportError}</span>}
+        </div>
+        <div className="n-images-toggle n-images-toggle-inline">
+          <span className="n-images-label">Images per cell</span>
+          <div className="n-images-buttons" role="group" aria-label="Images per cell">
+            {N_IMAGE_OPTIONS.map((n) => (
+              <button
+                key={n}
+                type="button"
+                className={`n-images-btn${(nImages ?? 1) === n ? " active" : ""}`}
+                title={`${n} image${n === 1 ? "" : "s"} per cell`}
+                onClick={() => onSetNImages(n)}
+              >
+                {n}
+              </button>
             ))}
-          </tbody>
-        </table>
+          </div>
+        </div>
       </div>
+      {hasRows ? (
+        <div className="expression-grid-wrapper">
+          <table className="expression-grid">
+            <thead>
+              <tr>
+                <th className="grid-corner" />
+                {genes.map((symbol) => (
+                  <th
+                    key={symbol}
+                    className="col-header"
+                    style={nImages > 1
+                      ? { width: `calc(var(--cell-size) * ${colMaxImages[symbol]})` }
+                      : undefined}
+                  >
+                    <div className="col-header-inner">
+                      <span className="col-gene-symbol">{symbol}</span>
+                      <button
+                        className="col-remove-btn"
+                        title={`Remove ${symbol}`}
+                        onClick={() => onRemoveGene(symbol)}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(({ hours, label }) => (
+                <tr key={hours}>
+                  <td className="row-header">{label}</td>
+                  {genes.map((symbol) => {
+                    const imgs = lookup[symbol]?.[hours];
+                    if (imgs && imgs.length > 0) {
+                      return (
+                        <ImageCell
+                          key={symbol}
+                          images={imgs}
+                          nImages={nImages ?? 1}
+                          colMax={colMaxImages[symbol]}
+                          onClick={(img) => {
+                            const idx = flatImages.findIndex((x) => x.image_id === img.image_id);
+                            if (idx !== -1) setLightboxIndex(idx);
+                          }}
+                        />
+                      );
+                    }
+                    return (
+                      <td
+                        key={symbol}
+                        className={`empty-cell${genesWithoutImages[symbol] ? " no-image-cell" : ""}`}
+                        style={nImages > 1
+                          ? { width: `calc(var(--cell-size) * ${colMaxImages[symbol]})` }
+                          : undefined}
+                      >
+                        {genesWithoutImages[symbol] && (
+                          <span className="no-image-cell-text">No image</span>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="grid-empty-message">No expression images found for the selected genes and filters.</p>
+      )}
       {lightboxIndex != null && flatImages[lightboxIndex] && (
         <Lightbox
           image={flatImages[lightboxIndex]}

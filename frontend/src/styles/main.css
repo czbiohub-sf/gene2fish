@@ -181,7 +181,7 @@ select {
 
 .control-cards {
   display: grid;
-  grid-template-columns: minmax(340px, 468px) minmax(0, 1fr);
+  grid-template-columns: minmax(320px, 400px) minmax(0, 1fr);
   gap: 18px;
   align-items: stretch;
 }
@@ -228,8 +228,8 @@ select {
 
 .filters-grid {
   display: grid;
-  grid-template-columns: minmax(330px, 0.9fr) minmax(240px, 0.78fr) minmax(190px, auto);
-  gap: 20px;
+  grid-template-columns: minmax(420px, 2fr) minmax(280px, 1fr);
+  gap: 18px 24px;
   align-items: end;
 }
 
@@ -402,6 +402,9 @@ select {
   font-size: 13px;
   cursor: pointer;
   color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .autocomplete-item:hover,
@@ -418,8 +421,8 @@ select {
 
 .stage-filter-selects {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 32px minmax(0, 0.9fr) 32px;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) 28px minmax(0, 1fr) 32px;
+  gap: 16px;
   align-items: end;
 }
 
@@ -461,6 +464,7 @@ select {
   color: var(--text-secondary);
   font-size: 20px;
   line-height: 1;
+  min-width: 28px;
 }
 
 .stage-clear {
@@ -557,7 +561,15 @@ select {
   line-height: 1.2;
 }
 
+.anatomy-term-chip-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .anatomy-term-remove {
+  flex: 0 0 auto;
   width: 18px;
   height: 18px;
   padding: 0;
@@ -639,7 +651,7 @@ select {
   display: flex;
   flex-direction: column;
   gap: 7px;
-  min-width: 240px;
+  min-width: 0;
 }
 
 .n-images-label {
@@ -650,12 +662,12 @@ select {
 
 .n-images-buttons {
   display: flex;
-  gap: 14px;
+  gap: 10px;
   height: 46px;
 }
 
 .n-images-btn {
-  min-width: 48px;
+  min-width: 56px;
   padding: 0 14px;
   font-size: 15px;
   font-family: var(--font-sans);
@@ -677,6 +689,17 @@ select {
   background: var(--accent);
   border-color: var(--accent);
   color: white;
+}
+
+.n-images-toggle-inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.n-images-toggle-inline .n-images-label {
+  white-space: nowrap;
 }
 
 /* Expression grid */
@@ -770,9 +793,18 @@ select {
 
 .expression-grid-toolbar {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 16px;
   margin-bottom: 10px;
+}
+
+.expression-grid-toolbar-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .export-table-btn {
@@ -893,6 +925,9 @@ select {
 
 .image-cell:hover {
   background: var(--bg-hover);
+  /* Lift the hovered cell above the sticky headers so its tooltip,
+     which pops above the cell, is not covered by the column header. */
+  z-index: 20;
 }
 
 .image-cell-inner {
@@ -965,6 +1000,28 @@ select {
   border: 1px dashed var(--border-dashed);
 }
 
+.no-image-cell {
+  padding: 8px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.no-image-cell-text {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  max-width: 100%;
+  border: 1px solid var(--border-dashed);
+  border-radius: 4px;
+  padding: 4px 7px;
+  background: var(--bg-card);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: normal;
+}
+
 /* Placeholder (404) */
 .cell-placeholder {
   width: calc(var(--cell-size) - 8px);
@@ -1016,6 +1073,14 @@ select {
   display: block;
 }
 
+/* The first body row sits right under the sticky header, at the top edge of
+   the scroll container (which clips overflow). Flip its tooltip to open below
+   the cell so it isn't cut off or hidden behind the column header. */
+.expression-grid tbody tr:first-child .cell-tooltip {
+  bottom: auto;
+  top: calc(100% + 4px);
+}
+
 /* Lightbox */
 .lightbox-overlay {
   position: fixed;
@@ -1034,7 +1099,7 @@ select {
   max-width: 900px;
   width: 100%;
   max-height: 90vh;
-  overflow-y: auto;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
@@ -1045,6 +1110,7 @@ select {
   justify-content: space-between;
   padding: 16px 20px;
   border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
 }
 
 .lightbox-title {
@@ -1108,6 +1174,9 @@ select {
   gap: 24px;
   padding: 20px;
   flex-wrap: wrap;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .lightbox-image-col {
@@ -1148,6 +1217,17 @@ select {
   font-family: var(--font-mono);
 }
 
+.meta-primary {
+  margin-bottom: 3px;
+}
+
+.meta-secondary {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
 .meta-value a {
   color: var(--accent);
   text-decoration: none;
@@ -1173,8 +1253,17 @@ select {
   font-size: 11px;
 }
 
+.meta-tag a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.meta-tag a:hover {
+  text-decoration: underline;
+}
+
 .suggested-genes-wrap {
-  margin: 12px 0 4px;
+  margin: 0 0 22px;
   padding: 10px 12px;
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -1282,13 +1371,25 @@ select {
   text-decoration: underline;
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1200px) {
   .control-cards {
     grid-template-columns: 1fr;
   }
+}
 
+@media (max-width: 1300px) {
   .filters-grid {
-    grid-template-columns: minmax(0, 1fr) minmax(220px, 0.7fr);
+    grid-template-columns: minmax(360px, 2fr) minmax(240px, 1fr);
+  }
+}
+
+@media (max-width: 980px) {
+  .filters-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .n-images-toggle-inline {
+    margin-left: 0;
   }
 }
 
@@ -1320,7 +1421,6 @@ select {
     padding: 12px;
   }
 
-  .filters-grid,
   .stage-filter-selects {
     grid-template-columns: 1fr;
   }
@@ -1333,8 +1433,28 @@ select {
     width: 100%;
   }
 
-  .n-images-toggle {
-    min-width: 0;
+  .filters-grid,
+  .expression-grid-toolbar,
+  .expression-grid-toolbar-actions,
+  .n-images-toggle-inline,
+  .n-images-buttons {
+    width: 100%;
+  }
+
+  .expression-grid-toolbar,
+  .expression-grid-toolbar-actions,
+  .n-images-toggle-inline {
+    align-items: stretch;
+  }
+
+  .n-images-toggle-inline {
+    flex-direction: column;
+    gap: 8px;
+    margin-left: 0;
+  }
+
+  .n-images-buttons {
+    justify-content: space-between;
   }
 
   .app-main {

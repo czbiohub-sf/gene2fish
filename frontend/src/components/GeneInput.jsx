@@ -93,7 +93,7 @@ export function GeneInput({ onAdd }) {
         )}
       </div>
       <p className="field-helper">
-        Press Enter to add
+        Press Enter to add — compare genes side by side
       </p>
     </div>
   );
