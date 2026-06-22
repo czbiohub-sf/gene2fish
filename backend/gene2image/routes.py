@@ -281,6 +281,8 @@ def search_genes(request: Request, q: str = Query(default="")) -> list[GeneSearc
     data = request.app.state.data
     gene_list: list[str] = data["gene_list"]
     alias_index: dict[str, list[tuple[str, str]]] = data.get("alias_index") or {}
+    # Alias keys are sorted once at load time (see load_data), not per request.
+    alias_keys: list[str] = data.get("alias_keys") or []
     q_lower = q.lower()
     limit = 20
 
@@ -295,10 +297,10 @@ def search_genes(request: Request, q: str = Query(default="")) -> list[GeneSearc
             if len(results) >= limit:
                 return results
 
-    # Then previous/alias names, resolved to their canonical symbol. Sorted for
-    # deterministic ordering; a canonical symbol already surfaced above is not
-    # repeated.
-    for alias in sorted(alias_index):
+    # Then previous/alias names, resolved to their canonical symbol. Iterated in
+    # the precomputed sorted order for determinism; a canonical symbol already
+    # surfaced above is not repeated.
+    for alias in alias_keys:
         if not alias.startswith(q_lower):
             continue
         for symbol, display_alias in alias_index[alias]:

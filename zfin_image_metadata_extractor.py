@@ -783,8 +783,10 @@ def main():
     alias_map = build_alias_map(extractor.data.get("aliases.txt"), gene_ids_in_results)
     aliases_path = Path(json_path).parent / ALIASES_OUTPUT_NAME
     print(f"\nSaving gene aliases to: {aliases_path}")
-    with open(aliases_path, "w") as f:
-        json.dump(alias_map, f, indent=2)
+    # Aliases can contain non-ASCII characters; write UTF-8 and keep them
+    # readable (ensure_ascii=False) for a consistent, human-legible sidecar.
+    with open(aliases_path, "w", encoding="utf-8") as f:
+        json.dump(alias_map, f, indent=2, ensure_ascii=False)
     print(f"  ✓ Saved aliases for {len(alias_map):,} genes")
 
     # Save TSV output

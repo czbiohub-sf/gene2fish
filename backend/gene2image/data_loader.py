@@ -107,6 +107,8 @@ def load_data() -> dict:
             if gid:
                 gene_id_to_symbol.setdefault(gid, symbol)
     alias_index = _build_alias_index(path.parent, gene_id_to_symbol)
+    # Sort the alias keys once here, not per search request.
+    alias_keys = sorted(alias_index)
     print(f"Indexed {sum(len(v) for v in alias_index.values())} alias → gene matches.")
 
     # Pre-sort each anatomy's gene list alphabetically by symbol.
@@ -124,6 +126,7 @@ def load_data() -> dict:
         "populated_stage_hours": populated_stage_hours,
         "anatomy_index": anatomy_index,
         "alias_index": alias_index,
+        "alias_keys": alias_keys,
     }
 
 
@@ -142,18 +145,25 @@ def _build_alias_index(
         return {}
 
     try:
-        raw: dict[str, list[str]] = json.loads(alias_path.read_text(encoding="utf-8"))
+        raw = json.loads(alias_path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError) as err:
         print(f"Warning: could not read {alias_path}: {err}")
+        return {}
+
+    # Fail closed on an unexpected shape: a non-object top level, or a gene whose
+    # aliases are not a list of strings, is skipped rather than crashing startup
+    # (or silently iterating the characters of a string).
+    if not isinstance(raw, dict):
+        print(f"Warning: {alias_path} is not a JSON object; ignoring aliases.")
         return {}
 
     alias_index: dict[str, list[tuple[str, str]]] = {}
     for gene_id, aliases in raw.items():
         symbol = gene_id_to_symbol.get(gene_id)
-        if not symbol:
+        if not symbol or not isinstance(aliases, list):
             continue
-        for alias in aliases or []:
-            if not alias:
+        for alias in aliases:
+            if not isinstance(alias, str) or not alias:
                 continue
             key = alias.lower()
             if key == symbol.lower():

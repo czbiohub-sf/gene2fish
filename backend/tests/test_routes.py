@@ -318,6 +318,51 @@ def test_gene_search_without_alias_sidecar_still_works(tmp_path, monkeypatch):
         assert c.get("/api/genes/search?q=oct4").json() == []
 
 
+def test_gene_search_fails_closed_on_malformed_sidecar(tmp_path, monkeypatch):
+    # A sidecar that isn't a {gene_id: [aliases]} object (here a list, and a gene
+    # whose aliases are a bare string) must not crash startup or iterate string
+    # characters — it degrades to symbol-only search.
+    records = [{"gene": {"gene_symbol": "pax2a", "gene_id": "ZDB-GENE-1"}}]
+    (tmp_path / "image_metadata.json").write_text(json.dumps(records))
+    (tmp_path / "gene_aliases.json").write_text(json.dumps(["not", "a", "dict"]))
+    monkeypatch.setenv("GENE2IMAGE_DATA_DIR", str(tmp_path))
+    from gene2image.main import app
+
+    with TestClient(app) as c:
+        assert c.get("/api/genes/search?q=pax").json() == [
+            {"symbol": "pax2a", "matched_alias": None}
+        ]
+        # No alias matches surface, and nothing 500s.
+        assert c.get("/api/genes/search?q=oct").json() == []
+
+
+def test_gene_search_skips_non_list_and_non_string_aliases(tmp_path, monkeypatch):
+    records = [
+        {"gene": {"gene_symbol": "pax2a", "gene_id": "ZDB-GENE-1"}},
+        {"gene": {"gene_symbol": "shha", "gene_id": "ZDB-GENE-2"}},
+    ]
+    (tmp_path / "image_metadata.json").write_text(json.dumps(records))
+    (tmp_path / "gene_aliases.json").write_text(
+        json.dumps(
+            {
+                "ZDB-GENE-1": "oldpax",          # string, not a list → skipped
+                "ZDB-GENE-2": ["sonic", 123, ""],  # list with junk → only "sonic" kept
+            }
+        )
+    )
+    monkeypatch.setenv("GENE2IMAGE_DATA_DIR", str(tmp_path))
+    from gene2image.main import app
+
+    with TestClient(app) as c:
+        # The string value must not be iterated character-by-character: "oldpax"
+        # would otherwise register single-letter aliases like "o".
+        assert c.get("/api/genes/search?q=o").json() == []
+        # The valid alias in the list still resolves; the int and "" are skipped.
+        assert c.get("/api/genes/search?q=sonic").json() == [
+            {"symbol": "shha", "matched_alias": "sonic"}
+        ]
+
+
 def test_gene_batch_includes_lightbox_identifier_metadata(tmp_path, monkeypatch):
     records = [
         {
