@@ -272,6 +272,38 @@ test("validates a typed gene name and normalizes it to the canonical symbol", as
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
 
+test("a slow stale validation does not clobber a newer submission", async ({ page }) => {
+  // First validation resolves slowly (and would 404); the user moves on before
+  // it returns. The stale response must not surface an error or otherwise touch
+  // state after the newer, valid submission succeeds.
+  await page.route("**/api/genes/slowgene/resolve", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    // The page aborts this request when the user types a new value; fulfilling
+    // an already-aborted route throws, which is irrelevant to the assertion.
+    await route.fulfill({ status: 404, json: { detail: "No gene matching 'slowgene'" } }).catch(() => {});
+  });
+
+  await page.goto("/");
+  const input = page.getByPlaceholder("Gene symbol (e.g. pax2a)");
+
+  await input.fill("slowgene");
+  await input.press("Enter"); // kicks off the slow validation
+
+  // Move on to a valid gene before the slow request returns.
+  await input.fill("pax2a");
+  await page.getByRole("button", { name: "Add" }).click();
+
+  await expect(page.getByRole("columnheader").filter({ hasText: "pax2a" })).toBeVisible();
+
+  // Wait past the slow request's completion; its stale 404 must be ignored —
+  // no error banner, input stays cleared, no phantom column.
+  await page.waitForTimeout(1300);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(input).toHaveValue("");
+  await expect(page.getByRole("columnheader").filter({ hasText: "pax2a" })).toHaveCount(1);
+  await expect(page.getByRole("columnheader").filter({ hasText: "slowgene" })).toHaveCount(0);
+});
+
 test("shows no-image labels for empty cells in a mixed gene grid", async ({ page }) => {
   // The default batch mock returns [] for unrecognized gene symbols.
   await page.goto("/?genes=a1cf,pax2a");

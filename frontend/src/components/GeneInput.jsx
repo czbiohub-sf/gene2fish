@@ -15,6 +15,20 @@ export function GeneInput({ onAdd }) {
   const [validating, setValidating] = useState(false);
   const [error, setError] = useState(null);
   const inputRef = useRef(null);
+  // Validation is async, so a slow response must not mutate state for a symbol
+  // the user has moved on from. Each validation captures the current sequence
+  // number; only the latest one may touch state, and the previous request is
+  // aborted outright.
+  const requestSeqRef = useRef(0);
+  const abortRef = useRef(null);
+
+  function cancelInFlight() {
+    requestSeqRef.current += 1; // any pending response is now stale
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+    }
+  }
 
   const fetchSuggestions = useCallback(
     debounce(async (q) => {
@@ -33,7 +47,14 @@ export function GeneInput({ onAdd }) {
     fetchSuggestions(value);
     setActiveIdx(-1);
     setError(null);
+    // Typing supersedes any in-flight validation so a late response can't add
+    // the previous symbol or clear the input the user is now editing.
+    cancelInFlight();
+    setValidating(false);
   }, [value]);
+
+  // Abort a pending validation if the component unmounts mid-request.
+  useEffect(() => () => cancelInFlight(), []);
 
   function reset() {
     setValue("");
@@ -56,12 +77,22 @@ export function GeneInput({ onAdd }) {
   async function submitTyped(symbol) {
     const s = symbol.trim();
     if (!s || validating) return;
+    // Supersede anything already pending, then claim this request's sequence.
+    cancelInFlight();
+    const seq = requestSeqRef.current;
+    const controller = new AbortController();
+    abortRef.current = controller;
     setValidating(true);
     setError(null);
     try {
-      const res = await fetch(`/api/genes/${encodeURIComponent(s)}/resolve`);
+      const res = await fetch(
+        `/api/genes/${encodeURIComponent(s)}/resolve`,
+        { signal: controller.signal }
+      );
+      if (seq !== requestSeqRef.current) return; // a newer request superseded us
       if (res.ok) {
         const { symbol: canonical } = await res.json();
+        if (seq !== requestSeqRef.current) return;
         onAdd(canonical);
         reset();
       } else if (res.status === 404) {
@@ -69,10 +100,14 @@ export function GeneInput({ onAdd }) {
       } else {
         setError("Couldn't validate that gene. Please try again.");
       }
-    } catch {
+    } catch (err) {
+      if (err.name === "AbortError" || seq !== requestSeqRef.current) return;
       setError("Couldn't validate that gene. Check your connection.");
     } finally {
-      setValidating(false);
+      if (seq === requestSeqRef.current) {
+        setValidating(false);
+        abortRef.current = null;
+      }
     }
   }
 
