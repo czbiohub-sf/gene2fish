@@ -45,6 +45,13 @@ class ImageRecord(BaseModel):
     probe_quality: str | None = None
 
 
+class GeneSearchResult(BaseModel):
+    symbol: str
+    # The previous/alias name that matched the query, when the gene was found
+    # via an alias rather than its current symbol (e.g. "oct4" → "pou5f3").
+    matched_alias: str | None = None
+
+
 class CanonicalStage(BaseModel):
     stage_name: str
     begin_hours: float

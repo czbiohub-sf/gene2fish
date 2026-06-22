@@ -57,8 +57,20 @@ async function mockApi(page) {
 
   await page.route("**/api/genes/search**", async (route) => {
     const q = new URL(route.request().url()).searchParams.get("q")?.toLowerCase() || "";
-    const genes = ["pacsin2", "pax2a", "evx1", "shhb", "nr5a2", "prox1a", "hand2"].filter((g) => g.startsWith(q));
-    await route.fulfill({ json: genes });
+    const symbols = ["pacsin2", "pax2a", "evx1", "shhb", "nr5a2", "prox1a", "hand2"];
+    // Previous/alias name → canonical symbol (mirrors the backend alias index).
+    const aliases = { paxprev: "pax2a" };
+    const results = symbols
+      .filter((g) => g.startsWith(q))
+      .map((symbol) => ({ symbol, matched_alias: null }));
+    const seen = new Set(results.map((r) => r.symbol));
+    for (const [alias, symbol] of Object.entries(aliases)) {
+      if (alias.startsWith(q) && !seen.has(symbol)) {
+        results.push({ symbol, matched_alias: alias });
+        seen.add(symbol);
+      }
+    }
+    await route.fulfill({ json: results });
   });
 
   await page.route("**/api/anatomy/search**", async (route) => {
@@ -194,6 +206,23 @@ test("changing images per cell keeps queued image cells loading and clickable", 
   await firstImage.click();
   await expect(page.locator(".lightbox-overlay")).toBeVisible();
   await expect(page.locator(".lightbox-title")).toHaveText("pax2a");
+});
+
+test("searching by a previous/alias name resolves to the canonical gene", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByPlaceholder("Gene symbol (e.g. pax2a)").fill("paxprev");
+
+  // The dropdown surfaces the canonical symbol, annotated with the alias matched.
+  const item = page.locator(".gene-input-wrapper .autocomplete-item", { hasText: "pax2a" });
+  await expect(item).toBeVisible();
+  await expect(item.locator(".autocomplete-alias")).toHaveText("a.k.a. paxprev");
+
+  await item.click();
+
+  // The canonical gene (not the typed alias) is added to the grid.
+  await expect(page.getByRole("columnheader").filter({ hasText: "pax2a" })).toBeVisible();
+  await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length);
 });
 
 test("shows no-image labels for empty cells in a mixed gene grid", async ({ page }) => {

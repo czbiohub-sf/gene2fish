@@ -17,6 +17,7 @@ from .models import (
     BatchRequest,
     CanonicalStage,
     DiseaseAssociation,
+    GeneSearchResult,
     HealthResponse,
     HumanOrtholog,
     ImageRecord,
@@ -225,6 +226,32 @@ def _filter_records(
     return result
 
 
+def _records_for_symbol(symbol: str, data: dict) -> list[dict]:
+    """Resolve a gene symbol to its image records.
+
+    Tries an exact match, then a case-insensitive match, then falls back to the
+    alias index so a previous/alias name (e.g. "oct4") resolves to the canonical
+    gene's records (e.g. "pou5f3").
+    """
+    gene_index: dict[str, list[dict]] = data["gene_index"]
+    records = gene_index.get(symbol)
+    if records:
+        return records
+
+    symbol_lower = symbol.lower()
+    for key, val in gene_index.items():
+        if key.lower() == symbol_lower:
+            return val
+
+    alias_index: dict[str, list[tuple[str, str]]] = data.get("alias_index") or {}
+    for canonical, _alias in alias_index.get(symbol_lower, []):
+        records = gene_index.get(canonical)
+        if records:
+            return records
+
+    return []
+
+
 def _select_representatives(records: list[dict], n: int = 1) -> list[dict]:
     """Group records by canonical stage and pick up to n ranked images per stage."""
     by_stage: dict[float, list[dict]] = defaultdict(list)
@@ -247,14 +274,42 @@ def health() -> HealthResponse:
     return HealthResponse(status="ok")
 
 
-@router.get("/genes/search")
-def search_genes(request: Request, q: str = Query(default="")) -> list[str]:
-    gene_list: list[str] = request.app.state.data["gene_list"]
+@router.get("/genes/search", response_model=list[GeneSearchResult])
+def search_genes(request: Request, q: str = Query(default="")) -> list[GeneSearchResult]:
     if not q:
         return []
+    data = request.app.state.data
+    gene_list: list[str] = data["gene_list"]
+    alias_index: dict[str, list[tuple[str, str]]] = data.get("alias_index") or {}
     q_lower = q.lower()
-    matches = [g for g in gene_list if g.lower().startswith(q_lower)]
-    return matches[:20]
+    limit = 20
+
+    results: list[GeneSearchResult] = []
+    seen: set[str] = set()
+
+    # Current symbols first (prefix match) — these are the primary results.
+    for g in gene_list:
+        if g.lower().startswith(q_lower):
+            results.append(GeneSearchResult(symbol=g))
+            seen.add(g)
+            if len(results) >= limit:
+                return results
+
+    # Then previous/alias names, resolved to their canonical symbol. Sorted for
+    # deterministic ordering; a canonical symbol already surfaced above is not
+    # repeated.
+    for alias in sorted(alias_index):
+        if not alias.startswith(q_lower):
+            continue
+        for symbol, display_alias in alias_index[alias]:
+            if symbol in seen:
+                continue
+            results.append(GeneSearchResult(symbol=symbol, matched_alias=display_alias))
+            seen.add(symbol)
+            if len(results) >= limit:
+                return results
+
+    return results
 
 
 @router.get("/image-proxy")
@@ -275,17 +330,7 @@ def get_gene_images(
     stage_max: float | None = Query(default=None),
     anatomy: str | None = Query(default=None),
 ) -> list[ImageRecord]:
-    gene_index: dict[str, list[dict]] = request.app.state.data["gene_index"]
-    records = gene_index.get(symbol) or gene_index.get(symbol.lower()) or []
-
-    # Try case-insensitive lookup if exact match fails
-    if not records:
-        symbol_lower = symbol.lower()
-        for key, val in gene_index.items():
-            if key.lower() == symbol_lower:
-                records = val
-                break
-
+    records = _records_for_symbol(symbol, request.app.state.data)
     filtered = _filter_records(records, stage_min, stage_max, anatomy)
     representatives = _select_representatives(filtered)
     return [_record_to_model(r) for r in representatives]
@@ -293,19 +338,10 @@ def get_gene_images(
 
 @router.post("/genes/batch")
 def batch_gene_images(body: BatchRequest, request: Request) -> dict[str, list[ImageRecord]]:
-    gene_index: dict[str, list[dict]] = request.app.state.data["gene_index"]
     result: dict[str, list[ImageRecord]] = {}
 
     for symbol in body.genes:
-        records = gene_index.get(symbol) or []
-        if not records:
-            # Case-insensitive fallback
-            symbol_lower = symbol.lower()
-            for key, val in gene_index.items():
-                if key.lower() == symbol_lower:
-                    records = val
-                    break
-
+        records = _records_for_symbol(symbol, request.app.state.data)
         filtered = _filter_records(records, body.stage_min, body.stage_max, body.anatomy)
         representatives = _select_representatives(filtered, body.n_images)
         result[symbol] = [_record_to_model(r) for r in representatives]

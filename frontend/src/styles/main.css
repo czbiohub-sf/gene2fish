@@ -412,6 +412,12 @@ select {
   background: var(--bg-hover);
 }
 
+.autocomplete-alias {
+  margin-left: 8px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
 /* Stage filter */
 .stage-filter {
   display: flex;

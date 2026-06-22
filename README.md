@@ -22,7 +22,7 @@ The backend looks for `image_metadata_v2.json` first and falls back to `image_me
 
 ## Building the data file (local dev)
 
-`zfin_image_metadata_extractor.py` downloads the 13 required TSVs from ZFIN, joins them, and writes `image_metadata.json` + `image_metadata.tsv`. Pick a directory where the data should live (e.g. `~/projects/gene2image_data`) and run the extractor from there:
+`zfin_image_metadata_extractor.py` downloads the 14 required TSVs from ZFIN, joins them, and writes `image_metadata.json` + `image_metadata.tsv` + `gene_aliases.json`. Pick a directory where the data should live (e.g. `~/projects/gene2image_data`) and run the extractor from there:
 
 ```bash
 mkdir -p /path/to/gene2image_data
@@ -31,9 +31,10 @@ uv run python /path/to/gene2image/zfin_image_metadata_extractor.py
 ```
 
 By default the extractor:
-- Downloads the 13 ZFIN TSV files into `./zfin_data/` (skipped if already present)
+- Downloads the 14 ZFIN TSV files into `./zfin_data/` (skipped if already present)
 - Filters to the 5 Thisse publications (`ZDB-PUB-040907-1`, `ZDB-PUB-010810-1`, `ZDB-PUB-051025-1`, `ZDB-PUB-080227-22`, `ZDB-PUB-080220-1`)
 - Writes `image_metadata.json` and `image_metadata.tsv` to the current working directory
+- Writes `gene_aliases.json` (next to the JSON index): each in-dataset gene's stable ZFIN ID mapped to its previous/alias names (from ZFIN's `aliases.txt`), so the backend can resolve searches by older names (e.g. `oct4` → `pou5f3`). The backend loads it automatically when present; absent, gene search degrades to current symbols only.
 
 Useful flags:
 - `--all-images` — process every ZFIN image, not just the Thisse subset

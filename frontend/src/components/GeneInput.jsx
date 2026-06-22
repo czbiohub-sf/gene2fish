@@ -47,7 +47,7 @@ export function GeneInput({ onAdd }) {
       setActiveIdx((i) => Math.max(i - 1, -1));
     } else if (e.key === "Enter") {
       if (activeIdx >= 0 && suggestions[activeIdx]) {
-        submit(suggestions[activeIdx]);
+        submit(suggestions[activeIdx].symbol);
       } else {
         submit(value);
       }
@@ -82,11 +82,14 @@ export function GeneInput({ onAdd }) {
           <div className="autocomplete-dropdown">
             {suggestions.map((s, i) => (
               <div
-                key={s}
+                key={s.symbol}
                 className={`autocomplete-item${i === activeIdx ? " active" : ""}`}
-                onMouseDown={() => submit(s)}
+                onMouseDown={() => submit(s.symbol)}
               >
-                {s}
+                {s.symbol}
+                {s.matched_alias && (
+                  <span className="autocomplete-alias">a.k.a. {s.matched_alias}</span>
+                )}
               </div>
             ))}
           </div>
