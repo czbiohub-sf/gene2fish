@@ -17,6 +17,7 @@ from .models import (
     BatchRequest,
     CanonicalStage,
     DiseaseAssociation,
+    GeneResolveResult,
     GeneSearchResult,
     HealthResponse,
     HumanOrtholog,
@@ -226,30 +227,39 @@ def _filter_records(
     return result
 
 
-def _records_for_symbol(symbol: str, data: dict) -> list[dict]:
-    """Resolve a gene symbol to its image records.
+def _resolve_symbol(symbol: str, data: dict) -> tuple[str, str | None] | None:
+    """Resolve a user-supplied gene symbol to the canonical symbol in the dataset.
 
     Tries an exact match, then a case-insensitive match, then falls back to the
     alias index so a previous/alias name (e.g. "oct4") resolves to the canonical
-    gene's records (e.g. "pou5f3").
+    gene (e.g. "pou5f3"). Returns ``(canonical_symbol, matched_alias)`` where
+    ``matched_alias`` is the previous/alias name that matched (``None`` when the
+    gene was found by its current symbol), or ``None`` when the symbol does not
+    correspond to any gene in the dataset.
     """
     gene_index: dict[str, list[dict]] = data["gene_index"]
-    records = gene_index.get(symbol)
-    if records:
-        return records
+    if symbol in gene_index:
+        return symbol, None
 
     symbol_lower = symbol.lower()
-    for key, val in gene_index.items():
+    for key in gene_index:
         if key.lower() == symbol_lower:
-            return val
+            return key, None
 
     alias_index: dict[str, list[tuple[str, str]]] = data.get("alias_index") or {}
-    for canonical, _alias in alias_index.get(symbol_lower, []):
-        records = gene_index.get(canonical)
-        if records:
-            return records
+    for canonical, display_alias in alias_index.get(symbol_lower, []):
+        if canonical in gene_index:
+            return canonical, display_alias
 
-    return []
+    return None
+
+
+def _records_for_symbol(symbol: str, data: dict) -> list[dict]:
+    """Resolve a gene symbol to its image records (empty list when unknown)."""
+    resolved = _resolve_symbol(symbol, data)
+    if resolved is None:
+        return []
+    return data["gene_index"].get(resolved[0], [])
 
 
 def _select_representatives(records: list[dict], n: int = 1) -> list[dict]:
@@ -312,6 +322,21 @@ def search_genes(request: Request, q: str = Query(default="")) -> list[GeneSearc
                 return results
 
     return results
+
+
+@router.get("/genes/{symbol}/resolve", response_model=GeneResolveResult)
+def resolve_gene(symbol: str, request: Request) -> GeneResolveResult:
+    """Resolve a typed gene name to its canonical symbol, or 404 if unknown.
+
+    The client calls this before opening a comparison column so an invalid or
+    nonsensical name is rejected up front instead of silently creating an empty
+    column (the batch endpoint returns no records for unknown symbols).
+    """
+    resolved = _resolve_symbol(symbol, request.app.state.data)
+    if resolved is None:
+        raise HTTPException(status_code=404, detail=f"No gene matching '{symbol}'")
+    canonical, matched_alias = resolved
+    return GeneResolveResult(symbol=canonical, matched_alias=matched_alias)
 
 
 @router.get("/image-proxy")

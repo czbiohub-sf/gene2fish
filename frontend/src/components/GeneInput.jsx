@@ -12,6 +12,8 @@ export function GeneInput({ onAdd }) {
   const [value, setValue] = useState("");
   const [suggestions, setSuggestions] = useState([]);
   const [activeIdx, setActiveIdx] = useState(-1);
+  const [validating, setValidating] = useState(false);
+  const [error, setError] = useState(null);
   const inputRef = useRef(null);
 
   const fetchSuggestions = useCallback(
@@ -30,14 +32,48 @@ export function GeneInput({ onAdd }) {
   useEffect(() => {
     fetchSuggestions(value);
     setActiveIdx(-1);
+    setError(null);
   }, [value]);
 
-  function submit(symbol) {
+  function reset() {
+    setValue("");
+    setSuggestions([]);
+    setError(null);
+  }
+
+  // Adds a symbol that is already known to be valid (picked from the
+  // autocomplete, which only surfaces real genes).
+  function addValidated(symbol) {
     const s = symbol.trim();
     if (!s) return;
     onAdd(s);
-    setValue("");
-    setSuggestions([]);
+    reset();
+  }
+
+  // Validates a free-typed entry against the dataset before opening a column,
+  // so an invalid or nonsensical name is rejected instead of creating an empty
+  // column. Resolves to the canonical symbol (e.g. "OCT4" → "pou5f3").
+  async function submitTyped(symbol) {
+    const s = symbol.trim();
+    if (!s || validating) return;
+    setValidating(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/genes/${encodeURIComponent(s)}/resolve`);
+      if (res.ok) {
+        const { symbol: canonical } = await res.json();
+        onAdd(canonical);
+        reset();
+      } else if (res.status === 404) {
+        setError(`No gene matching "${s}". Pick a suggestion from the list.`);
+      } else {
+        setError("Couldn't validate that gene. Please try again.");
+      }
+    } catch {
+      setError("Couldn't validate that gene. Check your connection.");
+    } finally {
+      setValidating(false);
+    }
   }
 
   function handleKeyDown(e) {
@@ -47,9 +83,9 @@ export function GeneInput({ onAdd }) {
       setActiveIdx((i) => Math.max(i - 1, -1));
     } else if (e.key === "Enter") {
       if (activeIdx >= 0 && suggestions[activeIdx]) {
-        submit(suggestions[activeIdx].symbol);
+        addValidated(suggestions[activeIdx].symbol);
       } else {
-        submit(value);
+        submitTyped(value);
       }
     } else if (e.key === "Escape") {
       setSuggestions([]);
@@ -74,9 +110,15 @@ export function GeneInput({ onAdd }) {
           onBlur={() => setTimeout(() => setSuggestions([]), 150)}
           autoComplete="off"
           spellCheck={false}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? "gene-input-error" : undefined}
         />
-        <button className="gene-input-btn" onClick={() => submit(value)}>
-          Add
+        <button
+          className="gene-input-btn"
+          onClick={() => submitTyped(value)}
+          disabled={validating}
+        >
+          {validating ? "Checking…" : "Add"}
         </button>
         {suggestions.length > 0 && (
           <div className="autocomplete-dropdown">
@@ -84,7 +126,7 @@ export function GeneInput({ onAdd }) {
               <div
                 key={s.symbol}
                 className={`autocomplete-item${i === activeIdx ? " active" : ""}`}
-                onMouseDown={() => submit(s.symbol)}
+                onMouseDown={() => addValidated(s.symbol)}
               >
                 {s.symbol}
                 {s.matched_alias && (
@@ -95,9 +137,15 @@ export function GeneInput({ onAdd }) {
           </div>
         )}
       </div>
-      <p className="field-helper">
-        Press Enter to add — compare genes side by side
-      </p>
+      {error ? (
+        <p id="gene-input-error" className="field-error" role="alert">
+          {error}
+        </p>
+      ) : (
+        <p className="field-helper">
+          Press Enter to add — compare genes side by side
+        </p>
+      )}
     </div>
   );
 }

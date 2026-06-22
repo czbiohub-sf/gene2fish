@@ -52,6 +52,16 @@ class GeneSearchResult(BaseModel):
     matched_alias: str | None = None
 
 
+class GeneResolveResult(BaseModel):
+    # The canonical dataset symbol a user-supplied name resolves to. The client
+    # validates a typed gene against this before opening a comparison column, so
+    # an unknown name 404s instead of creating an empty column.
+    symbol: str
+    # The previous/alias name that matched, when resolved via an alias rather
+    # than the current symbol (e.g. "oct4" → "pou5f3").
+    matched_alias: str | None = None
+
+
 class CanonicalStage(BaseModel):
     stage_name: str
     begin_hours: float
