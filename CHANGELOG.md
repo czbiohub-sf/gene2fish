@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/czbiohub-sf/gene2fish/compare/v0.3.1...v0.4.0) (2026-06-23)
+
+
+### Features
+
+* support gene search by previous and alias names (GEN-18) ([#46](https://github.com/czbiohub-sf/gene2fish/issues/46)) ([542f4b5](https://github.com/czbiohub-sf/gene2fish/commit/542f4b5c762421321b8dfcc922168361780acf20))
+
 ## [0.3.1](https://github.com/czbiohub-sf/gene2fish/compare/v0.3.0...v0.3.1) (2026-06-19)
 
 
