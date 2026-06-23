@@ -382,6 +382,13 @@ select {
   line-height: 1.4;
 }
 
+.field-error {
+  color: var(--danger);
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 600;
+}
+
 .autocomplete-dropdown {
   position: absolute;
   top: calc(100% + 2px);

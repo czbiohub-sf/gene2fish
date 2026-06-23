@@ -73,6 +73,24 @@ async function mockApi(page) {
     await route.fulfill({ json: results });
   });
 
+  await page.route("**/api/genes/*/resolve", async (route) => {
+    // Mirrors the backend resolver: exact/case-insensitive symbol or a known
+    // previous/alias name resolves to the canonical symbol; anything else 404s.
+    const symbols = ["pacsin2", "pax2a", "evx1", "shhb", "nr5a2", "prox1a", "hand2"];
+    const aliases = { paxprev: "pax2a" };
+    const path = new URL(route.request().url()).pathname;
+    const typed = decodeURIComponent(path.split("/").slice(-2, -1)[0]).toLowerCase();
+    const canonical = symbols.find((s) => s === typed)
+      || (aliases[typed] ? aliases[typed] : null);
+    if (canonical) {
+      await route.fulfill({
+        json: { symbol: canonical, matched_alias: aliases[typed] ? typed : null },
+      });
+    } else {
+      await route.fulfill({ status: 404, json: { detail: `No gene matching '${typed}'` } });
+    }
+  });
+
   await page.route("**/api/anatomy/search**", async (route) => {
     const q = new URL(route.request().url()).searchParams.get("q")?.toLowerCase() || "";
     const anatomyTerms = ["heart", "hindbrain", "liver primordium", "optic tectum neuropil region", "pronephros"];
@@ -223,6 +241,67 @@ test("searching by a previous/alias name resolves to the canonical gene", async 
   // The canonical gene (not the typed alias) is added to the grid.
   await expect(page.getByRole("columnheader").filter({ hasText: "pax2a" })).toBeVisible();
   await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length);
+});
+
+test("rejects an invalid gene name instead of adding an empty column", async ({ page }) => {
+  await page.goto("/");
+
+  const input = page.getByPlaceholder("Gene symbol (e.g. pax2a)");
+  await input.fill("notagene");
+  await input.press("Enter");
+
+  // An inline error appears and no comparison column is created.
+  await expect(page.getByRole("alert")).toContainText('No gene matching "notagene"');
+  await expect(page.getByRole("columnheader")).toHaveCount(0);
+  await expect(page).not.toHaveURL(/genes=/);
+});
+
+test("validates a typed gene name and normalizes it to the canonical symbol", async ({ page }) => {
+  await page.goto("/");
+
+  const input = page.getByPlaceholder("Gene symbol (e.g. pax2a)");
+  // Type a previous/alias name and submit without picking a suggestion; the
+  // resolver normalizes it to the canonical symbol before opening the column.
+  await input.fill("paxprev");
+  await page.getByRole("button", { name: "Add" }).click();
+
+  await expect(page.getByRole("columnheader").filter({ hasText: "pax2a" })).toBeVisible();
+  await expect(page).toHaveURL(/genes=pax2a/);
+  // The input clears and no error is shown on success.
+  await expect(input).toHaveValue("");
+  await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
+test("a slow stale validation does not clobber a newer submission", async ({ page }) => {
+  // First validation resolves slowly (and would 404); the user moves on before
+  // it returns. The stale response must not surface an error or otherwise touch
+  // state after the newer, valid submission succeeds.
+  await page.route("**/api/genes/slowgene/resolve", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    // The page aborts this request when the user types a new value; fulfilling
+    // an already-aborted route throws, which is irrelevant to the assertion.
+    await route.fulfill({ status: 404, json: { detail: "No gene matching 'slowgene'" } }).catch(() => {});
+  });
+
+  await page.goto("/");
+  const input = page.getByPlaceholder("Gene symbol (e.g. pax2a)");
+
+  await input.fill("slowgene");
+  await input.press("Enter"); // kicks off the slow validation
+
+  // Move on to a valid gene before the slow request returns.
+  await input.fill("pax2a");
+  await page.getByRole("button", { name: "Add" }).click();
+
+  await expect(page.getByRole("columnheader").filter({ hasText: "pax2a" })).toBeVisible();
+
+  // Wait past the slow request's completion; its stale 404 must be ignored —
+  // no error banner, input stays cleared, no phantom column.
+  await page.waitForTimeout(1300);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(input).toHaveValue("");
+  await expect(page.getByRole("columnheader").filter({ hasText: "pax2a" })).toHaveCount(1);
+  await expect(page.getByRole("columnheader").filter({ hasText: "slowgene" })).toHaveCount(0);
 });
 
 test("shows no-image labels for empty cells in a mixed gene grid", async ({ page }) => {

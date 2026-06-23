@@ -363,6 +363,48 @@ def test_gene_search_skips_non_list_and_non_string_aliases(tmp_path, monkeypatch
         ]
 
 
+def test_resolve_gene_returns_canonical_symbol(tmp_path, monkeypatch):
+    app = _alias_dataset(tmp_path, monkeypatch)
+    with TestClient(app) as c:
+        # Exact current symbol resolves to itself with no alias annotation.
+        exact = c.get("/api/genes/pou5f3/resolve")
+        # A case-mismatched current symbol is normalized to the canonical casing.
+        cased = c.get("/api/genes/POU5F3/resolve")
+        # A previous/alias name resolves to the canonical symbol, annotated.
+        via_alias = c.get("/api/genes/oct4/resolve")
+
+    assert exact.status_code == 200
+    assert exact.json() == {"symbol": "pou5f3", "matched_alias": None}
+    assert cased.status_code == 200
+    assert cased.json() == {"symbol": "pou5f3", "matched_alias": None}
+    assert via_alias.status_code == 200
+    assert via_alias.json() == {"symbol": "pou5f3", "matched_alias": "oct4"}
+
+
+def test_resolve_gene_rejects_unknown_symbol(tmp_path, monkeypatch):
+    app = _alias_dataset(tmp_path, monkeypatch)
+    with TestClient(app) as c:
+        resp = c.get("/api/genes/notagene/resolve")
+
+    # An invalid name must 404 so the client never opens an empty column for it.
+    assert resp.status_code == 404
+    assert "notagene" in resp.json()["detail"]
+
+
+def test_resolve_gene_without_alias_sidecar_still_validates_symbols(tmp_path, monkeypatch):
+    records = [{"gene": {"gene_symbol": "pax2a", "gene_id": "ZDB-GENE-1"}}]
+    (tmp_path / "image_metadata.json").write_text(json.dumps(records))
+    monkeypatch.setenv("GENE2IMAGE_DATA_DIR", str(tmp_path))
+    from gene2image.main import app
+
+    with TestClient(app) as c:
+        assert c.get("/api/genes/pax2a/resolve").json() == {
+            "symbol": "pax2a", "matched_alias": None
+        }
+        # No sidecar → previous names don't resolve and are rejected.
+        assert c.get("/api/genes/oct4/resolve").status_code == 404
+
+
 def test_gene_batch_includes_lightbox_identifier_metadata(tmp_path, monkeypatch):
     records = [
         {
