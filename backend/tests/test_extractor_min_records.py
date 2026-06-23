@@ -20,7 +20,12 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "zfin_image_metadata_extractor.py"
 
 sys.path.insert(0, str(REPO_ROOT))
-from zfin_image_metadata_extractor import REQUIRED_FILES  # noqa: E402
+import pandas as pd  # noqa: E402
+
+from zfin_image_metadata_extractor import (  # noqa: E402
+    REQUIRED_FILES,
+    build_alias_map,
+)
 
 
 def _make_zfin_dir(tmp_path: Path, n_images: int) -> Path:
@@ -87,3 +92,39 @@ def test_no_min_records_preserves_exit_zero_on_empty(tmp_path):
     data_dir = _make_zfin_dir(tmp_path, n_images=0)
     result = _run(data_dir, tmp_path / "out")
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_build_alias_map_scopes_to_dataset_genes_and_dedups():
+    aliases_df = pd.DataFrame(
+        {
+            "Current ZFIN ID": [
+                "ZDB-GENE-1", "ZDB-GENE-1", "ZDB-GENE-1",  # in dataset
+                "ZDB-GENE-1",                               # duplicate previous name
+                "ZDB-GENE-2",                               # not in dataset
+                "ZDB-ALT-9",                                # not a gene we have
+            ],
+            "Current Name": [None] * 6,
+            "Current Symbol": ["pou5f3"] * 4 + ["other", "alt"],
+            "Previous Name": ["oct4", "pou2", "pou5f1", "oct4", "xyz", "moe"],
+            "SO ID": [None] * 6,
+        }
+    )
+
+    alias_map = build_alias_map(aliases_df, {"ZDB-GENE-1"})
+
+    # Only the dataset gene is kept, previous names de-duplicated and sorted.
+    assert alias_map == {"ZDB-GENE-1": ["oct4", "pou2", "pou5f1"]}
+
+
+def test_build_alias_map_skips_missing_previous_names():
+    aliases_df = pd.DataFrame(
+        {
+            "Current ZFIN ID": ["ZDB-GENE-1", "ZDB-GENE-1"],
+            "Current Name": [None, None],
+            "Current Symbol": ["g", "g"],
+            "Previous Name": ["alpha", float("nan")],
+            "SO ID": [None, None],
+        }
+    )
+
+    assert build_alias_map(aliases_df, {"ZDB-GENE-1"}) == {"ZDB-GENE-1": ["alpha"]}

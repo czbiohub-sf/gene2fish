@@ -233,6 +233,178 @@ def test_anatomy_search_returns_available_options_without_query(tmp_path, monkey
     assert filtered.json() == ["hindbrain"]
 
 
+def _alias_dataset(tmp_path, monkeypatch):
+    """A dataset with one gene (pou5f3) plus an alias sidecar mapping its stable
+    gene ID to previous names (oct4, pou2, ...)."""
+    records = [
+        {
+            "image_id": "ZDB-IMAGE-1",
+            "gene": {
+                "gene_id": "ZDB-GENE-990415-72",
+                "gene_symbol": "pou5f3",
+                "gene_name": "POU domain, class 5, transcription factor 3",
+            },
+            "developmental_stages": [{"begin_hours": "5.25", "end_hours": "5.66"}],
+            "publication": {"publication_id": "ZDB-PUB-040907-1"},
+            "anatomical_locations": [{"anatomy_name": "blastoderm"}],
+        }
+    ]
+    (tmp_path / "image_metadata.json").write_text(json.dumps(records))
+    (tmp_path / "gene_aliases.json").write_text(
+        json.dumps({"ZDB-GENE-990415-72": ["oct4", "pou2", "Spiel ohne grenzen", "pou5f3"]})
+    )
+    monkeypatch.setenv("GENE2IMAGE_DATA_DIR", str(tmp_path))
+    from gene2image.main import app
+
+    return app
+
+
+def test_gene_search_matches_previous_alias_names(tmp_path, monkeypatch):
+    app = _alias_dataset(tmp_path, monkeypatch)
+    with TestClient(app) as c:
+        # Current symbol still matches and carries no alias annotation.
+        by_symbol = c.get("/api/genes/search?q=pou5").json()
+        # A previous name resolves to the canonical symbol, annotated with the alias.
+        by_alias = c.get("/api/genes/search?q=oct4").json()
+        # Multi-word previous names are searchable by prefix too.
+        by_phrase = c.get("/api/genes/search?q=spiel").json()
+
+    assert by_symbol == [{"symbol": "pou5f3", "matched_alias": None}]
+    assert by_alias == [{"symbol": "pou5f3", "matched_alias": "oct4"}]
+    assert by_phrase == [{"symbol": "pou5f3", "matched_alias": "Spiel ohne grenzen"}]
+
+
+def test_gene_search_does_not_duplicate_when_symbol_and_alias_both_match(tmp_path, monkeypatch):
+    app = _alias_dataset(tmp_path, monkeypatch)
+    with TestClient(app) as c:
+        # "pou" prefixes both the current symbol (pou5f3) and an alias (pou2),
+        # but the gene must appear once, via its current symbol.
+        results = c.get("/api/genes/search?q=pou").json()
+
+    assert results == [{"symbol": "pou5f3", "matched_alias": None}]
+
+
+def test_gene_images_resolve_alias_to_canonical_gene(tmp_path, monkeypatch):
+    app = _alias_dataset(tmp_path, monkeypatch)
+    with TestClient(app) as c:
+        via_alias = c.get("/api/genes/oct4/images").json()
+        via_symbol = c.get("/api/genes/pou5f3/images").json()
+
+    assert len(via_alias) == 1
+    assert via_alias[0]["gene_symbol"] == "pou5f3"
+    assert via_alias == via_symbol
+
+
+def test_gene_batch_resolves_alias_to_canonical_gene(tmp_path, monkeypatch):
+    app = _alias_dataset(tmp_path, monkeypatch)
+    with TestClient(app) as c:
+        resp = c.post("/api/genes/batch", json={"genes": ["pou2"]}).json()
+
+    assert len(resp["pou2"]) == 1
+    assert resp["pou2"][0]["gene_symbol"] == "pou5f3"
+
+
+def test_gene_search_without_alias_sidecar_still_works(tmp_path, monkeypatch):
+    # No gene_aliases.json present — search degrades to symbol-only matching.
+    records = [{"gene": {"gene_symbol": "pax2a", "gene_id": "ZDB-GENE-1"}}]
+    (tmp_path / "image_metadata.json").write_text(json.dumps(records))
+    monkeypatch.setenv("GENE2IMAGE_DATA_DIR", str(tmp_path))
+    from gene2image.main import app
+
+    with TestClient(app) as c:
+        assert c.get("/api/genes/search?q=pax").json() == [
+            {"symbol": "pax2a", "matched_alias": None}
+        ]
+        assert c.get("/api/genes/search?q=oct4").json() == []
+
+
+def test_gene_search_fails_closed_on_malformed_sidecar(tmp_path, monkeypatch):
+    # A sidecar that isn't a {gene_id: [aliases]} object (here a list, and a gene
+    # whose aliases are a bare string) must not crash startup or iterate string
+    # characters — it degrades to symbol-only search.
+    records = [{"gene": {"gene_symbol": "pax2a", "gene_id": "ZDB-GENE-1"}}]
+    (tmp_path / "image_metadata.json").write_text(json.dumps(records))
+    (tmp_path / "gene_aliases.json").write_text(json.dumps(["not", "a", "dict"]))
+    monkeypatch.setenv("GENE2IMAGE_DATA_DIR", str(tmp_path))
+    from gene2image.main import app
+
+    with TestClient(app) as c:
+        assert c.get("/api/genes/search?q=pax").json() == [
+            {"symbol": "pax2a", "matched_alias": None}
+        ]
+        # No alias matches surface, and nothing 500s.
+        assert c.get("/api/genes/search?q=oct").json() == []
+
+
+def test_gene_search_skips_non_list_and_non_string_aliases(tmp_path, monkeypatch):
+    records = [
+        {"gene": {"gene_symbol": "pax2a", "gene_id": "ZDB-GENE-1"}},
+        {"gene": {"gene_symbol": "shha", "gene_id": "ZDB-GENE-2"}},
+    ]
+    (tmp_path / "image_metadata.json").write_text(json.dumps(records))
+    (tmp_path / "gene_aliases.json").write_text(
+        json.dumps(
+            {
+                "ZDB-GENE-1": "oldpax",          # string, not a list → skipped
+                "ZDB-GENE-2": ["sonic", 123, ""],  # list with junk → only "sonic" kept
+            }
+        )
+    )
+    monkeypatch.setenv("GENE2IMAGE_DATA_DIR", str(tmp_path))
+    from gene2image.main import app
+
+    with TestClient(app) as c:
+        # The string value must not be iterated character-by-character: "oldpax"
+        # would otherwise register single-letter aliases like "o".
+        assert c.get("/api/genes/search?q=o").json() == []
+        # The valid alias in the list still resolves; the int and "" are skipped.
+        assert c.get("/api/genes/search?q=sonic").json() == [
+            {"symbol": "shha", "matched_alias": "sonic"}
+        ]
+
+
+def test_resolve_gene_returns_canonical_symbol(tmp_path, monkeypatch):
+    app = _alias_dataset(tmp_path, monkeypatch)
+    with TestClient(app) as c:
+        # Exact current symbol resolves to itself with no alias annotation.
+        exact = c.get("/api/genes/pou5f3/resolve")
+        # A case-mismatched current symbol is normalized to the canonical casing.
+        cased = c.get("/api/genes/POU5F3/resolve")
+        # A previous/alias name resolves to the canonical symbol, annotated.
+        via_alias = c.get("/api/genes/oct4/resolve")
+
+    assert exact.status_code == 200
+    assert exact.json() == {"symbol": "pou5f3", "matched_alias": None}
+    assert cased.status_code == 200
+    assert cased.json() == {"symbol": "pou5f3", "matched_alias": None}
+    assert via_alias.status_code == 200
+    assert via_alias.json() == {"symbol": "pou5f3", "matched_alias": "oct4"}
+
+
+def test_resolve_gene_rejects_unknown_symbol(tmp_path, monkeypatch):
+    app = _alias_dataset(tmp_path, monkeypatch)
+    with TestClient(app) as c:
+        resp = c.get("/api/genes/notagene/resolve")
+
+    # An invalid name must 404 so the client never opens an empty column for it.
+    assert resp.status_code == 404
+    assert "notagene" in resp.json()["detail"]
+
+
+def test_resolve_gene_without_alias_sidecar_still_validates_symbols(tmp_path, monkeypatch):
+    records = [{"gene": {"gene_symbol": "pax2a", "gene_id": "ZDB-GENE-1"}}]
+    (tmp_path / "image_metadata.json").write_text(json.dumps(records))
+    monkeypatch.setenv("GENE2IMAGE_DATA_DIR", str(tmp_path))
+    from gene2image.main import app
+
+    with TestClient(app) as c:
+        assert c.get("/api/genes/pax2a/resolve").json() == {
+            "symbol": "pax2a", "matched_alias": None
+        }
+        # No sidecar → previous names don't resolve and are rejected.
+        assert c.get("/api/genes/oct4/resolve").status_code == 404
+
+
 def test_gene_batch_includes_lightbox_identifier_metadata(tmp_path, monkeypatch):
     records = [
         {

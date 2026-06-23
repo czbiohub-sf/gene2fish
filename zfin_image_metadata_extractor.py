@@ -63,7 +63,13 @@ REQUIRED_FILES = {
     "human_orthos.txt": "https://zfin.org/downloads/file/human_orthos.txt",
     "gene2DiseaseViaOrthology.txt": "https://zfin.org/downloads/file/gene2DiseaseViaOrthology.txt",
     "uniprot.txt": "https://zfin.org/downloads/file/uniprot.txt",
+    "aliases.txt": "https://zfin.org/downloads/file/aliases.txt",
 }
+
+# Sidecar file (written next to image_metadata.json) mapping each canonical ZFIN
+# gene ID to its previous/alias names, so the backend can resolve searches like
+# "oct4" → "pou5f3" through the stable gene ID. See build_alias_map().
+ALIASES_OUTPUT_NAME = "gene_aliases.json"
 
 # Column name mappings for each file
 COLUMN_NAMES = {
@@ -99,6 +105,9 @@ COLUMN_NAMES = {
         "OMIM ID", "Evidence Code", "Publication"
     ],
     "uniprot.txt": ["ZFIN ID", "SO ID", "Symbol", "UniProt ID"],
+    "aliases.txt": [
+        "Current ZFIN ID", "Current Name", "Current Symbol", "Previous Name", "SO ID"
+    ],
 }
 
 
@@ -627,6 +636,36 @@ class ZFINImageMetadataExtractor:
         return pd.DataFrame(flat_rows)
 
 
+def build_alias_map(aliases_df: pd.DataFrame, gene_ids: set) -> Dict[str, List[str]]:
+    """Map each canonical ZFIN gene ID to its previous/alias names.
+
+    Joins the ZFIN aliases table to the dataset through the stable gene ID
+    (``Current ZFIN ID``), keeping only genes that appear in the extracted
+    images. The backend uses this to resolve searches by older names (e.g.
+    "oct4" → "pou5f3"). Per-gene aliases are de-duplicated and sorted.
+    """
+    gene_ids = set(gene_ids)
+    alias_map: Dict[str, List[str]] = {}
+    if aliases_df is None:
+        return alias_map
+
+    for _, row in aliases_df.iterrows():
+        gid = row.get("Current ZFIN ID")
+        if not gid or gid not in gene_ids:
+            continue
+        prev = row.get("Previous Name")
+        if prev is None or (isinstance(prev, float) and pd.isna(prev)):
+            continue
+        prev = str(prev).strip()
+        if not prev:
+            continue
+        names = alias_map.setdefault(gid, [])
+        if prev not in names:
+            names.append(prev)
+
+    return {gid: sorted(names, key=str.lower) for gid, names in alias_map.items()}
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Extract metadata for ZFIN images (auto-downloads required files)",
@@ -732,6 +771,23 @@ def main():
         json.dump(results, f, indent=2)
     json_size = Path(json_path).stat().st_size
     print(f"  ✓ Saved ({format_size(json_size)})")
+
+    # Save the gene-alias sidecar next to the JSON index. Built from the ZFIN
+    # aliases table, scoped to the genes that actually appear in the extracted
+    # images, so the backend can resolve searches by previous/alias names.
+    gene_ids_in_results = {
+        r["gene"].get("gene_id")
+        for r in results
+        if (r.get("gene") or {}).get("gene_id")
+    }
+    alias_map = build_alias_map(extractor.data.get("aliases.txt"), gene_ids_in_results)
+    aliases_path = Path(json_path).parent / ALIASES_OUTPUT_NAME
+    print(f"\nSaving gene aliases to: {aliases_path}")
+    # Aliases can contain non-ASCII characters; write UTF-8 and keep them
+    # readable (ensure_ascii=False) for a consistent, human-legible sidecar.
+    with open(aliases_path, "w", encoding="utf-8") as f:
+        json.dump(alias_map, f, indent=2, ensure_ascii=False)
+    print(f"  ✓ Saved aliases for {len(alias_map):,} genes")
 
     # Save TSV output
     tsv_path = f"{args.output_prefix}.tsv"

@@ -9,6 +9,10 @@ from pathlib import Path
 
 from .stage_utils import assign_canonical_stage
 
+# Sidecar written by the extractor next to image_metadata.json: maps each
+# canonical ZFIN gene ID to its previous/alias names.
+ALIASES_FILE_NAME = "gene_aliases.json"
+
 
 def _find_data_file() -> Path:
     data_dir = os.environ.get("GENE2IMAGE_DATA_DIR")
@@ -93,6 +97,20 @@ def load_data() -> dict:
     gene_list = sorted(gene_index.keys(), key=str.lower)
     anatomy_list = sorted(anatomy_set, key=str.lower)
 
+    # Map each stable gene ID present in the dataset to its canonical symbol,
+    # then fold the alias sidecar in through that ID so older names resolve to
+    # the symbol the rest of the app keys on.
+    gene_id_to_symbol: dict[str, str] = {}
+    for symbol, recs in gene_index.items():
+        for r in recs:
+            gid = (r.get("gene") or {}).get("gene_id")
+            if gid:
+                gene_id_to_symbol.setdefault(gid, symbol)
+    alias_index = _build_alias_index(path.parent, gene_id_to_symbol)
+    # Sort the alias keys once here, not per search request.
+    alias_keys = sorted(alias_index)
+    print(f"Indexed {sum(len(v) for v in alias_index.values())} alias → gene matches.")
+
     # Pre-sort each anatomy's gene list alphabetically by symbol.
     anatomy_index: dict[str, list[tuple[str, int]]] = {
         k: sorted(v.items(), key=lambda x: x[0].lower())
@@ -107,4 +125,50 @@ def load_data() -> dict:
         "anatomy_list": anatomy_list,
         "populated_stage_hours": populated_stage_hours,
         "anatomy_index": anatomy_index,
+        "alias_index": alias_index,
+        "alias_keys": alias_keys,
     }
+
+
+def _build_alias_index(
+    data_dir: Path, gene_id_to_symbol: dict[str, str]
+) -> dict[str, list[tuple[str, str]]]:
+    """Build {alias_lower: [(canonical_symbol, display_alias), ...]} from the sidecar.
+
+    The sidecar maps stable gene IDs to previous/alias names; we keep only the
+    genes present in the dataset and drop aliases that already equal the
+    canonical symbol (those are covered by the normal symbol search). Missing or
+    malformed sidecar → empty index (the feature degrades gracefully).
+    """
+    alias_path = data_dir / ALIASES_FILE_NAME
+    if not alias_path.exists():
+        return {}
+
+    try:
+        raw = json.loads(alias_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as err:
+        print(f"Warning: could not read {alias_path}: {err}")
+        return {}
+
+    # Fail closed on an unexpected shape: a non-object top level, or a gene whose
+    # aliases are not a list of strings, is skipped rather than crashing startup
+    # (or silently iterating the characters of a string).
+    if not isinstance(raw, dict):
+        print(f"Warning: {alias_path} is not a JSON object; ignoring aliases.")
+        return {}
+
+    alias_index: dict[str, list[tuple[str, str]]] = {}
+    for gene_id, aliases in raw.items():
+        symbol = gene_id_to_symbol.get(gene_id)
+        if not symbol or not isinstance(aliases, list):
+            continue
+        for alias in aliases:
+            if not isinstance(alias, str) or not alias:
+                continue
+            key = alias.lower()
+            if key == symbol.lower():
+                continue
+            bucket = alias_index.setdefault(key, [])
+            if all(existing != symbol for existing, _ in bucket):
+                bucket.append((symbol, alias))
+    return alias_index
