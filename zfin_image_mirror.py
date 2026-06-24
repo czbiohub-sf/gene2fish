@@ -119,7 +119,8 @@ def download(url: str, retries: int = 3) -> bytes | None:
             last_err = err
         except (URLError, TimeoutError) as err:
             last_err = err
-        time.sleep(0.5 * (attempt + 1))
+        if attempt < retries - 1:  # no point sleeping after the final attempt
+            time.sleep(0.5 * (attempt + 1))
     raise RuntimeError(f"failed to download {url}: {last_err}")
 
 

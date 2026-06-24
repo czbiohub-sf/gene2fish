@@ -97,7 +97,11 @@ def fetch_image(url: str) -> tuple[bytes, str] | None:
         return None
     try:
         resp = client.get_object(Bucket=bucket, Key=key)
-        body = resp["Body"].read()
+        stream = resp["Body"]
+        try:
+            body = stream.read()
+        finally:
+            stream.close()  # release the HTTP connection back to the pool
         media_type = resp.get("ContentType") or "image/jpeg"
         return body, media_type
     except Exception:  # noqa: BLE001 — missing key / network / creds → ZFIN fallback

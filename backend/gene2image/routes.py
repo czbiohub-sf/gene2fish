@@ -344,8 +344,10 @@ def resolve_gene(symbol: str, request: Request) -> GeneResolveResult:
 def image_proxy(url: str = Query(...)) -> Response:
     # Serve the image from our own mirror first (S3) so a temporary ZFIN outage
     # doesn't break image loading; fall back to fetching live from ZFIN when the
-    # object isn't mirrored or no bucket is configured (GEN-22).
-    _validate_zfin_image_url(url)
+    # object isn't mirrored or no bucket is configured (GEN-22). The S3 path is
+    # safe without a separate validation here: s3_images only resolves a key for
+    # canonical zfin.org/imageLoadUp URLs, and the ZFIN fallback validates the
+    # URL itself (in _fetch_zfin_image).
     result = s3_images.fetch_image(url) if s3_images.s3_enabled() else None
     if result is not None:
         data, media_type = result
