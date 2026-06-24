@@ -11,6 +11,7 @@ from urllib.request import urlopen
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 
+from . import s3_images
 from .models import (
     AnatomyGene,
     AnatomyGenesResponse,
@@ -341,11 +342,22 @@ def resolve_gene(symbol: str, request: Request) -> GeneResolveResult:
 
 @router.get("/image-proxy")
 def image_proxy(url: str = Query(...)) -> Response:
-    data, media_type = _fetch_zfin_image(url)
+    # Serve the image from our own mirror first (S3) so a temporary ZFIN outage
+    # doesn't break image loading; fall back to fetching live from ZFIN when the
+    # object isn't mirrored or no bucket is configured (GEN-22).
+    _validate_zfin_image_url(url)
+    result = s3_images.fetch_image(url) if s3_images.s3_enabled() else None
+    if result is not None:
+        data, media_type = result
+    else:
+        data, media_type = _fetch_zfin_image(url)
     return Response(
         content=data,
         media_type=media_type,
-        headers={"Access-Control-Allow-Origin": "*"},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Cache-Control": "public, max-age=86400",
+        },
     )
 
 
