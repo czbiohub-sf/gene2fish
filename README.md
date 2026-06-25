@@ -2,7 +2,10 @@
 
 Zebrafish gene expression image browser. Browse Thisse in situ hybridization images from ZFIN by gene symbol and developmental stage.
 
-Images are hotlinked directly from ZFIN (zfin.org) under CC BY 4.0. Never downloaded or proxied.
+Images originate from ZFIN (zfin.org) under CC BY 4.0. To stay resilient to
+temporary ZFIN outages, images are served through the backend `/api/image-proxy`
+endpoint, which reads them from our own S3 mirror and falls back to fetching live
+from ZFIN when an object isn't mirrored. See [Image mirror](#image-mirror).
 
 ## Data
 
@@ -104,6 +107,56 @@ docker run --rm -p 8000:8000 \
 
 The container runs as a non-root user (UID 10001). Open `http://localhost:8000`.
 The container exposes `/api/health` for deployment health checks.
+
+## Image mirror
+
+To keep images loading when ZFIN is temporarily unavailable, the in-situ images
+are mirrored into our own S3 bucket and served through the backend
+`/api/image-proxy` endpoint. The proxy reads each image from S3 first and only
+falls back to fetching live from ZFIN when the object isn't mirrored (or S3 is
+unreachable), so a ZFIN outage no longer breaks image loading.
+
+**Opt-in / no-op by default.** The proxy reads S3 only when
+`GENE2IMAGE_IMAGE_S3_BUCKET` is set. When it's unset (e.g. local dev), the proxy
+behaves exactly as before — a pure ZFIN passthrough — so no AWS setup is needed
+to run the app locally.
+
+Backend env vars (all optional):
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `GENE2IMAGE_IMAGE_S3_BUCKET` | _(unset → S3 disabled)_ | Bucket holding the mirror |
+| `GENE2IMAGE_IMAGE_S3_PREFIX` | `gene2fish/zfin-images` | Key prefix within the bucket |
+| `GENE2IMAGE_IMAGE_S3_REGION` | `us-west-2` | Bucket region |
+
+The deployment must grant the backend `s3:GetObject` on the bucket/prefix
+(via an IAM role / service account; standard AWS credential chain). The bucket
+stays **private** — images are never exposed publicly; they are streamed through
+the backend.
+
+### Populating the mirror
+
+`zfin_image_mirror.py` reads `image_metadata*.json`, downloads each image from
+ZFIN (the plain `.jpg`, plus the annotated `_annot.jpg` where it exists), and
+uploads them to S3, mirroring the ZFIN path 1:1 so the backend can map a ZFIN URL
+to a key by a prefix swap:
+
+```
+https://zfin.org/imageLoadUp/{year}/{pub}/{file}
+  → s3://{bucket}/{prefix}/imageLoadUp/{year}/{pub}/{file}
+```
+
+The run is resumable (objects already present are skipped):
+
+```bash
+export GENE2IMAGE_DATA_DIR=/path/to/gene2image_data   # holds image_metadata*.json
+export AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_DEFAULT_REGION=us-west-2
+python zfin_image_mirror.py                            # mirror everything
+python zfin_image_mirror.py --limit 50 --dry-run       # smoke test, no uploads
+```
+
+Useful flags: `--workers N` (concurrency), `--overwrite` (re-upload existing),
+`--skip-annot` (plain `.jpg` only), `--bucket` / `--prefix` / `--region`.
 
 ## Usage
 

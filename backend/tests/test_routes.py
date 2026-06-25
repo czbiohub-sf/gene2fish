@@ -109,6 +109,84 @@ def test_image_proxy_returns_502_when_fetch_fails(client, monkeypatch):
     assert resp.status_code == 502
 
 
+def test_image_proxy_serves_from_s3_when_mirrored(client, monkeypatch):
+    # When the mirror bucket is configured and holds the object, the proxy must
+    # serve the S3 bytes and never touch ZFIN (GEN-22).
+    from gene2image import routes, s3_images
+
+    def boom(*args, **kwargs):  # ZFIN must not be hit on an S3 hit
+        raise AssertionError("ZFIN should not be fetched when S3 has the image")
+
+    monkeypatch.setattr(routes, "urlopen", boom)
+    monkeypatch.setattr(s3_images, "s3_enabled", lambda: True)
+    monkeypatch.setattr(
+        s3_images, "fetch_image", lambda url: (b"s3-bytes", "image/jpeg")
+    )
+
+    resp = client.get(
+        "/api/image-proxy",
+        params={"url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"},
+    )
+
+    assert resp.status_code == 200
+    assert resp.content == b"s3-bytes"
+    assert resp.headers["cache-control"] == "public, max-age=86400"
+
+
+def test_image_proxy_falls_back_to_zfin_when_not_mirrored(client, monkeypatch):
+    # S3 enabled but object missing (fetch_image returns None) → live ZFIN fetch.
+    from gene2image import routes, s3_images
+
+    class Headers:
+        def get_content_type(self):
+            return "image/jpeg"
+
+    class FakeResponse:
+        headers = Headers()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return b"zfin-bytes"
+
+    monkeypatch.setattr(routes, "urlopen", lambda request, timeout, context=None: FakeResponse())
+    monkeypatch.setattr(s3_images, "s3_enabled", lambda: True)
+    monkeypatch.setattr(s3_images, "fetch_image", lambda url: None)
+
+    resp = client.get(
+        "/api/image-proxy",
+        params={"url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"},
+    )
+
+    assert resp.status_code == 200
+    assert resp.content == b"zfin-bytes"
+
+
+def test_s3_key_for_url_mirrors_zfin_path():
+    from gene2image import s3_images
+
+    key = s3_images.s3_key_for_url(
+        "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"
+    )
+    assert key == "gene2fish/zfin-images/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"
+    assert s3_images.s3_key_for_url("https://example.com/x.jpg") is None
+
+
+def test_s3_disabled_by_default(monkeypatch):
+    # No bucket env → S3 path is skipped entirely (proxy stays a ZFIN passthrough).
+    from gene2image import s3_images
+
+    monkeypatch.delenv("GENE2IMAGE_IMAGE_S3_BUCKET", raising=False)
+    assert s3_images.s3_enabled() is False
+    assert s3_images.fetch_image(
+        "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"
+    ) is None
+
+
 def test_catchall_does_not_swallow_options(client):
     # The catch-all 404 must not claim OPTIONS — let the framework/CORSMiddleware
     # own it. Otherwise an OPTIONS to an unknown /api/* path returns a 404 JSON
