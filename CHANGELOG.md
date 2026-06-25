@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/czbiohub-sf/gene2fish/compare/v0.4.0...v0.5.0) (2026-06-25)
+
+
+### Features
+
+* serve ZFIN images from our own S3 mirror to survive ZFIN outages (GEN-22) ([#49](https://github.com/czbiohub-sf/gene2fish/issues/49)) ([0d3a926](https://github.com/czbiohub-sf/gene2fish/commit/0d3a926648140ae16edb7afa4628add98637a1ea))
+
 ## [0.4.0](https://github.com/czbiohub-sf/gene2fish/compare/v0.3.1...v0.4.0) (2026-06-23)
 
 
