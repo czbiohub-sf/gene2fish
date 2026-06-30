@@ -17,6 +17,19 @@ stack:
     gene2fish:
       image:
         repository: 533267185808.dkr.ecr.us-west-2.amazonaws.com/core-platform/gene2fish/gene2fish
+      env:
+        - name: GENE2IMAGE_DATA_S3_BUCKET
+          value: czbsf-rnaquarium
+        - name: GENE2IMAGE_DATA_S3_PREFIX
+          value: gene2fish/data
+        - name: GENE2IMAGE_DATA_S3_REGION
+          value: us-west-2
+        - name: GENE2IMAGE_IMAGE_S3_BUCKET
+          value: czbsf-rnaquarium
+        - name: GENE2IMAGE_IMAGE_S3_PREFIX
+          value: gene2fish/zfin-images
+        - name: GENE2IMAGE_IMAGE_S3_REGION
+          value: us-west-2
       # The app loads the full ~115MB image_metadata.json into memory at
       # startup and builds in-memory indexes (measured peak ~565MB RSS for
       # 53k records). 1Gi gives headroom over that plus serving + ZFIN data

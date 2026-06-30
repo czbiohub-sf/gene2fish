@@ -5,6 +5,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 
+@pytest.fixture(autouse=True)
+def clear_data_s3_env(monkeypatch):
+    monkeypatch.delenv("GENE2IMAGE_DATA_S3_BUCKET", raising=False)
+    monkeypatch.delenv("GENE2IMAGE_DATA_S3_PREFIX", raising=False)
+    monkeypatch.delenv("GENE2IMAGE_DATA_S3_REGION", raising=False)
+
+
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     # load_data() runs in the app lifespan and requires GENE2IMAGE_DATA_DIR to
@@ -46,6 +53,52 @@ def test_known_routes_not_shadowed_by_catchall(client):
     assert client.get("/api/health").status_code == 200
     # real route returns 200 (empty data) — never 404 from the catch-all
     assert client.get("/api/stages").status_code != 404
+
+
+def test_data_loader_reads_metadata_and_aliases_from_s3(monkeypatch):
+    from gene2image import data_loader
+
+    records = [
+        {
+            "image_id": "ZDB-IMAGE-1",
+            "gene": {
+                "gene_id": "ZDB-GENE-1",
+                "gene_symbol": "pou5f3",
+            },
+            "developmental_stages": [{"begin_hours": "5.25", "end_hours": "5.66"}],
+            "anatomical_locations": [{"anatomy_name": "blastoderm"}],
+        }
+    ]
+    objects = {
+        "gene2fish/data/image_metadata_v2.json": json.dumps(records),
+        "gene2fish/data/gene_aliases.json": json.dumps({"ZDB-GENE-1": ["oct4"]}),
+    }
+
+    class Body:
+        def __init__(self, text):
+            self.text = text
+
+        def read(self):
+            return self.text.encode("utf-8")
+
+        def close(self):
+            pass
+
+    class FakeS3:
+        def get_object(self, Bucket, Key):
+            assert Bucket == "czbsf-rnaquarium"
+            return {"Body": Body(objects[Key])}
+
+    monkeypatch.delenv("GENE2IMAGE_DATA_DIR", raising=False)
+    monkeypatch.setenv("GENE2IMAGE_DATA_S3_BUCKET", "czbsf-rnaquarium")
+    monkeypatch.setenv("GENE2IMAGE_DATA_S3_PREFIX", "gene2fish/data")
+    monkeypatch.setattr(data_loader, "_get_s3_client", lambda region: FakeS3())
+
+    loaded = data_loader.load_data()
+
+    assert loaded["gene_list"] == ["pou5f3"]
+    assert loaded["anatomy_list"] == ["blastoderm"]
+    assert loaded["alias_index"] == {"oct4": [("pou5f3", "oct4")]}
 
 
 def test_image_proxy_restricts_to_zfin_imageloadup_urls(client):

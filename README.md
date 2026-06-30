@@ -21,7 +21,25 @@ Expected location:
 /path/to/gene2image_data/image_metadata.json
 ```
 
-The backend looks for `image_metadata_v2.json` first and falls back to `image_metadata.json`. Set the `GENE2IMAGE_DATA_DIR` environment variable to the directory containing the file.
+The backend looks for `image_metadata_v2.json` first and falls back to
+`image_metadata.json`. Set the `GENE2IMAGE_DATA_DIR` environment variable to the
+directory containing the file.
+
+In deployment, the backend can load the metadata index from S3 instead of the
+baked `/data` directory. Set `GENE2IMAGE_DATA_S3_BUCKET` to enable this path:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `GENE2IMAGE_DATA_S3_BUCKET` | _(unset -> local file)_ | Bucket holding `image_metadata*.json` and `gene_aliases.json` |
+| `GENE2IMAGE_DATA_S3_PREFIX` | `gene2fish/data` | Key prefix for metadata objects |
+| `GENE2IMAGE_DATA_S3_REGION` | `us-west-2` | Bucket region |
+
+Expected S3 object layout:
+
+```
+s3://czbsf-rnaquarium/gene2fish/data/image_metadata_v2.json
+s3://czbsf-rnaquarium/gene2fish/data/gene_aliases.json
+```
 
 ## Building the data file (local dev)
 
@@ -54,6 +72,15 @@ After building, set the env var to the directory holding the JSON:
 
 ```bash
 export GENE2IMAGE_DATA_DIR=/path/to/gene2image_data
+```
+
+To publish the metadata index used by deployed environments:
+
+```bash
+aws s3 cp /path/to/gene2image_data/image_metadata_v2.json \
+  s3://czbsf-rnaquarium/gene2fish/data/image_metadata_v2.json
+aws s3 cp /path/to/gene2image_data/gene_aliases.json \
+  s3://czbsf-rnaquarium/gene2fish/data/gene_aliases.json
 ```
 
 ## Setup

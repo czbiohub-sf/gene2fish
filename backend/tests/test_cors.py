@@ -2,6 +2,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 
+@pytest.fixture(autouse=True)
+def clear_data_s3_env(monkeypatch):
+    monkeypatch.delenv("GENE2IMAGE_DATA_S3_BUCKET", raising=False)
+    monkeypatch.delenv("GENE2IMAGE_DATA_S3_PREFIX", raising=False)
+    monkeypatch.delenv("GENE2IMAGE_DATA_S3_REGION", raising=False)
+
+
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     # CORSMiddleware acts before routing, but the app lifespan still runs on

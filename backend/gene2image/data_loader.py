@@ -12,24 +12,102 @@ from .stage_utils import assign_canonical_stage
 # Sidecar written by the extractor next to image_metadata.json: maps each
 # canonical ZFIN gene ID to its previous/alias names.
 ALIASES_FILE_NAME = "gene_aliases.json"
+DATA_FILE_NAMES = ("image_metadata_v2.json", "image_metadata.json")
+DEFAULT_DATA_S3_PREFIX = "gene2fish/data"
+DEFAULT_DATA_S3_REGION = "us-west-2"
+
+
+def _data_s3_bucket() -> str | None:
+    return os.environ.get("GENE2IMAGE_DATA_S3_BUCKET") or None
+
+
+def _data_s3_prefix() -> str:
+    return os.environ.get("GENE2IMAGE_DATA_S3_PREFIX", DEFAULT_DATA_S3_PREFIX).strip("/")
+
+
+def _data_s3_region() -> str:
+    return os.environ.get(
+        "GENE2IMAGE_DATA_S3_REGION",
+        os.environ.get("GENE2IMAGE_IMAGE_S3_REGION", DEFAULT_DATA_S3_REGION),
+    )
+
+
+def _s3_key(name: str) -> str:
+    prefix = _data_s3_prefix()
+    return f"{prefix}/{name}" if prefix else name
+
+
+def _get_s3_client(region: str):
+    import boto3
+    from botocore.config import Config
+
+    return boto3.client(
+        "s3",
+        config=Config(
+            region_name=region,
+            retries={"max_attempts": 3, "mode": "standard"},
+        ),
+    )
+
+
+def _missing_s3_object(err: Exception) -> bool:
+    response = getattr(err, "response", None)
+    if not isinstance(response, dict):
+        return False
+    code = str((response.get("Error") or {}).get("Code") or "")
+    return code in {"NoSuchKey", "404", "NotFound"}
+
+
+def _read_s3_text_if_exists(bucket: str, key: str, region: str) -> str | None:
+    client = _get_s3_client(region)
+    try:
+        resp = client.get_object(Bucket=bucket, Key=key)
+    except Exception as err:
+        if _missing_s3_object(err):
+            return None
+        raise
+    stream = resp["Body"]
+    try:
+        return stream.read().decode("utf-8")
+    finally:
+        stream.close()
 
 
 def _find_data_file() -> Path:
     data_dir = os.environ.get("GENE2IMAGE_DATA_DIR")
     if not data_dir:
         raise RuntimeError(
-            "GENE2IMAGE_DATA_DIR environment variable is not set. "
-            "Point it to the directory containing image_metadata.json."
+            "GENE2IMAGE_DATA_DIR or GENE2IMAGE_DATA_S3_BUCKET must be set. "
+            "Point GENE2IMAGE_DATA_DIR to the directory containing image_metadata.json, "
+            "or set GENE2IMAGE_DATA_S3_BUCKET to load the metadata from S3."
         )
     base = Path(data_dir)
     # Prefer v2 (corrected per-image stage data) if present
-    for name in ("image_metadata_v2.json", "image_metadata.json"):
+    for name in DATA_FILE_NAMES:
         path = base / name
         if path.exists():
             return path
     raise FileNotFoundError(
         f"No image_metadata.json or image_metadata_v2.json found in {data_dir}"
     )
+
+
+def _load_data_text() -> tuple[str, str, Path | None]:
+    bucket = _data_s3_bucket()
+    if bucket:
+        region = _data_s3_region()
+        for name in DATA_FILE_NAMES:
+            key = _s3_key(name)
+            raw = _read_s3_text_if_exists(bucket, key, region)
+            if raw is not None:
+                return f"s3://{bucket}/{key}", raw, None
+        raise FileNotFoundError(
+            "No image_metadata.json or image_metadata_v2.json found in "
+            f"s3://{bucket}/{_data_s3_prefix()}"
+        )
+
+    path = _find_data_file()
+    return str(path), path.read_text(encoding="utf-8"), path.parent
 
 
 def _parse_stage_hours(record: dict) -> None:
@@ -46,10 +124,9 @@ def _parse_stage_hours(record: dict) -> None:
 
 def load_data() -> dict:
     """Load JSON, clean NaN, parse hours, build indexes. Returns app state dict."""
-    path = _find_data_file()
+    source, raw, local_data_dir = _load_data_text()
 
-    print(f"Loading data from {path} ...")
-    raw = path.read_text(encoding="utf-8")
+    print(f"Loading data from {source} ...")
 
     # Replace bare NaN (from pandas export) with null before parsing
     raw = re.sub(r"\bNaN\b", "null", raw)
@@ -106,7 +183,7 @@ def load_data() -> dict:
             gid = (r.get("gene") or {}).get("gene_id")
             if gid:
                 gene_id_to_symbol.setdefault(gid, symbol)
-    alias_index = _build_alias_index(path.parent, gene_id_to_symbol)
+    alias_index = _build_alias_index(local_data_dir, gene_id_to_symbol)
     # Sort the alias keys once here, not per search request.
     alias_keys = sorted(alias_index)
     print(f"Indexed {sum(len(v) for v in alias_index.values())} alias → gene matches.")
@@ -131,7 +208,7 @@ def load_data() -> dict:
 
 
 def _build_alias_index(
-    data_dir: Path, gene_id_to_symbol: dict[str, str]
+    data_dir: Path | None, gene_id_to_symbol: dict[str, str]
 ) -> dict[str, list[tuple[str, str]]]:
     """Build {alias_lower: [(canonical_symbol, display_alias), ...]} from the sidecar.
 
@@ -140,21 +217,33 @@ def _build_alias_index(
     canonical symbol (those are covered by the normal symbol search). Missing or
     malformed sidecar → empty index (the feature degrades gracefully).
     """
-    alias_path = data_dir / ALIASES_FILE_NAME
-    if not alias_path.exists():
-        return {}
-
+    source = ALIASES_FILE_NAME
     try:
-        raw = json.loads(alias_path.read_text(encoding="utf-8"))
+        bucket = _data_s3_bucket()
+        if bucket:
+            key = _s3_key(ALIASES_FILE_NAME)
+            raw_text = _read_s3_text_if_exists(bucket, key, _data_s3_region())
+            if raw_text is None:
+                return {}
+            source = f"s3://{bucket}/{key}"
+        elif data_dir is not None:
+            alias_path = data_dir / ALIASES_FILE_NAME
+            if not alias_path.exists():
+                return {}
+            source = str(alias_path)
+            raw_text = alias_path.read_text(encoding="utf-8")
+        else:
+            return {}
+        raw = json.loads(raw_text)
     except (json.JSONDecodeError, OSError) as err:
-        print(f"Warning: could not read {alias_path}: {err}")
+        print(f"Warning: could not read {source}: {err}")
         return {}
 
     # Fail closed on an unexpected shape: a non-object top level, or a gene whose
     # aliases are not a list of strings, is skipped rather than crashing startup
     # (or silently iterating the characters of a string).
     if not isinstance(raw, dict):
-        print(f"Warning: {alias_path} is not a JSON object; ignoring aliases.")
+        print(f"Warning: {source} is not a JSON object; ignoring aliases.")
         return {}
 
     alias_index: dict[str, list[tuple[str, str]]] = {}
