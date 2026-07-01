@@ -9,10 +9,27 @@ stack:
       maxReplicas: 4
       targetCPUUtilizationPercentage: 70
       targetMemoryUtilizationPercentage: 70
+    # CNTR-101: prod is shown to external users (e.g. ZFIN) who don't have
+    # Okta access, so it uses nginx basic auth (below) instead of the
+    # Okta/oauth2-proxy gatekeeping. Turning the proxy off here avoids
+    # deploying an oauth2-proxy pod that nothing routes to. Staging keeps the
+    # Okta protection inherited from common.yaml.
+    oidcProxy:
+      enabled: false
   services:
     gene2fish:
       image:
         tag: sha-45471c3
       ingress:
+        # CNTR-101: replace Okta gatekeeping with HTTP basic auth so the app
+        # can be demoed to external users while staying non-public. The
+        # `basic-auth` secret (an htpasswd entry with a long password) is
+        # provisioned out-of-band in the prod stack namespace; it is not
+        # committed here. See the PR description for the provisioning steps.
+        oidcProtected: false
+        annotations:
+          nginx.ingress.kubernetes.io/auth-type: basic
+          nginx.ingress.kubernetes.io/auth-secret: basic-auth
+          nginx.ingress.kubernetes.io/auth-realm: "Gene2Fish - restricted preview"
         rules:
           - host: gene2fish.apps.czbiohub.org
