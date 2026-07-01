@@ -50,7 +50,7 @@ import boto3
 from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 
-DEFAULT_BUCKET = "czbsf-rnaquarium"
+DEFAULT_BUCKET = "rnaquarium-prod"
 DEFAULT_PREFIX = "gene2fish/zfin-images"
 DEFAULT_REGION = "us-west-2"
 USER_AGENT = "gene2fish image mirror (GEN-22)"
