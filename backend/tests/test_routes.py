@@ -93,6 +93,53 @@ def test_image_proxy_returns_image_bytes(client, monkeypatch):
     assert resp.headers["access-control-allow-origin"] == "*"
 
 
+def test_image_proxy_does_not_follow_redirects(client, monkeypatch):
+    # SSRF guard: the allowlist only validates the *initial* URL. If ZFIN (or an
+    # open redirect on it) 3xx-redirects to an internal host, the proxy must NOT
+    # follow it. Stand up a local server that redirects to a "secret" path and
+    # assert the secret is never fetched or returned to the caller.
+    import http.server
+    import threading
+
+    from gene2image import routes
+
+    secret = b"INTERNAL-SECRET"
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            if self.path == "/secret":
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(secret)
+            else:
+                self.send_response(302)
+                self.send_header("Location", "/secret")
+                self.end_headers()
+
+        def log_message(self, format, *args):  # silence test-server logging
+            pass
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+    port = server.server_address[1]
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        # Bypass the zfin.org allowlist so the fetch can target the local
+        # redirecting server; the redirect-following behavior is what we test.
+        monkeypatch.setattr(routes, "_validate_zfin_image_url", lambda url: None)
+        resp = client.get(
+            "/api/image-proxy", params={"url": f"http://127.0.0.1:{port}/redirect"}
+        )
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+    # Redirect refused → surfaced as a non-2xx error, and the secret body is
+    # never returned. Without the no-redirect opener this returns 200 + secret.
+    assert resp.status_code != 200
+    assert secret not in resp.content
+
+
 def test_image_proxy_returns_502_when_fetch_fails(client, monkeypatch):
     from gene2image import routes
 
