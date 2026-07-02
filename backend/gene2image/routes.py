@@ -59,6 +59,13 @@ def _fetch_zfin_image(url: str) -> tuple[bytes, str]:
     try:
         with urlopen(request, timeout=15) as resp:
             media_type = resp.headers.get_content_type() or "image/jpeg"
+            if not media_type.startswith("image/"):
+                # The proxy only serves images. Refuse anything else so a
+                # non-image (e.g. text/html) upstream response can't be rendered
+                # as a document on our own origin (stored/reflected XSS).
+                raise HTTPException(
+                    status_code=502, detail="ZFIN returned non-image content"
+                )
             return resp.read(), media_type
     except HTTPError as err:
         raise HTTPException(status_code=err.code, detail="ZFIN image not found") from err
@@ -359,6 +366,9 @@ def image_proxy(url: str = Query(...)) -> Response:
         headers={
             "Access-Control-Allow-Origin": "*",
             "Cache-Control": "public, max-age=86400",
+            # Belt-and-suspenders with the image/* check in _fetch_zfin_image:
+            # never let a browser MIME-sniff a proxied response into HTML.
+            "X-Content-Type-Options": "nosniff",
         },
     )
 
