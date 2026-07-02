@@ -22,11 +22,23 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="gene2image API", lifespan=lifespan)
 
-# Local dev: the Vite dev server (:5173) calls the API cross-origin.
-_ALLOWED_ORIGINS = [
+# The Vite dev server (:5173) calls the API cross-origin during local
+# development. Deployed containers serve the built frontend same-origin
+# (GENE2IMAGE_FRONTEND_DIR is set in the image), so these localhost origins are
+# only needed — and only trusted — when the frontend is NOT mounted. Excluding
+# them from deployed environments keeps prod from trusting a localhost page.
+_LOCAL_DEV_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]
+
+
+def _cors_allow_origins() -> list[str]:
+    if os.environ.get("GENE2IMAGE_FRONTEND_DIR"):
+        return []
+    return list(_LOCAL_DEV_ORIGINS)
+
+
 # Deploy targets are wildcard subdomains, which allow_origins (exact match
 # only) can't express — Starlette fullmatches this regex against the Origin
 # header and echoes back the specific origin. https only; no credentials.
@@ -41,7 +53,7 @@ _ALLOWED_ORIGIN_REGEX = (
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_ALLOWED_ORIGINS,
+    allow_origins=_cors_allow_origins(),
     allow_origin_regex=_ALLOWED_ORIGIN_REGEX,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
