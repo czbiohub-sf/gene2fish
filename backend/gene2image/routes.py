@@ -6,6 +6,7 @@ from collections import defaultdict
 from typing import NoReturn
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
+from urllib.request import HTTPRedirectHandler, build_opener, install_opener
 from urllib.request import Request as UrlRequest
 from urllib.request import urlopen
 
@@ -51,6 +52,25 @@ def _validate_zfin_image_url(url: str) -> None:
         raise HTTPException(status_code=400, detail="Only zfin.org image URLs are supported")
     if not parsed.path.startswith("/imageLoadUp/"):
         raise HTTPException(status_code=400, detail="Only ZFIN imageLoadUp URLs are supported")
+
+
+class _NoRedirectHandler(HTTPRedirectHandler):
+    """SSRF guard: never follow redirects when fetching ZFIN images.
+
+    ``_validate_zfin_image_url`` only checks the *initial* URL. urllib follows
+    3xx redirects by default and does not re-validate the target, so a redirect
+    (e.g. via an open redirect on zfin.org) could point the fetch at an internal
+    host such as the cloud metadata endpoint. Returning ``None`` turns any
+    redirect into an ``HTTPError`` instead of silently following it.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+# urlopen() reads urllib's process-global opener; install one that refuses
+# redirects so the image proxy can never be pivoted to an internal host.
+install_opener(build_opener(_NoRedirectHandler))
 
 
 def _fetch_zfin_image(url: str) -> tuple[bytes, str]:
