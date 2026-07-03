@@ -91,6 +91,43 @@ def test_image_proxy_returns_image_bytes(client, monkeypatch):
     assert resp.content == b"image-bytes"
     assert resp.headers["content-type"] == "image/jpeg"
     assert resp.headers["access-control-allow-origin"] == "*"
+    assert resp.headers["x-content-type-options"] == "nosniff"
+
+
+def test_image_proxy_rejects_non_image_content(client, monkeypatch):
+    # Content-type hardening: the proxy serves only images. If ZFIN returns a
+    # non-image (e.g. text/html) body, it must be refused — never returned so it
+    # could render as a document on our own origin (XSS). Without the image/*
+    # check this returns 200 + the HTML body.
+    from gene2image import routes
+
+    class Headers:
+        def get_content_type(self):
+            return "text/html"
+
+    class FakeResponse:
+        headers = Headers()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return b"<script>alert(document.domain)</script>"
+
+    monkeypatch.setattr(
+        routes, "urlopen", lambda request, timeout, context=None: FakeResponse()
+    )
+
+    resp = client.get(
+        "/api/image-proxy",
+        params={"url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"},
+    )
+
+    assert resp.status_code == 502
+    assert b"<script>" not in resp.content
 
 
 def test_image_proxy_does_not_follow_redirects(client, monkeypatch):
