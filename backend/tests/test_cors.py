@@ -53,6 +53,63 @@ def test_preflight_rejects_unknown_origin(client, origin):
     assert resp.headers.get("access-control-allow-origin") is None
 
 
+def test_local_dev_origins_dropped_when_frontend_mounted(monkeypatch):
+    # Deployed containers set GENE2IMAGE_FRONTEND_DIR and serve the frontend
+    # same-origin, so the localhost dev origins must not be trusted there. Local
+    # dev (no mounted frontend) still allows the Vite dev-server origins.
+    from gene2image import main
+
+    monkeypatch.setenv("GENE2IMAGE_FRONTEND_DIR", "/app/frontend/dist")
+    assert main._cors_allow_origins() == []
+
+    monkeypatch.delenv("GENE2IMAGE_FRONTEND_DIR", raising=False)
+    assert "http://localhost:5173" in main._cors_allow_origins()
+
+
+def test_preflight_rejects_localhost_when_frontend_mounted(tmp_path, monkeypatch):
+    # End-to-end: with a deploy-like config (frontend mounted same-origin) the
+    # CORS middleware rejects the localhost dev origin while still echoing a
+    # deployed origin. Reloads the module so the import-time middleware wiring
+    # picks up the env, and restores it afterward for other tests.
+    import importlib
+
+    (tmp_path / "image_metadata.json").write_text("[]")
+    monkeypatch.setenv("GENE2IMAGE_DATA_DIR", str(tmp_path))
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text("<html></html>")
+    monkeypatch.setenv("GENE2IMAGE_FRONTEND_DIR", str(dist))
+
+    from gene2image import main as main_module
+
+    importlib.reload(main_module)
+    try:
+        with TestClient(main_module.app) as c:
+            deployed = c.options(
+                "/api/genes/batch",
+                headers={
+                    "Origin": "https://gene2fish.apps.czbiohub.org",
+                    "Access-Control-Request-Method": "POST",
+                },
+            )
+            local = c.options(
+                "/api/genes/batch",
+                headers={
+                    "Origin": "http://localhost:5173",
+                    "Access-Control-Request-Method": "POST",
+                },
+            )
+        assert (
+            deployed.headers.get("access-control-allow-origin")
+            == "https://gene2fish.apps.czbiohub.org"
+        )
+        assert local.headers.get("access-control-allow-origin") is None
+    finally:
+        # Restore the default (unmounted) module state for subsequent tests.
+        monkeypatch.delenv("GENE2IMAGE_FRONTEND_DIR", raising=False)
+        importlib.reload(main_module)
+
+
 def test_preflight_limits_methods_to_get_post(client):
     resp = client.options(
         "/api/genes/batch",
