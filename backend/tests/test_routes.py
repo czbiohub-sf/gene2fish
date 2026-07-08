@@ -616,3 +616,95 @@ def test_gene_batch_includes_lightbox_identifier_metadata(tmp_path, monkeypatch)
     assert image["gene_name"] == "protein kinase C and casein kinase substrate in neurons 2"
     assert image["est_id"] == "ZDB-CDNA-040425-55286"
     assert image["est_symbol"] == "MGC:55286"
+
+
+def _facets_dataset(tmp_path, monkeypatch):
+    """Two genes at disjoint stages/anatomy so union vs. single-gene facets differ."""
+    records = [
+        {
+            "gene": {"gene_symbol": "early"},
+            "developmental_stages": [{"begin_hours": "5.25"}],
+            "anatomical_locations": [{"anatomy_name": "Hindbrain"}],
+        },
+        {
+            "gene": {"gene_symbol": "early"},
+            "developmental_stages": [{"begin_hours": "5.25"}],
+            "anatomical_locations": [{"anatomy_name": "Hindbrain"}],
+        },
+        {
+            "gene": {"gene_symbol": "late"},
+            "developmental_stages": [{"begin_hours": "42"}],
+            "anatomical_locations": [{"anatomy_name": "heart"}],
+        },
+    ]
+    (tmp_path / "image_metadata.json").write_text(json.dumps(records))
+    monkeypatch.setenv("GENE2IMAGE_DATA_DIR", str(tmp_path))
+    from gene2image.main import app
+
+    return app
+
+
+def test_gene_facets_unions_stages_and_anatomy_across_genes(tmp_path, monkeypatch):
+    app = _facets_dataset(tmp_path, monkeypatch)
+
+    with TestClient(app) as c:
+        resp = c.post("/api/genes/facets", json={"genes": ["early", "late"]})
+
+    assert resp.status_code == 200
+    # Union of both genes: each gene's stage/anatomy is reported, with counts.
+    # Anatomy names are lowercased ("Hindbrain" -> "hindbrain").
+    assert resp.json() == {
+        "stages": [
+            {"begin_hours": 5.25, "image_count": 2},
+            {"begin_hours": 42.0, "image_count": 1},
+        ],
+        "anatomy": {"hindbrain": 2, "heart": 1},
+    }
+
+
+def test_gene_facets_reflect_only_the_selected_genes(tmp_path, monkeypatch):
+    app = _facets_dataset(tmp_path, monkeypatch)
+
+    with TestClient(app) as c:
+        resp = c.post("/api/genes/facets", json={"genes": ["early"]})
+
+    # Only the "early" gene's stage/anatomy is present; "late" (42h, heart) is not.
+    assert resp.json() == {
+        "stages": [{"begin_hours": 5.25, "image_count": 2}],
+        "anatomy": {"hindbrain": 2},
+    }
+
+
+def test_gene_facets_ignore_unknown_symbols(tmp_path, monkeypatch):
+    app = _facets_dataset(tmp_path, monkeypatch)
+
+    with TestClient(app) as c:
+        resp = c.post("/api/genes/facets", json={"genes": ["early", "nosuchgene"]})
+
+    # An unknown symbol contributes nothing rather than erroring.
+    assert resp.json() == {
+        "stages": [{"begin_hours": 5.25, "image_count": 2}],
+        "anatomy": {"hindbrain": 2},
+    }
+
+
+def test_gene_facets_empty_gene_list_returns_empty_facets(tmp_path, monkeypatch):
+    app = _facets_dataset(tmp_path, monkeypatch)
+
+    with TestClient(app) as c:
+        resp = c.post("/api/genes/facets", json={"genes": []})
+
+    assert resp.json() == {"stages": [], "anatomy": {}}
+
+
+def test_gene_facets_count_each_gene_once_for_duplicate_symbols(tmp_path, monkeypatch):
+    app = _facets_dataset(tmp_path, monkeypatch)
+
+    with TestClient(app) as c:
+        resp = c.post("/api/genes/facets", json={"genes": ["early", "early"]})
+
+    # A gene listed twice is not double-counted.
+    assert resp.json() == {
+        "stages": [{"begin_hours": 5.25, "image_count": 2}],
+        "anatomy": {"hindbrain": 2},
+    }

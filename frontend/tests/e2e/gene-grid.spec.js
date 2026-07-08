@@ -147,6 +147,24 @@ async function mockApi(page) {
     });
   });
 
+  // Default facets: every stage and anatomy term has images, so no filter
+  // option is disabled. Tests that exercise the greying-out behavior override
+  // this route with a restricted set.
+  await page.route("**/api/genes/facets", async (route) => {
+    await route.fulfill({
+      json: {
+        stages: stages.map((s) => ({ begin_hours: s.begin_hours, image_count: 5 })),
+        anatomy: {
+          heart: 4,
+          hindbrain: 3,
+          "liver primordium": 2,
+          "optic tectum neuropil region": 1,
+          pronephros: 6,
+        },
+      },
+    });
+  });
+
   await page.route("**/api/genes/batch", async (route) => {
     const body = route.request().postDataJSON();
     const response = {};
@@ -685,7 +703,7 @@ test("shows the initial empty-state prompt when no genes are selected", async ({
   await page.goto("/");
 
   await expect(page.getByRole("heading", { name: "Search gene expression images" })).toBeVisible();
-  await expect(page.getByText("Enter a gene name and select filters")).toBeVisible();
+  await expect(page.getByText("Search one gene to explore its expression patterns")).toBeVisible();
   await expect(page.getByRole("button", { name: "Example: shhb" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Example: liver primordium" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Example: prox1a" })).toBeVisible();
@@ -908,4 +926,98 @@ test("anatomy genes 500 surfaces an error in the suggested-genes header", async 
   // A non-404 failure renders the error span inside the strip header.
   await expect(page.locator(".suggested-genes-error")).toBeVisible();
   await expect(page.locator(".suggested-genes-error")).toContainText("Error:");
+});
+
+test("stage options disable for stages with no images, and re-enable when the gene is removed", async ({ page }) => {
+  // pacsin2 only has images at the three earliest stages; the later three
+  // should be greyed out and unselectable while it is the only gene.
+  await page.route("**/api/genes/facets", async (route) => {
+    const { genes } = route.request().postDataJSON();
+    const enabled = genes.includes("pax2a")
+      ? stages
+      : stages.slice(0, 3); // pacsin2-only → early stages only
+    await route.fulfill({
+      json: {
+        stages: enabled.map((s) => ({ begin_hours: s.begin_hours, image_count: 5 })),
+        anatomy: { hindbrain: 3 },
+      },
+    });
+  });
+
+  await page.goto("/?genes=pacsin2");
+  await expect(page.getByRole("columnheader").filter({ hasText: "pacsin2" })).toBeVisible();
+
+  const stageSelect = page.locator(".stage-filter select").first();
+  // In-range stage stays selectable; an out-of-range stage is disabled with a
+  // hint. (toHaveJSProperty reads option.disabled directly — Playwright's
+  // toBeDisabled is unreliable on <option> elements.)
+  await expect(stageSelect.locator('option[value="5.25"]')).toHaveJSProperty("disabled", false);
+  const disabledOption = stageSelect.locator('option[value="42"]');
+  await expect(disabledOption).toHaveJSProperty("disabled", true);
+  await expect(disabledOption).toHaveAttribute("title", "No images for the genes in the comparison");
+
+  // Add pax2a (which covers every stage) → union re-enables the late stages.
+  await page.getByPlaceholder("Gene symbol (e.g. pax2a)").fill("pax2a");
+  await page.getByRole("button", { name: "Add" }).click();
+  await expect(page.getByRole("columnheader").filter({ hasText: "pax2a" })).toBeVisible();
+  await expect(stageSelect.locator('option[value="42"]')).toHaveJSProperty("disabled", false);
+
+  // Remove every gene → facets clear → all stages enabled again (original behavior).
+  await page.getByTitle("Remove pax2a").click();
+  await page.getByTitle("Remove pacsin2").click();
+  await expect(page.getByRole("columnheader")).toHaveCount(0);
+  await expect(stageSelect.locator('option[value="42"]')).toHaveJSProperty("disabled", false);
+});
+
+test("anatomy terms not expressed by the current genes are disabled with a hint", async ({ page }) => {
+  // Only hindbrain has images for the gene in the grid; heart/pronephros are
+  // de-emphasized (disabled) but still listed so the vocabulary stays visible.
+  await page.route("**/api/genes/facets", async (route) => {
+    await route.fulfill({
+      json: {
+        stages: stages.map((s) => ({ begin_hours: s.begin_hours, image_count: 5 })),
+        anatomy: { hindbrain: 7 },
+      },
+    });
+  });
+
+  await page.goto("/?genes=pacsin2");
+  await expect(page.getByRole("columnheader").filter({ hasText: "pacsin2" })).toBeVisible();
+
+  const anatomyInput = page.getByPlaceholder("e.g. hindbrain");
+  await anatomyInput.click();
+  const dropdown = page.locator(".anatomy-filter .autocomplete-dropdown");
+  await expect(dropdown).toBeVisible();
+
+  // Expressed term: enabled, annotated with its match count.
+  const hindbrain = dropdown.locator(".autocomplete-item", { hasText: "hindbrain" });
+  await expect(hindbrain).not.toHaveClass(/disabled/);
+  await expect(hindbrain.locator(".autocomplete-count")).toHaveText("7");
+
+  // Unexpressed term: disabled, aria-disabled, hint on hover, and unselectable.
+  const heart = dropdown.locator(".autocomplete-item", { hasText: "heart" });
+  await expect(heart).toHaveClass(/disabled/);
+  await expect(heart).toHaveAttribute("aria-disabled", "true");
+  await expect(heart).toHaveAttribute("title", "No images for the genes in the comparison");
+  // force past the actionability check (the element is intentionally disabled)
+  // to prove that even a click cannot select a de-emphasized term.
+  await heart.click({ force: true });
+  await expect(page.locator(".anatomy-term-chip", { hasText: "heart" })).toHaveCount(0);
+
+  // The expressed term can still be selected.
+  await hindbrain.click();
+  await expect(page.locator(".anatomy-term-chip", { hasText: "hindbrain" })).toBeVisible();
+});
+
+test("with no genes in the comparison every anatomy option stays enabled", async ({ page }) => {
+  await page.goto("/");
+
+  const anatomyInput = page.getByPlaceholder("e.g. hindbrain");
+  await anatomyInput.click();
+  const dropdown = page.locator(".anatomy-filter .autocomplete-dropdown");
+  await expect(dropdown).toBeVisible();
+
+  // No genes → no facets request → nothing disabled, no counts shown.
+  await expect(dropdown.locator(".autocomplete-item.disabled")).toHaveCount(0);
+  await expect(dropdown.locator(".autocomplete-count")).toHaveCount(0);
 });

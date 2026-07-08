@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { useUrlState } from "./hooks/useUrlState.js";
 import { useGeneData } from "./hooks/useGeneData.js";
+import { useGeneFacets } from "./hooks/useGeneFacets.js";
 import { GeneInput } from "./components/GeneInput.jsx";
 import { StageFilter } from "./components/StageFilter.jsx";
 import { AnatomyFilter } from "./components/AnatomyFilter.jsx";
@@ -14,6 +15,10 @@ export default function App() {
   const [theme, setTheme] = useState("light");
 
   const { data, loading, error } = useGeneData(genes, stageMin, stageMax, nImages);
+  // Which filter options have images for the genes in the grid — drives the
+  // context-aware disabling of stage/anatomy options (GEN-23). Null when no
+  // genes are present, in which case every option stays enabled.
+  const facets = useGeneFacets(genes);
 
   const addGene = useCallback(
     (symbol) => {
@@ -103,8 +108,13 @@ export default function App() {
                 stageMin={stageMin}
                 stageMax={stageMax}
                 onChange={setStageRange}
+                stageFacets={facets?.stages ?? null}
               />
-              <AnatomyFilter value={anatomy} onChange={setAnatomy} />
+              <AnatomyFilter
+                value={anatomy}
+                onChange={setAnatomy}
+                anatomyFacets={facets?.anatomy ?? null}
+              />
             </div>
           </section>
         </div>

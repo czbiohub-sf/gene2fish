@@ -19,11 +19,14 @@ from .models import (
     BatchRequest,
     CanonicalStage,
     DiseaseAssociation,
+    GeneFacetsRequest,
+    GeneFacetsResponse,
     GeneResolveResult,
     GeneSearchResult,
     HealthResponse,
     HumanOrtholog,
     ImageRecord,
+    StageFacet,
 )
 from .stage_utils import CANONICAL_STAGES, get_stage_info, select_representative, select_top_n
 
@@ -418,6 +421,48 @@ def batch_gene_images(body: BatchRequest, request: Request) -> dict[str, list[Im
         result[symbol] = [_record_to_model(r) for r in representatives]
 
     return result
+
+
+@router.post("/genes/facets", response_model=GeneFacetsResponse)
+def gene_facets(body: GeneFacetsRequest, request: Request) -> GeneFacetsResponse:
+    """Report which stage/anatomy filter options have images for the given genes.
+
+    Powers the context-aware filters (GEN-23): the client greys out options that
+    would return nothing for the genes currently in the comparison. Union
+    semantics — an option is reported if it matches ANY gene in the set — because
+    the grid renders each gene in its own column, so an option that yields images
+    for even one gene still produces useful results. Unknown symbols are ignored
+    and duplicate/alias references to the same gene are counted once.
+    """
+    data = request.app.state.data
+    gene_index: dict[str, list[dict]] = data["gene_index"]
+
+    stage_counts: dict[float, int] = defaultdict(int)
+    anatomy_counts: dict[str, int] = defaultdict(int)
+    seen: set[str] = set()
+
+    for symbol in body.genes:
+        resolved = _resolve_symbol(symbol, data)
+        if resolved is None:
+            continue
+        canonical = resolved[0]
+        if canonical in seen:
+            continue
+        seen.add(canonical)
+        for record in gene_index.get(canonical, []):
+            ch = record.get("_canonical_hours")
+            if ch is not None:
+                stage_counts[ch] += 1
+            for loc in record.get("anatomical_locations") or []:
+                name = loc.get("anatomy_name")
+                if name:
+                    anatomy_counts[name.lower()] += 1
+
+    stages = [
+        StageFacet(begin_hours=hours, image_count=count)
+        for hours, count in sorted(stage_counts.items())
+    ]
+    return GeneFacetsResponse(stages=stages, anatomy=dict(anatomy_counts))
 
 
 @router.get("/anatomy/search")
