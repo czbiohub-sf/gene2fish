@@ -1,15 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="gene2fish">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#6366F1"/>
-      <stop offset="1" stop-color="#6E46DC"/>
-    </linearGradient>
-  </defs>
-  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
-  <g transform="translate(32 32) scale(-0.82 0.82) translate(-34.5 -32)">
-    <path d="M8 32c12-15 29-15 42 0-13 15-30 15-42 0Z" fill="none" stroke="#FFFFFF" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M50 32l11-9v18l-11-9Z" fill="none" stroke="#FFFFFF" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M35 20c8 6 8 18 0 24" fill="none" stroke="#67E8F9" stroke-width="3.4" stroke-linecap="round"/>
-    <circle cx="21" cy="28" r="3" fill="#67E8F9"/>
-  </g>
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- [ bracket -->
+  <path d="M0.223 32V0.23H5.915V2.557H2.549V29.639H5.915V32H0.223Z" fill="black"/>
+  <!-- ] bracket -->
+  <path d="M25.741 0.23V32H20.049V29.639H23.416V2.557H20.049V0.23H25.741Z" fill="black"/>
+  <!-- o -->
+  <path d="M12.973 20.546C15.298 20.546 17.207 18.844 17.207 16.207C17.207 13.569 15.298 11.971 12.973 11.971C10.647 11.971 8.738 13.638 8.738 16.207C8.738 18.775 10.647 20.546 12.973 20.546ZM12.973 24.678C8.357 24.678 4.539 21.31 4.539 16.206C4.539 11.101 8.357 7.803 12.973 7.803C17.589 7.803 21.407 11.102 21.407 16.206C21.407 21.309 17.554 24.678 12.973 24.678Z" fill="black"/>
 </svg>
