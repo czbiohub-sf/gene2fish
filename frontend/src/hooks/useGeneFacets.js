@@ -6,7 +6,9 @@ import { useEffect, useState } from "react";
 // every option stays enabled rather than being wrongly greyed out.
 export function useGeneFacets(genes) {
   const [facets, setFacets] = useState(null);
-  const genesKey = genes.join(",");
+  // Resilient to a falsy `genes` so the memoized key never throws before the
+  // effect's own fail-open guard runs.
+  const genesKey = Array.isArray(genes) ? genes.join(",") : "";
 
   useEffect(() => {
     if (!genes || genes.length === 0) {
