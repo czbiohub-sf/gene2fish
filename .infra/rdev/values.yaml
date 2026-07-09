@@ -3,4 +3,4 @@ stack:
   services:
     gene2fish:
       image:
-        tag: sha-3ae7eb3
+        tag: sha-2abf46a
