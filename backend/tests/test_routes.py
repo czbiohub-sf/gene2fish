@@ -161,9 +161,9 @@ def test_image_proxy_does_not_follow_redirects(client, monkeypatch):
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
-        # Bypass the zfin.org allowlist so the fetch can target the local
-        # redirecting server; the redirect-following behavior is what we test.
-        monkeypatch.setattr(routes, "_validate_zfin_image_url", lambda url: None)
+        # Bypass the host allowlist so the fetch can target the local redirecting
+        # server; the redirect-following behavior is what we test.
+        monkeypatch.setattr(routes, "_validate_image_url", lambda url: None)
         resp = client.get(
             "/api/image-proxy", params={"url": f"http://127.0.0.1:{port}/redirect"}
         )
@@ -193,32 +193,9 @@ def test_image_proxy_returns_502_when_fetch_fails(client, monkeypatch):
     assert resp.status_code == 502
 
 
-def test_image_proxy_serves_from_s3_when_mirrored(client, monkeypatch):
-    # When the mirror bucket is configured and holds the object, the proxy must
-    # serve the S3 bytes and never touch ZFIN (GEN-22).
-    from gene2image import routes, s3_images
-
-    def boom(*args, **kwargs):  # ZFIN must not be hit on an S3 hit
-        raise AssertionError("ZFIN should not be fetched when S3 has the image")
-
-    monkeypatch.setattr(routes, "urlopen", boom)
-    monkeypatch.setattr(s3_images, "s3_enabled", lambda: True)
-    monkeypatch.setattr(
-        s3_images, "fetch_image", lambda url: (b"s3-bytes", "image/jpeg")
-    )
-
-    resp = client.get(
-        "/api/image-proxy",
-        params={"url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"},
-    )
-
-    assert resp.status_code == 200
-    assert resp.content == b"s3-bytes"
-    assert resp.headers["cache-control"] == "public, max-age=86400"
-
-
-def test_image_proxy_falls_back_to_zfin_when_not_mirrored(client, monkeypatch):
-    # S3 enabled but object missing (fetch_image returns None) → live ZFIN fetch.
+def test_image_proxy_serves_from_mirror_url(client, monkeypatch):
+    # The proxy (used by the PNG export) accepts our public S3 mirror URL and
+    # returns its bytes same-origin — no AWS credentials, no ZFIN (GEN-27).
     from gene2image import routes, s3_images
 
     class Headers:
@@ -235,40 +212,71 @@ def test_image_proxy_falls_back_to_zfin_when_not_mirrored(client, monkeypatch):
             return False
 
         def read(self):
-            return b"zfin-bytes"
+            return b"s3-bytes"
 
-    monkeypatch.setattr(routes, "urlopen", lambda request, timeout, context=None: FakeResponse())
-    monkeypatch.setattr(s3_images, "s3_enabled", lambda: True)
-    monkeypatch.setattr(s3_images, "fetch_image", lambda url: None)
+    seen = {}
 
-    resp = client.get(
-        "/api/image-proxy",
-        params={"url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"},
+    def fake_urlopen(request, timeout, context=None):
+        seen["url"] = request.full_url
+        return FakeResponse()
+
+    monkeypatch.setattr(routes, "urlopen", fake_urlopen)
+
+    mirror_url = s3_images.public_url(
+        "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"
     )
+    resp = client.get("/api/image-proxy", params={"url": mirror_url})
 
     assert resp.status_code == 200
-    assert resp.content == b"zfin-bytes"
+    assert resp.content == b"s3-bytes"
+    assert seen["url"] == mirror_url  # fetched straight from the mirror
+    assert resp.headers["cache-control"] == "public, max-age=86400"
+    assert resp.headers["x-content-type-options"] == "nosniff"
 
 
-def test_s3_key_for_url_mirrors_zfin_path():
+def test_image_proxy_rejects_foreign_hosts(client):
+    # SSRF guard: only ZFIN imageLoadUp and our mirror host are allowed.
+    for bad in (
+        "https://example.com/imageLoadUp/x.jpg",
+        "https://evil.com/gene2fish/zfin-images/imageLoadUp/x.jpg",
+        "https://zfin.org/ZDB-IMAGE-123",
+    ):
+        assert client.get("/api/image-proxy", params={"url": bad}).status_code == 400
+
+
+def test_public_url_and_key_mirror_zfin_path():
     from gene2image import s3_images
 
-    key = s3_images.s3_key_for_url(
-        "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"
+    z = "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"
+    assert (
+        s3_images.s3_key_for_url(z)
+        == "gene2fish/zfin-images/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"
     )
-    assert key == "gene2fish/zfin-images/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"
+    assert s3_images.public_url(z) == (
+        "https://czbsf-rnaquarium.s3.us-west-2.amazonaws.com/"
+        "gene2fish/zfin-images/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"
+    )
     assert s3_images.s3_key_for_url("https://example.com/x.jpg") is None
+    assert s3_images.public_url("https://example.com/x.jpg") is None
 
 
-def test_s3_disabled_by_default(monkeypatch):
-    # No bucket env → S3 path is skipped entirely (proxy stays a ZFIN passthrough).
-    from gene2image import s3_images
+def test_record_to_model_prefers_s3_mirror_with_zfin_fallback():
+    # image_url/fallback point at the public S3 mirror; image_url_zfin is the
+    # live-ZFIN last resort (GEN-27).
+    from gene2image.routes import _record_to_model
 
-    monkeypatch.delenv("GENE2IMAGE_IMAGE_S3_BUCKET", raising=False)
-    assert s3_images.s3_enabled() is False
-    assert s3_images.fetch_image(
-        "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"
-    ) is None
+    model = _record_to_model(
+        {"image_id": "ZDB-IMAGE-1", "publication": {"publication_id": "ZDB-PUB-051025-1"}}
+    )
+    base = "https://czbsf-rnaquarium.s3.us-west-2.amazonaws.com/gene2fish/zfin-images/"
+    assert model.image_url.startswith(base) and model.image_url.endswith("_annot.jpg")
+    assert model.image_url_fallback.startswith(base) and model.image_url_fallback.endswith(
+        "ZDB-IMAGE-1.jpg"
+    )
+    assert (
+        model.image_url_zfin
+        == "https://zfin.org/imageLoadUp/2005/ZDB-PUB-051025-1/ZDB-IMAGE-1.jpg"
+    )
 
 
 def test_catchall_does_not_swallow_options(client):

@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { proxiedImageSrc } from "../utils/imageProxy.js";
+import { imageSources } from "../utils/imageProxy.js";
 
 function zfinUrl(id) {
   return `https://zfin.org/${id}`;
@@ -55,20 +55,21 @@ export function Lightbox({ image, onClose, onPrev, onNext, hasPrev, hasNext }) {
         <div className="lightbox-body">
           <div className="lightbox-image-col">
             <img
-              // key forces a fresh element per image so the fallback flag and
+              // key forces a fresh element per image so the attempt counter and
               // any display:none from a prior image are reset on navigation.
               key={image.image_id}
               className="lightbox-img"
-              // Served via the backend proxy (S3 mirror, live-ZFIN fallback) so
-              // images survive temporary ZFIN outages (GEN-22).
-              src={proxiedImageSrc(image.image_url)}
+              // Loaded directly from the public S3 mirror, walking the source
+              // chain on error: S3 annotated → S3 plain → live ZFIN (GEN-27).
+              src={imageSources(image)[0]}
               alt={`${image.gene_symbol} expression`}
               onError={(e) => {
                 const img = e.target;
-                const fallback = proxiedImageSrc(image.image_url_fallback);
-                if (!img.dataset.fellBack && fallback && fallback !== img.getAttribute("src")) {
-                  img.dataset.fellBack = "1";
-                  img.src = fallback;
+                const sources = imageSources(image);
+                const next = Number(img.dataset.attempt || "0") + 1;
+                if (next < sources.length) {
+                  img.dataset.attempt = String(next);
+                  img.src = sources[next];
                 } else {
                   img.style.display = "none";
                 }

@@ -3,9 +3,9 @@
 Zebrafish gene expression image browser. Browse Thisse in situ hybridization images from ZFIN by gene symbol and developmental stage.
 
 Images originate from ZFIN (zfin.org) under CC BY 4.0. To stay resilient to
-temporary ZFIN outages, images are served through the backend `/api/image-proxy`
-endpoint, which reads them from our own S3 mirror and falls back to fetching live
-from ZFIN when an object isn't mirrored. See [Image mirror](#image-mirror).
+temporary ZFIN outages, they are served from our own **public** S3 mirror
+(loaded directly by the browser), with live ZFIN as a last-resort fallback for
+anything not yet mirrored. See [Image mirror](#image-mirror).
 
 ## Data
 
@@ -111,28 +111,36 @@ The container exposes `/api/health` for deployment health checks.
 ## Image mirror
 
 To keep images loading when ZFIN is temporarily unavailable, the in-situ images
-are mirrored into our own S3 bucket and served through the backend
-`/api/image-proxy` endpoint. The proxy reads each image from S3 first and only
-falls back to fetching live from ZFIN when the object isn't mirrored (or S3 is
-unreachable), so a ZFIN outage no longer breaks image loading.
+are mirrored into our own S3 bucket, and that prefix is served **publicly**. The
+browser loads each image directly from the public mirror, walking a fallback
+chain on error:
 
-**Opt-in / no-op by default.** The proxy reads S3 only when
-`GENE2IMAGE_IMAGE_S3_BUCKET` is set. When it's unset (e.g. local dev), the proxy
-behaves exactly as before — a pure ZFIN passthrough — so no AWS setup is needed
-to run the app locally.
+1. S3 mirror — annotated variant (`_annot.jpg`, preferred; exists for ~27% of images)
+2. S3 mirror — plain variant (`.jpg`, present for every image)
+3. live ZFIN — plain variant (last resort: images not yet mirrored, e.g. newly added)
 
-Backend env vars (all optional):
+Because the mirror is public, **no AWS credentials are needed anywhere** — not in
+the browser and not in the backend. This is deliberate (GEN-27): credential/IAM
+wiring differs per environment and was the reason images worked locally but not
+in prod. Public serving works identically in local, staging and prod. The images
+are ZFIN's, under CC BY 4.0, so there is nothing private to protect.
+
+The backend `/api/image-proxy` endpoint still exists, but only for the PNG export
+(a `<canvas>` needs same-origin bytes); it fetches over plain HTTP with no auth.
+
+Backend env vars (all optional; defaults need no configuration):
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `GENE2IMAGE_IMAGE_S3_BUCKET` | _(unset → S3 disabled)_ | Bucket holding the mirror |
+| `GENE2IMAGE_IMAGE_S3_BUCKET` | `czbsf-rnaquarium` | Bucket holding the mirror |
 | `GENE2IMAGE_IMAGE_S3_PREFIX` | `gene2fish/zfin-images` | Key prefix within the bucket |
 | `GENE2IMAGE_IMAGE_S3_REGION` | `us-west-2` | Bucket region |
+| `GENE2IMAGE_IMAGE_BASE_URL` | _(derived from bucket+region)_ | Override the public base URL (e.g. a CloudFront domain) |
 
-The deployment must grant the backend `s3:GetObject` on the bucket/prefix
-(via an IAM role / service account; standard AWS credential chain). The bucket
-stays **private** — images are never exposed publicly; they are streamed through
-the backend.
+**Bucket policy (one-time setup).** The `gene2fish/zfin-images/*` prefix must be
+publicly readable. Add a statement granting `s3:GetObject` to `Principal: "*"`
+scoped to that prefix — analogous to the existing `PublicReadGeneEmbeddingH5ADS`
+statement on the same bucket. The rest of the (shared) bucket stays private.
 
 ### Populating the mirror
 

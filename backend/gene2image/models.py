@@ -23,8 +23,14 @@ class DiseaseAssociation(BaseModel):
 
 class ImageRecord(BaseModel):
     image_id: str
+    # Primary + fallbacks, tried in order by the client:
+    #   image_url          → public S3 mirror, annotated variant (preferred)
+    #   image_url_fallback → public S3 mirror, plain variant (present for every image)
+    #   image_url_zfin     → live ZFIN, plain variant (last resort; covers images
+    #                        not yet mirrored, e.g. newly added ones)
     image_url: str
     image_url_fallback: str
+    image_url_zfin: str | None = None
     gene_symbol: str
     gene_id: str | None = None
     gene_name: str | None = None

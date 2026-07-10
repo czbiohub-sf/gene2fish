@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import NoReturn
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlparse
 from urllib.request import HTTPRedirectHandler, build_opener, install_opener
 from urllib.request import Request as UrlRequest
 from urllib.request import urlopen
@@ -49,12 +48,17 @@ def _build_image_url(pub_id: str, image_id: str) -> tuple[str, str]:
     return f"{base}_annot.jpg", f"{base}.jpg"
 
 
-def _validate_zfin_image_url(url: str) -> None:
-    parsed = urlparse(url)
-    if parsed.scheme != "https" or parsed.netloc != "zfin.org":
-        raise HTTPException(status_code=400, detail="Only zfin.org image URLs are supported")
-    if not parsed.path.startswith("/imageLoadUp/"):
-        raise HTTPException(status_code=400, detail="Only ZFIN imageLoadUp URLs are supported")
+def _validate_image_url(url: str) -> None:
+    # The proxy (used by the PNG export, which needs same-origin bytes for the
+    # canvas) accepts only two host families: canonical ZFIN imageLoadUp URLs and
+    # our own public S3 mirror URLs. Both prefixes pin scheme+host, so an
+    # attacker can't point the fetch at an internal host (SSRF).
+    if url.startswith(s3_images.ZFIN_IMAGELOADUP_PREFIX) or s3_images.is_mirror_url(url):
+        return
+    raise HTTPException(
+        status_code=400,
+        detail="Only ZFIN imageLoadUp or gene2fish S3 mirror image URLs are supported",
+    )
 
 
 class _NoRedirectHandler(HTTPRedirectHandler):
@@ -76,8 +80,8 @@ class _NoRedirectHandler(HTTPRedirectHandler):
 install_opener(build_opener(_NoRedirectHandler))
 
 
-def _fetch_zfin_image(url: str) -> tuple[bytes, str]:
-    _validate_zfin_image_url(url)
+def _fetch_image(url: str) -> tuple[bytes, str]:
+    _validate_image_url(url)
     request = UrlRequest(url, headers={"User-Agent": "gene2fish image export"})
     try:
         with urlopen(request, timeout=15) as resp:
@@ -87,15 +91,15 @@ def _fetch_zfin_image(url: str) -> tuple[bytes, str]:
                 # non-image (e.g. text/html) upstream response can't be rendered
                 # as a document on our own origin (stored/reflected XSS).
                 raise HTTPException(
-                    status_code=502, detail="ZFIN returned non-image content"
+                    status_code=502, detail="Upstream returned non-image content"
                 )
             return resp.read(), media_type
     except HTTPError as err:
-        raise HTTPException(status_code=err.code, detail="ZFIN image not found") from err
+        raise HTTPException(status_code=err.code, detail="Image not found") from err
     except URLError as err:
-        raise HTTPException(status_code=502, detail="Unable to fetch ZFIN image") from err
+        raise HTTPException(status_code=502, detail="Unable to fetch image") from err
     except TimeoutError as err:
-        raise HTTPException(status_code=502, detail="Unable to fetch ZFIN image") from err
+        raise HTTPException(status_code=502, detail="Unable to fetch image") from err
 
 
 def _record_to_model(record: dict) -> ImageRecord:
@@ -103,7 +107,13 @@ def _record_to_model(record: dict) -> ImageRecord:
     image_id = record.get("image_id", "")
     pub = record.get("publication") or {}
     pub_id = pub.get("publication_id") or ""
-    image_url, image_url_fallback = _build_image_url(pub_id, image_id)
+    zfin_annot, zfin_plain = _build_image_url(pub_id, image_id)
+    # Serve from our public S3 mirror (no auth needed anywhere); fall back to the
+    # plain variant, then to live ZFIN as a last resort (GEN-27). public_url()
+    # falls back to the ZFIN URL only if the URL isn't a canonical imageLoadUp one.
+    image_url = s3_images.public_url(zfin_annot) or zfin_annot
+    image_url_fallback = s3_images.public_url(zfin_plain) or zfin_plain
+    image_url_zfin = zfin_plain
 
     gene = record.get("gene") or {}
     image_info = record.get("image_info") or {}
@@ -163,6 +173,7 @@ def _record_to_model(record: dict) -> ImageRecord:
         human_orthologs=human_orthologs,
         disease_associations=disease_associations,
         uniprot_ids=uniprot_ids,
+        image_url_zfin=image_url_zfin,
         publication_id=pub_id or None,
         pubmed_id=str(pub["pubmed_id"]) if pub.get("pubmed_id") is not None else None,
         est_id=expression.get("est_id"),
@@ -372,24 +383,19 @@ def resolve_gene(symbol: str, request: Request) -> GeneResolveResult:
 
 @router.get("/image-proxy")
 def image_proxy(url: str = Query(...)) -> Response:
-    # Serve the image from our own mirror first (S3) so a temporary ZFIN outage
-    # doesn't break image loading; fall back to fetching live from ZFIN when the
-    # object isn't mirrored or no bucket is configured (GEN-22). The S3 path is
-    # safe without a separate validation here: s3_images only resolves a key for
-    # canonical zfin.org/imageLoadUp URLs, and the ZFIN fallback validates the
-    # URL itself (in _fetch_zfin_image).
-    result = s3_images.fetch_image(url) if s3_images.s3_enabled() else None
-    if result is not None:
-        data, media_type = result
-    else:
-        data, media_type = _fetch_zfin_image(url)
+    # Same-origin image bytes for the PNG export (a cross-origin <img> would taint
+    # the export canvas). Images render in the grid/lightbox directly from the
+    # public S3 mirror — this proxy is only for the canvas path. It fetches
+    # whatever URL the client passes (our S3 mirror or ZFIN), both host-pinned by
+    # _validate_image_url; no AWS credentials involved (GEN-27).
+    data, media_type = _fetch_image(url)
     return Response(
         content=data,
         media_type=media_type,
         headers={
             "Access-Control-Allow-Origin": "*",
             "Cache-Control": "public, max-age=86400",
-            # Belt-and-suspenders with the image/* check in _fetch_zfin_image:
+            # Belt-and-suspenders with the image/* check in _fetch_image:
             # never let a browser MIME-sniff a proxied response into HTML.
             "X-Content-Type-Options": "nosniff",
         },

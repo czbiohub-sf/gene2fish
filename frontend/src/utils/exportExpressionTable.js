@@ -1,4 +1,4 @@
-import { proxiedImageSrc } from "./imageProxy.js";
+import { imageSources, proxiedImageSrc } from "./imageProxy.js";
 
 const EXPORT_CELL_SIZE = 180;
 const EXPORT_ROW_HEADER_WIDTH = 150;
@@ -69,10 +69,11 @@ function loadImage(src) {
 }
 
 async function loadBestImage(image) {
-  const primary = await loadImage(proxiedImageSrc(image.image_url));
-  if (primary) return primary;
-  if (image.image_url_fallback && image.image_url_fallback !== image.image_url) {
-    return loadImage(proxiedImageSrc(image.image_url_fallback));
+  // Walk the same source chain the grid uses (S3 annotated → S3 plain → ZFIN),
+  // but through the proxy so the export canvas gets same-origin bytes (GEN-27).
+  for (const src of imageSources(image)) {
+    const img = await loadImage(proxiedImageSrc(src));
+    if (img) return img;
   }
   return null;
 }

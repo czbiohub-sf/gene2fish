@@ -1,27 +1,30 @@
 import { useEffect, useState } from "react";
 import { useImageQueue } from "../hooks/useImageQueue.js";
-import { proxiedImageSrc } from "../utils/imageProxy.js";
+import { imageSources } from "../utils/imageProxy.js";
 
 function SingleImage({ image, onClick, compact, onFail }) {
   const [src, setSrc] = useState(null); // null = waiting in queue, not yet requested
   const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const enqueue = useImageQueue();
 
-  // Load through the backend proxy (our S3 mirror, with live-ZFIN fallback) so
-  // images keep loading during temporary ZFIN outages (GEN-22).
-  const primarySrc = proxiedImageSrc(image.image_url);
-  const fallbackSrc = proxiedImageSrc(image.image_url_fallback);
+  // Load directly from the public S3 mirror (no backend/auth), walking the
+  // preference chain on error: S3 annotated → S3 plain → live ZFIN (GEN-27).
+  const sources = imageSources(image);
 
   useEffect(() => {
     setSrc(null);
     setFailed(false);
-    const dequeue = enqueue(setSrc, primarySrc);
+    setAttempt(0);
+    const dequeue = enqueue(setSrc, sources[0]);
     return dequeue; // remove from queue if unmounted before turn
   }, [image.image_url]); // re-enqueue if image changes
 
   function handleError(e) {
-    if (src === primarySrc && fallbackSrc !== primarySrc) {
-      setSrc(fallbackSrc);
+    const next = attempt + 1;
+    if (next < sources.length) {
+      setAttempt(next);
+      setSrc(sources[next]);
     } else {
       e.target.onerror = null;
       setFailed(true);
