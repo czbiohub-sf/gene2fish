@@ -8,7 +8,19 @@ function debounce(fn, ms) {
   };
 }
 
-export function AnatomyFilter({ value, onChange }) {
+const NO_IMAGES_HINT = "No images for the genes in the comparison";
+
+// Classify an anatomy suggestion against the current gene set's facets.
+// `facets` null (no genes in the grid) means "no constraint" — everything
+// stays enabled. Otherwise a term is disabled unless at least one current gene
+// expresses it, and its image count guides selection.
+function anatomyOptionState(term, facets) {
+  if (!facets) return { disabled: false, count: null };
+  const count = facets[term.toLowerCase()] || 0;
+  return { disabled: count === 0, count };
+}
+
+export function AnatomyFilter({ value, onChange, anatomyFacets }) {
   const selectedTerms = Array.isArray(value) ? value : (value ? [value] : []);
   const selectedTermsKey = selectedTerms.join("\n");
   const [inputVal, setInputVal] = useState("");
@@ -152,18 +164,25 @@ export function AnatomyFilter({ value, onChange }) {
           </button>
           {isOpen && availableSuggestions.length > 0 && (
             <div id="anatomy-options" className="autocomplete-dropdown" role="listbox">
-              {availableSuggestions.map((s) => (
-                <div
-                  key={s}
-                  className="autocomplete-item"
-                  title={s}
-                  role="option"
-                  aria-selected="false"
-                  onMouseDown={() => select(s)}
-                >
-                  {s}
-                </div>
-              ))}
+              {availableSuggestions.map((s) => {
+                const { disabled, count } = anatomyOptionState(s, anatomyFacets);
+                return (
+                  <div
+                    key={s}
+                    className={`autocomplete-item${disabled ? " disabled" : ""}`}
+                    title={disabled ? NO_IMAGES_HINT : s}
+                    role="option"
+                    aria-selected="false"
+                    aria-disabled={disabled || undefined}
+                    onMouseDown={disabled ? undefined : () => select(s)}
+                  >
+                    <span className="autocomplete-item-label">{s}</span>
+                    {count != null && count > 0 && (
+                      <span className="autocomplete-count">{count}</span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
           {(inputVal || selectedTerms.length > 0) && (

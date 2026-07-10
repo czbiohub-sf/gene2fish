@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+const NO_IMAGES_HINT = "No images for the genes in the comparison";
 
 const FALLBACK_STAGES = [
   { stage_name: "Gastrula:50%-epiboly", begin_hours: 5.25, display_label: "50%-epiboly" },
@@ -31,8 +33,16 @@ function fullStageLabel(stage) {
   return `${stage.stage_name} (${stage.display_label})`;
 }
 
-export function StageFilter({ stageMin, stageMax, onChange }) {
+export function StageFilter({ stageMin, stageMax, onChange, stageFacets }) {
   const [stages, setStages] = useState(FALLBACK_STAGES);
+
+  // Set of canonical begin_hours that have images for the genes in the grid.
+  // Null (no genes in the comparison) means "no constraint" — every stage stays
+  // selectable, preserving the original behavior.
+  const enabledHours = useMemo(
+    () => (stageFacets ? new Set(stageFacets.map((f) => f.begin_hours)) : null),
+    [stageFacets]
+  );
 
   useEffect(() => {
     fetch("/api/stages")
@@ -63,6 +73,29 @@ export function StageFilter({ stageMin, stageMax, onChange }) {
 
   const isFiltered = selectedMin !== minHours || selectedMax !== maxHours;
 
+  // Render the option list for one of the range selects. A stage with no images
+  // for the current genes is disabled (greyed + unselectable) and explains why
+  // on hover, but the currently selected value is always kept enabled so the
+  // select can still represent its own state.
+  function renderOptions(currentValue) {
+    return stages.map((s) => {
+      const disabled =
+        enabledHours !== null &&
+        !enabledHours.has(s.begin_hours) &&
+        s.begin_hours !== currentValue;
+      return (
+        <option
+          key={s.begin_hours}
+          value={s.begin_hours}
+          disabled={disabled}
+          title={disabled ? NO_IMAGES_HINT : fullStageLabel(s)}
+        >
+          {shortStageLabel(s)}
+        </option>
+      );
+    });
+  }
+
   return (
     <div className="stage-filter">
       <div className="stage-filter-selects">
@@ -73,11 +106,7 @@ export function StageFilter({ stageMin, stageMax, onChange }) {
             onChange={handleMin}
             title={selectedMinStage ? fullStageLabel(selectedMinStage) : undefined}
           >
-            {stages.map((s) => (
-              <option key={s.begin_hours} value={s.begin_hours} title={fullStageLabel(s)}>
-                {shortStageLabel(s)}
-              </option>
-            ))}
+            {renderOptions(selectedMin)}
           </select>
         </label>
         <span className="range-arrow" aria-hidden="true">→</span>
@@ -88,11 +117,7 @@ export function StageFilter({ stageMin, stageMax, onChange }) {
             onChange={handleMax}
             title={selectedMaxStage ? fullStageLabel(selectedMaxStage) : undefined}
           >
-            {stages.map((s) => (
-              <option key={s.begin_hours} value={s.begin_hours} title={fullStageLabel(s)}>
-                {shortStageLabel(s)}
-              </option>
-            ))}
+            {renderOptions(selectedMax)}
           </select>
         </label>
         {isFiltered && (

@@ -419,6 +419,41 @@ select {
   background: var(--bg-hover);
 }
 
+/* Context-aware filter option that has no images for the current genes
+   (GEN-23): greyed and non-interactive, but still listed so the full
+   vocabulary stays discoverable. */
+.autocomplete-item.disabled {
+  color: var(--text-secondary);
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.autocomplete-item.disabled:hover {
+  background: transparent;
+}
+
+/* Anatomy options carry an optional match count, so lay them out as a row and
+   keep the term text ellipsized. Scoped to the anatomy filter to leave the gene
+   search dropdown untouched. */
+.anatomy-filter .autocomplete-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.anatomy-filter .autocomplete-item-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.autocomplete-count {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
 .autocomplete-alias {
   margin-left: 8px;
   color: var(--text-secondary);

@@ -76,6 +76,24 @@ class BatchRequest(BaseModel):
     n_images: int = 1
 
 
+class GeneFacetsRequest(BaseModel):
+    genes: list[str]
+
+
+class StageFacet(BaseModel):
+    begin_hours: float
+    image_count: int
+
+
+class GeneFacetsResponse(BaseModel):
+    # Which filter options have any images for the current gene set (union
+    # semantics: an option counts if it matches ANY gene in the comparison).
+    # `stages` lists canonical begin_hours with a positive image count; `anatomy`
+    # maps a lowercased anatomy term to its image count across those genes.
+    stages: list[StageFacet]
+    anatomy: dict[str, int]
+
+
 class AnatomyGene(BaseModel):
     gene_symbol: str
     image_count: int
