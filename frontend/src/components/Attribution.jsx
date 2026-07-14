@@ -1,4 +1,12 @@
-const THISSE_PUBLICATIONS = [
+const ZFIN_PUBLICATIONS = [
+  {
+    id: "ZDB-PUB-220216-32",
+    year: 2022,
+    authors:
+      "Bradford YM, Van Slyke CE, Ruzicka L, Singer A, Eagle A, Fashena D, Howe DG, Frazer K, Martin R, Paddock H, Pich C, Ramachandran S, Westerfield M",
+    title:
+      "Zebrafish information network, the knowledgebase for Danio rerio research",
+  },
   {
     id: "ZDB-PUB-010810-1",
     year: 2001,
@@ -54,7 +62,7 @@ export function Attribution() {
       <div className="footer-references">
         <span className="footer-references-label">References</span>
         <ol className="footer-ref-list">
-          {THISSE_PUBLICATIONS.map((pub) => (
+          {ZFIN_PUBLICATIONS.map((pub) => (
             <li key={pub.id}>
               {pub.authors} ({pub.year}). {pub.title}.{" "}
               <a
