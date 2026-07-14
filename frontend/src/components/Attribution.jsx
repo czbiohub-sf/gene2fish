@@ -43,7 +43,7 @@ export function Attribution() {
   return (
     <footer className="app-footer">
       <div className="footer-license">
-        Images from{" "}
+        Images and image data provided by{" "}
         <a href="https://zfin.org" target="_blank" rel="noopener noreferrer">
           ZFIN (zfin.org)
         </a>
