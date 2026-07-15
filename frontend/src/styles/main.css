@@ -1310,6 +1310,22 @@ select {
   text-decoration: underline;
 }
 
+/* Anatomy tags pair a term label with its ZFA ontology id (GEN-32). */
+.anatomy-tag {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.anatomy-tag-name {
+  color: var(--text-primary);
+}
+
+.anatomy-tag-id {
+  font-size: 10px;
+  color: var(--accent);
+}
+
 .suggested-genes-wrap {
   margin: 0 0 22px;
   padding: 10px 12px;

@@ -600,6 +600,10 @@ def test_gene_batch_includes_lightbox_identifier_metadata(tmp_path, monkeypatch)
             "fish": {"fish_name": "wild type"},
             "human_orthologs": [{"human_symbol": "PACSIN2"}],
             "uniprot_ids": ["F1QC13"],
+            "anatomical_locations": [
+                {"anatomy_id": "ZFA:0001135", "anatomy_name": "neural tube"},
+                {"anatomy_name": "unmapped region"},
+            ],
         }
     ]
     (tmp_path / "image_metadata.json").write_text(json.dumps(records))
@@ -616,6 +620,12 @@ def test_gene_batch_includes_lightbox_identifier_metadata(tmp_path, monkeypatch)
     assert image["gene_name"] == "protein kinase C and casein kinase substrate in neurons 2"
     assert image["est_id"] == "ZDB-CDNA-040425-55286"
     assert image["est_symbol"] == "MGC:55286"
+    # Anatomy terms carry their ZFA ontology id so the lightbox can link to
+    # ZFIN; a term without an id still passes through with anatomy_id None.
+    assert image["anatomy_terms"] == [
+        {"anatomy_name": "neural tube", "anatomy_id": "ZFA:0001135"},
+        {"anatomy_name": "unmapped region", "anatomy_id": None},
+    ]
 
 
 def _facets_dataset(tmp_path, monkeypatch):

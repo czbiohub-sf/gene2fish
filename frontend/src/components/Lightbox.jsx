@@ -89,12 +89,19 @@ export function Lightbox({ image, onClose, onPrev, onNext, hasPrev, hasNext }) {
             <GeneMeta image={image} />
             <MetaGroup label="Stage" value={image.stage_display_label} />
             <MetaGroup label="Image preparation" value={image.image_preparation} />
-            {image.anatomy_names?.length > 0 && (
+            {image.anatomy_terms?.length > 0 && (
               <div className="meta-group">
                 <div className="meta-label">Anatomy</div>
                 <ul className="meta-list">
-                  {image.anatomy_names.map((a) => (
-                    <li key={a} className="meta-tag">{a}</li>
+                  {image.anatomy_terms.map((a) => (
+                    <li key={a.anatomy_id || a.anatomy_name} className="meta-tag anatomy-tag">
+                      <span className="anatomy-tag-name">{a.anatomy_name}</span>
+                      {a.anatomy_id && (
+                        <ExternalLink href={zfinUrl(a.anatomy_id)}>
+                          <span className="anatomy-tag-id mono">{a.anatomy_id}</span>
+                        </ExternalLink>
+                      )}
+                    </li>
                   ))}
                 </ul>
               </div>

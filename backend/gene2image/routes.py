@@ -16,6 +16,7 @@ from . import s3_images
 from .models import (
     AnatomyGene,
     AnatomyGenesResponse,
+    AnatomyTerm,
     BatchRequest,
     CanonicalStage,
     DiseaseAssociation,
@@ -116,8 +117,11 @@ def _record_to_model(record: dict) -> ImageRecord:
     if canonical_hours is not None:
         stage_name, stage_display_label = get_stage_info(canonical_hours)
 
-    anatomy_names = [
-        loc["anatomy_name"]
+    anatomy_terms = [
+        AnatomyTerm(
+            anatomy_name=loc["anatomy_name"],
+            anatomy_id=loc.get("anatomy_id"),
+        )
         for loc in (record.get("anatomical_locations") or [])
         if loc.get("anatomy_name")
     ]
@@ -156,7 +160,7 @@ def _record_to_model(record: dict) -> ImageRecord:
         stage_name=stage_name,
         stage_begin_hours=canonical_hours,
         stage_display_label=stage_display_label,
-        anatomy_names=anatomy_names,
+        anatomy_terms=anatomy_terms,
         image_preparation=image_info.get("image_preparation"),
         figure_id=image_info.get("figure_id"),
         fish_name=(fish.get("fish_name") or fish.get("fish_abbreviation")),
