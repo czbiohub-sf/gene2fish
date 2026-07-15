@@ -40,7 +40,7 @@ function SingleImage({ image, onClick, compact, onFail }) {
         onClick={(e) => { e.stopPropagation(); onClick(image); }}
         title={[
           image.stage_display_label,
-          image.anatomy_names?.length ? image.anatomy_names.join(", ") : null,
+          image.anatomy_terms?.length ? image.anatomy_terms.map((a) => a.anatomy_name).join(", ") : null,
           image.image_id,
         ].filter(Boolean).join(" · ")}
       />
@@ -56,7 +56,7 @@ function SingleImage({ image, onClick, compact, onFail }) {
       onClick={(e) => { e.stopPropagation(); onClick(image); }}
       title={[
         image.stage_display_label,
-        image.anatomy_names?.length ? image.anatomy_names.join(", ") : null,
+        image.anatomy_terms?.length ? image.anatomy_terms.map((a) => a.anatomy_name).join(", ") : null,
         image.image_id,
       ].filter(Boolean).join(" · ")}
     />
@@ -72,7 +72,7 @@ function SingleCell({ image, onClick }) {
 
   const tooltipText = [
     image.stage_display_label,
-    image.anatomy_names?.length ? image.anatomy_names.join(", ") : null,
+    image.anatomy_terms?.length ? image.anatomy_terms.map((a) => a.anatomy_name).join(", ") : null,
     image.image_id,
     image.publication_id,
   ].filter(Boolean).join(" · ");

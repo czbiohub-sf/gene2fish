@@ -22,7 +22,9 @@ function image(gene, stage, index = 1) {
     stage_name: stage.stage_name,
     stage_begin_hours: stage.begin_hours,
     stage_display_label: stage.display_label,
-    anatomy_names: gene === "evx1" ? ["hindbrain"] : [],
+    anatomy_terms: gene === "evx1"
+      ? [{ anatomy_name: "hindbrain", anatomy_id: "ZFA:0000125" }]
+      : [],
     image_preparation: "whole-mount",
     figure_id: `FIG-${id}`,
     fish_name: "wild type",
@@ -363,6 +365,22 @@ test("lightbox links key metadata identifiers", async ({ page }) => {
   await expect(page.getByRole("link", { name: "P2RX4" })).toHaveAttribute(
     "href",
     "https://www.ncbi.nlm.nih.gov/search/all/?term=P2RX4"
+  );
+});
+
+test("lightbox shows anatomy terms with a ZFA id linked to ZFIN", async ({ page }) => {
+  await page.goto("/?genes=evx1");
+
+  await page.locator('img[alt^="evx1 at"]').first().click();
+  await expect(page.locator(".lightbox-overlay")).toBeVisible();
+
+  const anatomyGroup = page
+    .locator(".lightbox-meta-col .meta-group")
+    .filter({ has: page.locator(".meta-label", { hasText: "Anatomy" }) });
+  await expect(anatomyGroup).toContainText("hindbrain");
+  await expect(anatomyGroup.getByRole("link", { name: "ZFA:0000125" })).toHaveAttribute(
+    "href",
+    "https://zfin.org/ZFA:0000125"
   );
 });
 

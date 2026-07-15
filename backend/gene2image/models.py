@@ -13,6 +13,13 @@ class HumanOrtholog(BaseModel):
     entrez_gene_id: str | None = None
 
 
+class AnatomyTerm(BaseModel):
+    anatomy_name: str
+    # ZFA ontology identifier, e.g. "ZFA:0000615". May be absent for records
+    # that only carry a free-text anatomy label.
+    anatomy_id: str | None = None
+
+
 class DiseaseAssociation(BaseModel):
     do_term_name: str | None = None
     do_term_id: str | None = None
@@ -31,7 +38,7 @@ class ImageRecord(BaseModel):
     stage_name: str | None = None
     stage_begin_hours: float | None = None
     stage_display_label: str | None = None
-    anatomy_names: list[str] = []
+    anatomy_terms: list[AnatomyTerm] = []
     image_preparation: str | None = None
     figure_id: str | None = None
     fish_name: str | None = None
