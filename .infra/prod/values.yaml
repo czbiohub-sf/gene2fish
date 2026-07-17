@@ -19,7 +19,7 @@ stack:
   services:
     gene2fish:
       image:
-        tag: sha-45471c3
+        tag: sha-0f6f754
       ingress:
         # CNTR-101: replace Okta gatekeeping with HTTP basic auth so the app
         # can be demoed to external users while staying non-public. The

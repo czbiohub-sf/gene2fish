@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.6.0](https://github.com/czbiohub-sf/gene2fish/compare/v0.5.0...v0.6.0) (2026-07-15)
+
+
+### Features
+
+* **analytics:** add Plausible tracking snippet (GEN-28) ([#77](https://github.com/czbiohub-sf/gene2fish/issues/77)) ([448aed4](https://github.com/czbiohub-sf/gene2fish/commit/448aed4dec6bf1748915f1e0cd69267c857d9884))
+* **filters:** make stage/anatomy options context-aware (GEN-23) ([#70](https://github.com/czbiohub-sf/gene2fish/issues/70)) ([5f9cfad](https://github.com/czbiohub-sf/gene2fish/commit/5f9cfad54de546cd31cd189d4a937750113666c8))
+* **frontend:** add favicon for gene2fish (GEN-25) ([#69](https://github.com/czbiohub-sf/gene2fish/issues/69)) ([4809990](https://github.com/czbiohub-sf/gene2fish/commit/4809990111859ec80aec287760127fc01dbae481))
+* **references:** add ZFIN knowledgebase citation (GEN-30) ([#76](https://github.com/czbiohub-sf/gene2fish/issues/76)) ([ed5058e](https://github.com/czbiohub-sf/gene2fish/commit/ed5058ef260fde2fcef7288fcca3ddd8d99adccb))
+* switch prod access from Okta to basic auth for external demos (CNTR-101) ([#59](https://github.com/czbiohub-sf/gene2fish/issues/59)) ([3c99592](https://github.com/czbiohub-sf/gene2fish/commit/3c99592bd6e1f47f5f431d3303f5a7fb4136db6a))
+
+
+### Bug Fixes
+
+* **ci:** remove dependabot auto-merge to require human review ([#65](https://github.com/czbiohub-sf/gene2fish/issues/65)) ([5ee201a](https://github.com/czbiohub-sf/gene2fish/commit/5ee201a554e19ea4dbf06416d18c6db8147c8134))
+* **cors:** drop localhost dev origins from deployed environments ([#67](https://github.com/czbiohub-sf/gene2fish/issues/67)) ([42b1fe7](https://github.com/czbiohub-sf/gene2fish/commit/42b1fe7399630ea6eb9dbc5a9950cfc68356e1e8))
+* **image-proxy:** refuse redirects when fetching ZFIN images (SSRF) ([#66](https://github.com/czbiohub-sf/gene2fish/issues/66)) ([5177701](https://github.com/czbiohub-sf/gene2fish/commit/5177701950a8d02d06d32f755a61c8c8653a8592))
+* **image-proxy:** reject non-image content and add nosniff (XSS) ([#68](https://github.com/czbiohub-sf/gene2fish/issues/68)) ([1fc4c52](https://github.com/czbiohub-sf/gene2fish/commit/1fc4c5231b2ff378f68711f95364398196140e22))
+
 ## [0.5.0](https://github.com/czbiohub-sf/gene2fish/compare/v0.4.0...v0.5.0) (2026-06-25)
 
 
