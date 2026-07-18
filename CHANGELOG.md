@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/czbiohub-sf/gene2fish/compare/v0.6.0...v0.6.1) (2026-07-18)
+
+
+### Bug Fixes
+
+* **image-proxy:** fall back to plain .jpg when ZFIN lacks the annotated variant ([#81](https://github.com/czbiohub-sf/gene2fish/issues/81)) ([f77f84f](https://github.com/czbiohub-sf/gene2fish/commit/f77f84fe0506588c9ea58b0ea2949596730ed7e1))
+
 ## [0.6.0](https://github.com/czbiohub-sf/gene2fish/compare/v0.5.0...v0.6.0) (2026-07-15)
 
 
