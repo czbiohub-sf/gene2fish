@@ -3,13 +3,19 @@
 const queue = []; // [{setSrc, url}]
 let intervalId = null;
 
-const INTERVAL_MS = 150;
+// The grid now loads small thumbnails (~1KB) rather than full-res images
+// (~377KB), so releasing them quickly no longer risks flooding the network or
+// the backend. Release a small batch per short tick so a comparison grid
+// populates almost immediately instead of trickling in at ~7 images/second.
+const INTERVAL_MS = 40;
+const BATCH_PER_TICK = 4;
 
 function startInterval() {
   if (intervalId !== null) return;
   intervalId = setInterval(() => {
-    const next = queue.shift();
-    if (next) {
+    for (let i = 0; i < BATCH_PER_TICK; i++) {
+      const next = queue.shift();
+      if (!next) break;
       next.setSrc(next.url);
     }
     if (queue.length === 0) {
