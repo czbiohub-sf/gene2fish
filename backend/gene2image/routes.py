@@ -99,6 +99,33 @@ def _fetch_zfin_image(url: str) -> tuple[bytes, str]:
         raise HTTPException(status_code=502, detail="Unable to fetch ZFIN image") from err
 
 
+def _plain_image_variant(url: str) -> str | None:
+    """The un-annotated ``.jpg`` for an ``_annot.jpg`` URL, else ``None``.
+
+    ZFIN hosts annotated (``_annot.jpg``) variants for only some images; for the
+    rest the annotated URL 404s while the plain ``.jpg`` exists. Deriving the
+    plain URL lets the proxy retry server-side so the browser gets a single 200
+    instead of a 404 (plus a client-side refetch) for every such image.
+    """
+    suffix = "_annot.jpg"
+    if url.endswith(suffix):
+        return url[: -len(suffix)] + ".jpg"
+    return None
+
+
+def _resolve_image(url: str) -> tuple[bytes, str]:
+    """Fetch an image from the S3 mirror if present, else live from ZFIN.
+
+    The S3 path is safe without a separate validation here: s3_images only
+    resolves a key for canonical zfin.org/imageLoadUp URLs, and the ZFIN
+    fallback validates the URL itself (in _fetch_zfin_image).
+    """
+    result = s3_images.fetch_image(url) if s3_images.s3_enabled() else None
+    if result is not None:
+        return result
+    return _fetch_zfin_image(url)
+
+
 def _record_to_model(record: dict) -> ImageRecord:
     """Convert a raw data record to an ImageRecord pydantic model."""
     image_id = record.get("image_id", "")
@@ -378,15 +405,18 @@ def resolve_gene(symbol: str, request: Request) -> GeneResolveResult:
 def image_proxy(url: str = Query(...)) -> Response:
     # Serve the image from our own mirror first (S3) so a temporary ZFIN outage
     # doesn't break image loading; fall back to fetching live from ZFIN when the
-    # object isn't mirrored or no bucket is configured (GEN-22). The S3 path is
-    # safe without a separate validation here: s3_images only resolves a key for
-    # canonical zfin.org/imageLoadUp URLs, and the ZFIN fallback validates the
-    # URL itself (in _fetch_zfin_image).
-    result = s3_images.fetch_image(url) if s3_images.s3_enabled() else None
-    if result is not None:
-        data, media_type = result
-    else:
-        data, media_type = _fetch_zfin_image(url)
+    # object isn't mirrored or no bucket is configured (GEN-22).
+    try:
+        data, media_type = _resolve_image(url)
+    except HTTPException as err:
+        # ZFIN has no annotated (`_annot.jpg`) variant for many images and 404s
+        # on them; retry the plain `.jpg` server-side so the browser gets a
+        # single 200 instead of a 404 (plus a client-side refetch) per image.
+        plain = _plain_image_variant(url)
+        if err.status_code == 404 and plain is not None:
+            data, media_type = _resolve_image(plain)
+        else:
+            raise
     return Response(
         content=data,
         media_type=media_type,
