@@ -1,5 +1,5 @@
 import json
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 
 import pytest
 from fastapi.testclient import TestClient
@@ -248,6 +248,60 @@ def test_image_proxy_falls_back_to_zfin_when_not_mirrored(client, monkeypatch):
 
     assert resp.status_code == 200
     assert resp.content == b"zfin-bytes"
+
+
+def test_image_proxy_falls_back_to_plain_when_annotated_missing(client, monkeypatch):
+    # ZFIN has no `_annot.jpg` for many images (404); the proxy must retry the
+    # plain `.jpg` server-side so the browser gets one 200 instead of a 404.
+    from gene2image import routes
+
+    class Headers:
+        def get_content_type(self):
+            return "image/jpeg"
+
+    class FakeResponse:
+        headers = Headers()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return b"plain-bytes"
+
+    def fake_urlopen(request, timeout):
+        if request.full_url.endswith("_annot.jpg"):
+            raise HTTPError(request.full_url, 404, "Not Found", {}, None)
+        return FakeResponse()
+
+    monkeypatch.setattr(routes, "urlopen", fake_urlopen)
+
+    resp = client.get(
+        "/api/image-proxy",
+        params={"url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1_annot.jpg"},
+    )
+
+    assert resp.status_code == 200
+    assert resp.content == b"plain-bytes"
+
+
+def test_image_proxy_404s_when_both_annotated_and_plain_missing(client, monkeypatch):
+    # A genuine 404 (neither variant exists) must still surface, not be masked.
+    from gene2image import routes
+
+    def fake_urlopen(request, timeout):
+        raise HTTPError(request.full_url, 404, "Not Found", {}, None)
+
+    monkeypatch.setattr(routes, "urlopen", fake_urlopen)
+
+    resp = client.get(
+        "/api/image-proxy",
+        params={"url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1_annot.jpg"},
+    )
+
+    assert resp.status_code == 404
 
 
 def test_s3_key_for_url_mirrors_zfin_path():
