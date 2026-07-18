@@ -38,8 +38,13 @@ router = APIRouter(prefix="/api")
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _build_image_url(pub_id: str, image_id: str) -> tuple[str, str]:
-    """Return (annotated_url, plain_url) for an image."""
+def _build_image_url(pub_id: str, image_id: str) -> tuple[str, str, str]:
+    """Return (annotated_url, plain_url, thumb_url) for an image.
+
+    ZFIN hosts a small ``_thumb.jpg`` (~1KB, 86x64) alongside the full-res image
+    (~377KB, 1392x1040). The grid serves the thumbnail so a comparison view of N
+    images transfers ~N KB instead of ~N*377 KB; the lightbox loads full-res.
+    """
     # pub_id format: ZDB-PUB-YYMMDD-N  — year is "20" + first 2 chars of third segment
     # e.g. ZDB-PUB-010810-1 → "01" → "2001"
     try:
@@ -47,7 +52,7 @@ def _build_image_url(pub_id: str, image_id: str) -> tuple[str, str]:
     except (IndexError, AttributeError):
         year = "2000"
     base = f"https://zfin.org/imageLoadUp/{year}/{pub_id}/{image_id}"
-    return f"{base}_annot.jpg", f"{base}.jpg"
+    return f"{base}_annot.jpg", f"{base}.jpg", f"{base}_thumb.jpg"
 
 
 def _validate_zfin_image_url(url: str) -> None:
@@ -131,7 +136,7 @@ def _record_to_model(record: dict) -> ImageRecord:
     image_id = record.get("image_id", "")
     pub = record.get("publication") or {}
     pub_id = pub.get("publication_id") or ""
-    image_url, image_url_fallback = _build_image_url(pub_id, image_id)
+    image_url, image_url_fallback, image_thumb_url = _build_image_url(pub_id, image_id)
 
     gene = record.get("gene") or {}
     image_info = record.get("image_info") or {}
@@ -181,6 +186,7 @@ def _record_to_model(record: dict) -> ImageRecord:
         image_id=image_id,
         image_url=image_url,
         image_url_fallback=image_url_fallback,
+        image_thumb_url=image_thumb_url,
         gene_symbol=gene.get("gene_symbol", ""),
         gene_id=gene.get("gene_id"),
         gene_name=gene.get("gene_name"),
