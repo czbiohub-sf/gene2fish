@@ -9,7 +9,13 @@ function SingleImage({ image, onClick, compact, onFail }) {
 
   // Load through the backend proxy (our S3 mirror, with live-ZFIN fallback) so
   // images keep loading during temporary ZFIN outages (GEN-22).
-  const primarySrc = proxiedImageSrc(image.image_url);
+  //
+  // The grid serves the small ZFIN thumbnail (~1KB, 86x64) instead of the
+  // full-res image (~377KB): a comparison view of N images then transfers ~N KB
+  // rather than ~N*377 KB, which is what made the grid slow to load. The
+  // lightbox still loads full-res. If a thumb is missing we fall back to the
+  // plain full-res image.
+  const primarySrc = proxiedImageSrc(image.image_thumb_url);
   const fallbackSrc = proxiedImageSrc(image.image_url_fallback);
 
   useEffect(() => {
@@ -17,7 +23,7 @@ function SingleImage({ image, onClick, compact, onFail }) {
     setFailed(false);
     const dequeue = enqueue(setSrc, primarySrc);
     return dequeue; // remove from queue if unmounted before turn
-  }, [image.image_url]); // re-enqueue if image changes
+  }, [image.image_thumb_url]); // re-enqueue if image changes
 
   function handleError(e) {
     if (src === primarySrc && fallbackSrc !== primarySrc) {
