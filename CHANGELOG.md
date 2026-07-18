@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.2](https://github.com/czbiohub-sf/gene2fish/compare/v0.6.1...v0.6.2) (2026-07-18)
+
+
+### Bug Fixes
+
+* **images:** remove the 150ms grid load throttle now that cells use thumbnails ([#84](https://github.com/czbiohub-sf/gene2fish/issues/84)) ([0a32d23](https://github.com/czbiohub-sf/gene2fish/commit/0a32d2376346fcf9b494c4b3172b6e5fe165f8f9))
+
 ## [0.6.1](https://github.com/czbiohub-sf/gene2fish/compare/v0.6.0...v0.6.1) (2026-07-18)
 
 
