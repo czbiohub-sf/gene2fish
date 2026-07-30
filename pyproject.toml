@@ -5,7 +5,7 @@ description = "Zebrafish gene expression image browser"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.111.0",
-    "uvicorn[standard]>=0.29.0",
+    "uvicorn[standard]>=0.52.0",
     "pydantic>=2.0.0",
     "pandas>=3.0.2",
     "matplotlib>=3.10.8",
