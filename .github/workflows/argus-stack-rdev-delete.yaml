@@ -20,7 +20,7 @@ jobs:
 
     steps:
       - name: Delete rdev stack
-        uses: chanzuckerberg/argus-artifacts/ci/packages/delete-stack@v0
+        uses: chanzuckerberg/argus-artifacts/ci/packages/delete-stack@v0.131.0
         with:
           appName: gene2fish
           envName: rdev
