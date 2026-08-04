@@ -15,21 +15,21 @@ jobs:
   lint-rdev:
     runs-on: ubuntu-latest
     steps:
-      - uses: chanzuckerberg/github-actions/.github/actions/helm-lint@v6
+      - uses: chanzuckerberg/github-actions/.github/actions/helm-lint@v6.32.0
         with:
           chart_path: .infra/rdev
           values_files: ../common.yaml,./values.yaml
   lint-staging:
     runs-on: ubuntu-latest
     steps:
-      - uses: chanzuckerberg/github-actions/.github/actions/helm-lint@v6
+      - uses: chanzuckerberg/github-actions/.github/actions/helm-lint@v6.32.0
         with:
           chart_path: .infra/staging
           values_files: ../common.yaml,./values.yaml
   lint-prod:
     runs-on: ubuntu-latest
     steps:
-      - uses: chanzuckerberg/github-actions/.github/actions/helm-lint@v6
+      - uses: chanzuckerberg/github-actions/.github/actions/helm-lint@v6.32.0
         with:
           chart_path: .infra/prod
           values_files: ../common.yaml,./values.yaml
