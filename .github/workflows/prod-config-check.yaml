@@ -17,5 +17,5 @@ permissions:
 
 jobs:
   prod-config-check:
-    uses: chanzuckerberg/github-actions/.github/workflows/argus-prod-config-check.yaml@v6
+    uses: chanzuckerberg/github-actions/.github/workflows/argus-prod-config-check.yaml@v6.32.0
     secrets: inherit
