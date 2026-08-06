@@ -304,16 +304,17 @@ def test_image_proxy_404s_when_both_annotated_and_plain_missing(client, monkeypa
     assert resp.status_code == 404
 
 
-def test_build_image_url_includes_thumbnail():
-    # The grid serves the small ZFIN thumbnail (~1KB) instead of the full-res
-    # image (~377KB); _build_image_url must expose the `_thumb.jpg` URL.
+def test_build_image_url_includes_medium():
+    # The grid serves ZFIN's medium variant (~15KB, 500x374) instead of the
+    # full-res image (~377KB) — the tiny 86x64 thumbnail looked blurry upscaled
+    # into the grid cell (GEN-36); _build_image_url must expose `_medium.jpg`.
     from gene2image.routes import _build_image_url
 
-    annot, plain, thumb = _build_image_url("ZDB-PUB-051025-1", "ZDB-IMAGE-060130-333")
+    annot, plain, medium = _build_image_url("ZDB-PUB-051025-1", "ZDB-IMAGE-060130-333")
     base = "https://zfin.org/imageLoadUp/2005/ZDB-PUB-051025-1/ZDB-IMAGE-060130-333"
     assert annot == f"{base}_annot.jpg"
     assert plain == f"{base}.jpg"
-    assert thumb == f"{base}_thumb.jpg"
+    assert medium == f"{base}_medium.jpg"
 
 
 def test_s3_key_for_url_mirrors_zfin_path():
