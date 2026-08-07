@@ -182,7 +182,11 @@ def main() -> int:
     parser.add_argument("--region", default=DEFAULT_REGION)
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--limit", type=int, default=0, help="Process only the first N images")
-    parser.add_argument("--skip-annot", action="store_true", help="Mirror only plain .jpg")
+    parser.add_argument(
+        "--skip-annot",
+        action="store_true",
+        help="Skip the annotated variant (still mirrors plain .jpg + _medium.jpg)",
+    )
     parser.add_argument("--overwrite", action="store_true", help="Re-upload even if present")
     parser.add_argument("--dry-run", action="store_true", help="Download but do not upload")
     args = parser.parse_args()
