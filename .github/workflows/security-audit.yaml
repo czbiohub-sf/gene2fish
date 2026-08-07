@@ -22,8 +22,10 @@ jobs:
   python-audit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      # Third-party actions pinned to full commit SHAs (mutable tags can be
+      # repointed at malicious code); the trailing comment tracks the version.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
       - name: Export shipped (runtime) deps from the lockfile
         # Same export the runtime image uses (see Dockerfile) — audit exactly what ships.
         run: uv export --frozen --no-dev --no-emit-project -o requirements.txt
@@ -37,8 +39,8 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "20"
       - name: npm audit (fail on high + critical)
