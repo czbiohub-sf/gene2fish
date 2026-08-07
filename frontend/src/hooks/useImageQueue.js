@@ -3,7 +3,7 @@
 const queue = []; // [{setSrc, url}]
 let intervalId = null;
 
-// The grid now loads small thumbnails (~1KB) rather than full-res images
+// The grid loads ZFIN's medium variant (~15KB) rather than full-res images
 // (~377KB), so releasing them quickly no longer risks flooding the network or
 // the backend. Release a small batch per short tick so a comparison grid
 // populates almost immediately instead of trickling in at ~7 images/second.

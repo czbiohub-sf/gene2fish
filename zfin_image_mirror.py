@@ -58,14 +58,14 @@ USER_AGENT = "gene2fish image mirror (GEN-22)"
 ZFIN_HOST_PREFIX = "https://zfin.org/imageLoadUp/"
 
 
-def build_image_urls(pub_id: str, image_id: str) -> tuple[str, str]:
-    """Return (annotated_url, plain_url) — mirrors backend ``_build_image_url``."""
+def build_image_urls(pub_id: str, image_id: str) -> tuple[str, str, str]:
+    """Return (annotated_url, plain_url, medium_url) — mirrors backend ``_build_image_url``."""
     try:
         year = "20" + pub_id.split("-")[2][:2]
     except (IndexError, AttributeError):
         year = "2000"
     base = f"{ZFIN_HOST_PREFIX}{year}/{pub_id}/{image_id}"
-    return f"{base}_annot.jpg", f"{base}.jpg"
+    return f"{base}_annot.jpg", f"{base}.jpg", f"{base}_medium.jpg"
 
 
 def url_to_key(url: str, prefix: str) -> str:
@@ -182,7 +182,11 @@ def main() -> int:
     parser.add_argument("--region", default=DEFAULT_REGION)
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--limit", type=int, default=0, help="Process only the first N images")
-    parser.add_argument("--skip-annot", action="store_true", help="Mirror only plain .jpg")
+    parser.add_argument(
+        "--skip-annot",
+        action="store_true",
+        help="Skip the annotated variant (still mirrors plain .jpg + _medium.jpg)",
+    )
     parser.add_argument("--overwrite", action="store_true", help="Re-upload even if present")
     parser.add_argument("--dry-run", action="store_true", help="Download but do not upload")
     args = parser.parse_args()
@@ -194,18 +198,21 @@ def main() -> int:
         records = records[: args.limit]
     print(f"{len(records)} image records.")
 
-    # Build the (url, key) work list — plain always, annotated unless skipped.
+    # Build the (url, key) work list — plain + medium always, annotated unless
+    # skipped. The grid serves the medium variant (GEN-36), so mirroring it keeps
+    # the grid resilient to ZFIN outages just like the full-res lightbox image.
     tasks: list[tuple[str, str]] = []
     for r in records:
         image_id = r.get("image_id") or ""
         pub_id = (r.get("publication") or {}).get("publication_id") or ""
         if not image_id or not pub_id:
             continue
-        annot_url, plain_url = build_image_urls(pub_id, image_id)
+        annot_url, plain_url, medium_url = build_image_urls(pub_id, image_id)
         tasks.append((plain_url, url_to_key(plain_url, args.prefix)))
+        tasks.append((medium_url, url_to_key(medium_url, args.prefix)))
         if not args.skip_annot:
             tasks.append((annot_url, url_to_key(annot_url, args.prefix)))
-    print(f"{len(tasks)} image files to consider (plain + annotated).")
+    print(f"{len(tasks)} image files to consider (plain + medium + annotated).")
 
     config = Config(region_name=args.region, retries={"max_attempts": 5, "mode": "standard"})
     s3 = boto3.client("s3", config=config)

@@ -16,7 +16,7 @@ function image(gene, stage, index = 1) {
     image_id: id,
     image_url: `https://images.example.test/${id}.png`,
     image_url_fallback: `https://images.example.test/${id}-fallback.png`,
-    image_thumb_url: `https://images.example.test/${id}-thumb.png`,
+    image_medium_url: `https://images.example.test/${id}-medium.png`,
     gene_symbol: gene,
     gene_id: gene === "pax2a" ? "ZDB-GENE-040426-2596" : `ZDB-GENE-${gene}`,
     gene_name: gene === "pax2a" ? "paired box 2a" : `${gene} gene`,
@@ -438,7 +438,7 @@ test("exports only the expression table as a PNG", async ({ page }) => {
         ...img,
         image_url: `https://zfin.org/imageLoadUp/2005/ZDB-PUB-051025-1/${img.image_id}_annot.jpg`,
         image_url_fallback: `https://zfin.org/imageLoadUp/2005/ZDB-PUB-051025-1/${img.image_id}.jpg`,
-        image_thumb_url: `https://zfin.org/imageLoadUp/2005/ZDB-PUB-051025-1/${img.image_id}_thumb.jpg`,
+        image_medium_url: `https://zfin.org/imageLoadUp/2005/ZDB-PUB-051025-1/${img.image_id}_medium.jpg`,
       }));
     }
     await route.fulfill({ json: response });
@@ -750,8 +750,8 @@ test("shows a no-results message for a gene with no matching images", async ({ p
 });
 
 test("shows 'Image unavailable' with a ZFIN link when both image URLs 404", async ({ page }) => {
-  // Override the image host so the thumbnail AND fallback URLs both fail,
-  // exercising SingleCell's fallback (image_thumb_url -> image_url_fallback ->
+  // Override the image host so the medium AND fallback URLs both fail,
+  // exercising SingleCell's fallback (image_medium_url -> image_url_fallback ->
   // placeholder).
   await page.route("https://images.example.test/**", async (route) => {
     await route.fulfill({ status: 404 });
