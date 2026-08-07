@@ -19,7 +19,11 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["pytest", "httpx"]
+# The test suite exercises build-time code — the extractor imports pandas and
+# test_extractor_min_records builds pandas DataFrames — so dev includes the
+# build group. This keeps `uv run pytest` (dev group only) working without
+# pulling pandas/matplotlib back into the runtime dependencies.
+dev = ["pytest", "httpx", { include-group = "build" }]
 # Build-only deps: pandas drives the ZFIN extractor that bakes the data index at
 # image-build time; matplotlib powers the local plotting scripts in scripts/.
 # Neither is imported by the running app (data_loader reads JSON via the stdlib),

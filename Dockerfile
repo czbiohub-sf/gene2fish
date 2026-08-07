@@ -18,8 +18,10 @@ WORKDIR /app
 
 RUN pip install --no-cache-dir uv
 
-# Install only the build-only dependency group (pandas + its stack) from the
-# lock; the extractor imports pandas, the runtime app does not.
+# Install the build-only dependency group (pandas, matplotlib, pillow) from the
+# lock. Only pandas is needed here — the extractor imports it — but the whole
+# group is installed for simplicity; matplotlib/pillow (the plotting stack) are
+# harmless in this throwaway stage and never reach the runtime image.
 COPY pyproject.toml uv.lock ./
 RUN uv export --frozen --no-emit-project --only-group build -o build-requirements.txt \
     && uv pip install --system --no-cache -r build-requirements.txt

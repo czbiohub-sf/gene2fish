@@ -277,6 +277,9 @@ build = [
 ]
 dev = [
     { name = "httpx" },
+    { name = "matplotlib" },
+    { name = "pandas" },
+    { name = "pillow" },
     { name = "pytest" },
 ]
 
@@ -299,6 +302,9 @@ build = [
 ]
 dev = [
     { name = "httpx" },
+    { name = "matplotlib", specifier = ">=3.10.8" },
+    { name = "pandas", specifier = ">=3.0.2" },
+    { name = "pillow", specifier = ">=12.3.0" },
     { name = "pytest" },
 ]
 
