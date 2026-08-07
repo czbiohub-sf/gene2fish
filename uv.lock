@@ -264,15 +264,17 @@ dependencies = [
     { name = "click" },
     { name = "fastapi" },
     { name = "idna" },
-    { name = "matplotlib" },
-    { name = "pandas" },
-    { name = "pillow" },
     { name = "pydantic" },
     { name = "starlette" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
 [package.dev-dependencies]
+build = [
+    { name = "matplotlib" },
+    { name = "pandas" },
+    { name = "pillow" },
+]
 dev = [
     { name = "httpx" },
     { name = "pytest" },
@@ -284,15 +286,17 @@ requires-dist = [
     { name = "click", specifier = ">=8.3.3" },
     { name = "fastapi", specifier = ">=0.111.0" },
     { name = "idna", specifier = ">=3.15" },
-    { name = "matplotlib", specifier = ">=3.10.8" },
-    { name = "pandas", specifier = ">=3.0.2" },
-    { name = "pillow", specifier = ">=12.3.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "starlette", specifier = ">=1.3.1" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.29.0" },
 ]
 
 [package.metadata.requires-dev]
+build = [
+    { name = "matplotlib", specifier = ">=3.10.8" },
+    { name = "pandas", specifier = ">=3.0.2" },
+    { name = "pillow", specifier = ">=12.3.0" },
+]
 dev = [
     { name = "httpx" },
     { name = "pytest" },
