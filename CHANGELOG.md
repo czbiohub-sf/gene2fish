@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.3](https://github.com/czbiohub-sf/gene2fish/compare/v0.6.2...v0.6.3) (2026-08-07)
+
+
+### Bug Fixes
+
+* **images:** serve medium-res grid images instead of tiny thumbnails (GEN-36) ([#108](https://github.com/czbiohub-sf/gene2fish/issues/108)) ([7acaad8](https://github.com/czbiohub-sf/gene2fish/commit/7acaad8a3747854d2b8fd8f69c3e05a3b150b59f))
+
 ## [0.6.2](https://github.com/czbiohub-sf/gene2fish/compare/v0.6.1...v0.6.2) (2026-07-18)
 
 
