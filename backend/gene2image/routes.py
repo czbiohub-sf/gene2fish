@@ -298,21 +298,23 @@ def _filter_records(
 def _resolve_symbol(symbol: str, data: dict) -> tuple[str, str | None] | None:
     """Resolve a user-supplied gene symbol to the canonical symbol in the dataset.
 
-    Tries an exact match, then a case-insensitive match, then falls back to the
-    alias index so a previous/alias name (e.g. "oct4") resolves to the canonical
-    gene (e.g. "pou5f3"). Returns ``(canonical_symbol, matched_alias)`` where
-    ``matched_alias`` is the previous/alias name that matched (``None`` when the
-    gene was found by its current symbol), or ``None`` when the symbol does not
-    correspond to any gene in the dataset.
+    Tries an exact match, then a case-insensitive match (via the precomputed
+    lowercase index — O(1), no per-request linear scan; GEN-4), then falls back
+    to the alias index so a previous/alias name (e.g. "oct4") resolves to the
+    canonical gene (e.g. "pou5f3"). Returns ``(canonical_symbol, matched_alias)``
+    where ``matched_alias`` is the previous/alias name that matched (``None`` when
+    the gene was found by its current symbol), or ``None`` when the symbol does
+    not correspond to any gene in the dataset.
     """
     gene_index: dict[str, list[dict]] = data["gene_index"]
     if symbol in gene_index:
         return symbol, None
 
     symbol_lower = symbol.lower()
-    for key in gene_index:
-        if key.lower() == symbol_lower:
-            return key, None
+    symbol_lower_index: dict[str, str] = data.get("symbol_lower_index") or {}
+    canonical = symbol_lower_index.get(symbol_lower)
+    if canonical is not None:
+        return canonical, None
 
     alias_index: dict[str, list[tuple[str, str]]] = data.get("alias_index") or {}
     for canonical, display_alias in alias_index.get(symbol_lower, []):
