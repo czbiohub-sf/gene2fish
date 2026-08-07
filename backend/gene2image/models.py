@@ -32,7 +32,7 @@ class ImageRecord(BaseModel):
     image_id: str
     image_url: str
     image_url_fallback: str
-    image_thumb_url: str
+    image_medium_url: str
     gene_symbol: str
     gene_id: str | None = None
     gene_name: str | None = None
