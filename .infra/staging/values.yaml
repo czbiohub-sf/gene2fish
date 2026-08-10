@@ -3,7 +3,7 @@ stack:
   services:
     gene2fish:
       image:
-        tag: sha-dd9ce23
+        tag: sha-4b898b1
       ingress:
         rules:
           - host: gene2fish.apps-staging.czbiohub.org
