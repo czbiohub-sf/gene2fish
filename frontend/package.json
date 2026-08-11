@@ -15,7 +15,7 @@
   "dependencies": {
     "@fontsource/jetbrains-mono": "^5.0.0",
     "@sentry/react": "^10.70.0",
-    "react": "^18.3.0",
+    "react": "^19.2.8",
     "react-dom": "^18.3.0"
   },
   "devDependencies": {
