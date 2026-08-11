@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/czbiohub-sf/gene2fish/compare/v0.6.3...v0.7.0) (2026-08-11)
+
+
+### Features
+
+* **security:** batch limits, slim runtime image, security headers & CI hardening (GEN-4/5/6/7/8) ([#113](https://github.com/czbiohub-sf/gene2fish/issues/113)) ([70797f4](https://github.com/czbiohub-sf/gene2fish/commit/70797f44f4ce59247e58244e742452ec78394a40))
+
 ## [0.6.3](https://github.com/czbiohub-sf/gene2fish/compare/v0.6.2...v0.6.3) (2026-08-07)
 
 
