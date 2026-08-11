@@ -16,7 +16,7 @@
     "@fontsource/jetbrains-mono": "^5.0.0",
     "@sentry/react": "^10.70.0",
     "react": "^18.3.0",
-    "react-dom": "^18.3.0"
+    "react-dom": "^19.2.8"
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",
