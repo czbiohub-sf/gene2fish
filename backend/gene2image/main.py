@@ -6,12 +6,28 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import sentry_sdk
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .data_loader import load_data
 from .routes import router
+
+# Report unhandled exceptions to Sentry (GEN-37). The Starlette/FastAPI
+# integrations are enabled automatically because fastapi is installed, so
+# route errors arrive with request context attached. Gated on SENTRY_DSN,
+# which only the deployed image sets (see Dockerfile) — local dev servers and
+# pytest runs stay out of Sentry unless a developer exports it deliberately.
+_sentry_dsn = os.environ.get("SENTRY_DSN")
+if _sentry_dsn:
+    sentry_sdk.init(
+        dsn=_sentry_dsn,
+        # Include request headers and client IP on events. Sentry's default
+        # event scrubber still redacts sensitive keys (authorization, cookies,
+        # tokens), so prod's basic-auth header is filtered before upload.
+        send_default_pii=True,
+    )
 
 
 @asynccontextmanager

@@ -50,7 +50,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     GENE2IMAGE_FRONTEND_DIR=/app/frontend/dist \
     GENE2IMAGE_DATA_DIR=/data \
-    PORT=8000
+    PORT=8000 \
+    # Enables Sentry error reporting in main.py (GEN-37). A DSN only permits
+    # submitting events, so it is not a secret. Set here rather than in code so
+    # local dev/pytest never report; override to "" at deploy time to disable.
+    SENTRY_DSN=https://bf942a1926b7aa1ad6c094f5680c71e6@o4508060872409088.ingest.us.sentry.io/4511889801740288
 # The Thisse image index is copied from the data-build stage into /data, so
 # GENE2IMAGE_DATA_DIR has an in-image default and no runtime volume is needed.
 
