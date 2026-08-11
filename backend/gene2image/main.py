@@ -22,6 +22,54 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="gene2image API", lifespan=lifespan)
 
+# Content-Security-Policy tuned to the built SPA (GEN-6):
+#  - script-src allows 'self' (Vite's hashed module bundles), the Plausible
+#    analytics script, and 'unsafe-inline' — index.html ships a small inline
+#    Plausible bootstrap, so inline is permitted to avoid a CSP violation;
+#    tightening to a nonce/hash would require build-time CSP injection.
+#  - style-src allows inline styles (React style props / injected <style>).
+#  - img-src allows same-origin (images are served through /api/image-proxy),
+#    data: URIs, and https://zfin.org for any direct ZFIN hotlink.
+#  - font-src allows 'self' and data: — the JetBrains Mono webfonts are
+#    base64-inlined as data: URIs in the built CSS.
+#  - connect-src allows the same-origin API plus the Plausible event beacon.
+#  - frame-ancestors 'none' backs up X-Frame-Options: DENY (clickjacking).
+_CSP = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline' https://plausible.io; "
+    "style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data: https://zfin.org; "
+    "font-src 'self' data:; "
+    "connect-src 'self' https://plausible.io; "
+    "object-src 'none'; "
+    "base-uri 'self'; "
+    "form-action 'self'; "
+    "frame-ancestors 'none'"
+)
+
+_SECURITY_HEADERS = {
+    "Content-Security-Policy": _CSP,
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "X-Frame-Options": "DENY",
+}
+
+
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    """Attach baseline security headers to every response — API and static files.
+
+    Uses setdefault so a route that already sets one of these (e.g. the image
+    proxy sets X-Content-Type-Options) is not overwritten and no header is
+    duplicated. The deployed OIDC/nginx layer only injects a request header
+    (Authorization); it does not set these response headers, so there is no
+    conflict (GEN-6).
+    """
+    response = await call_next(request)
+    for header, value in _SECURITY_HEADERS.items():
+        response.headers.setdefault(header, value)
+    return response
+
 # The Vite dev server (:5173) calls the API cross-origin during local
 # development. Deployed containers serve the built frontend same-origin
 # (GENE2IMAGE_FRONTEND_DIR is set in the image), so these localhost origins are

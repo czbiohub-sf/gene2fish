@@ -11,9 +11,12 @@ instead of silently shipping an empty/partial index.
 """
 
 import re
+import tomllib
 from pathlib import Path
 
-DOCKERFILE = Path(__file__).resolve().parents[2] / "Dockerfile"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DOCKERFILE = REPO_ROOT / "Dockerfile"
+PYPROJECT = REPO_ROOT / "pyproject.toml"
 
 
 def _user_directives() -> list[str]:
@@ -44,3 +47,30 @@ def test_dockerfile_gates_baked_index_with_min_records():
     match = re.search(r"--min-records\s+(\d+)", text)
     assert match, "Dockerfile must run the extractor with --min-records to gate the build"
     assert int(match.group(1)) > 0, "the --min-records floor must be positive"
+
+
+def _pyproject() -> dict:
+    return tomllib.loads(PYPROJECT.read_text())
+
+
+def test_heavy_extractor_deps_are_build_only_not_runtime():
+    """pandas/matplotlib drive the build-time extractor and local plots, not the
+    running app, so they must live in the build-only group and never in runtime
+    dependencies — keeping them out of the shipped image (GEN-5)."""
+    cfg = _pyproject()
+    runtime = " ".join(cfg["project"]["dependencies"])
+    build_group = " ".join(cfg["dependency-groups"]["build"])
+    for pkg in ("pandas", "matplotlib"):
+        assert pkg not in runtime, f"{pkg} must not be a runtime dependency"
+        assert pkg in build_group, f"{pkg} must be declared in the build-only group"
+
+
+def test_runtime_stage_excludes_dev_and_build_groups():
+    """The runtime image installs deps with ``uv export --no-dev``, which drops
+    both the dev and build-only groups, so the heavy extractor libraries never
+    ship in the final image (GEN-5)."""
+    text = DOCKERFILE.read_text()
+    # The final stage bakes no data itself; it copies /data from a build stage.
+    assert "--from=data-build /data /data" in text
+    # Runtime deps are exported without dev/build groups.
+    assert re.search(r"uv export --frozen --no-dev --no-emit-project", text)

@@ -785,3 +785,58 @@ def test_gene_facets_count_each_gene_once_for_duplicate_symbols(tmp_path, monkey
         "stages": [{"begin_hours": 5.25, "image_count": 2}],
         "anatomy": {"hindbrain": 2},
     }
+
+
+def test_batch_rejects_gene_list_over_limit(client):
+    # >200 genes must be rejected at validation (422) before the handler runs
+    # any per-gene work, so a giant POST fails fast instead of burning CPU (GEN-4).
+    resp = client.post("/api/genes/batch", json={"genes": ["g"] * 201})
+    assert resp.status_code == 422
+
+
+def test_batch_accepts_gene_list_at_limit(client):
+    # Exactly 200 is allowed (boundary); empty data → every gene maps to [].
+    resp = client.post("/api/genes/batch", json={"genes": ["g"] * 200})
+    assert resp.status_code == 200
+
+
+def test_batch_rejects_n_images_out_of_range(client):
+    # n_images must be within [1, 10]; 0 and 11 both 422.
+    below = client.post("/api/genes/batch", json={"genes": ["g"], "n_images": 0})
+    above = client.post("/api/genes/batch", json={"genes": ["g"], "n_images": 11})
+    assert below.status_code == 422
+    assert above.status_code == 422
+
+
+def test_batch_accepts_n_images_at_bounds(client):
+    lo = client.post("/api/genes/batch", json={"genes": ["g"], "n_images": 1})
+    hi = client.post("/api/genes/batch", json={"genes": ["g"], "n_images": 10})
+    assert lo.status_code == 200
+    assert hi.status_code == 200
+
+
+def test_giant_batch_post_fails_fast_at_validation(client):
+    # A pathologically large gene list is rejected by request validation (422)
+    # rather than iterating 50k symbols through the resolve/filter pipeline —
+    # the CPU-exhaustion guard for /api/genes/batch (GEN-4).
+    resp = client.post("/api/genes/batch", json={"genes": ["g"] * 50000})
+    assert resp.status_code == 422
+
+
+def test_case_insensitive_lookup_resolves_without_linear_scan(tmp_path, monkeypatch):
+    # The lowercase index (GEN-4) must resolve a case-mismatched symbol to its
+    # canonical casing across all the resolve paths, replacing the removed
+    # per-request linear scan over every gene.
+    records = [{"gene": {"gene_symbol": "Pax2a", "gene_id": "ZDB-GENE-1"}}]
+    (tmp_path / "image_metadata.json").write_text(json.dumps(records))
+    monkeypatch.setenv("GENE2IMAGE_DATA_DIR", str(tmp_path))
+    from gene2image.main import app
+
+    with TestClient(app) as c:
+        assert c.get("/api/genes/PAX2A/resolve").json() == {
+            "symbol": "Pax2a", "matched_alias": None
+        }
+        batch = c.post("/api/genes/batch", json={"genes": ["pax2A"]}).json()
+        assert list(batch.keys()) == ["pax2A"]
+        # Unknown symbol still resolves to nothing (empty column), not an error.
+        assert c.get("/api/genes/nope/resolve").status_code == 404

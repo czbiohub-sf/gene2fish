@@ -32,9 +32,17 @@ jobs:
         uses: dependabot/fetch-metadata@v3
         with:
           github-token: ${{ steps.generate_token.outputs.token }}
-      - name: Approve a PR
+      - name: Approve and enable auto-merge for patch/minor updates
+        # Only patch and minor bumps are auto-approved and set to auto-merge.
+        # Major bumps can carry breaking changes, so they are left for a human
+        # to review and merge (GEN-8). update-type comes from the metadata step
+        # above and is one of version-update:semver-{patch,minor,major}.
+        if: >-
+          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+          steps.metadata.outputs.update-type == 'version-update:semver-minor'
         run: |
           gh pr review --approve "$PR_URL"
+          gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}

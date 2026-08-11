@@ -97,6 +97,14 @@ def load_data() -> dict:
     gene_list = sorted(gene_index.keys(), key=str.lower)
     anatomy_list = sorted(anatomy_set, key=str.lower)
 
+    # Lowercase → canonical symbol map for O(1) case-insensitive lookup, so
+    # _resolve_symbol never has to linearly scan every gene per request (GEN-4).
+    # setdefault keeps the first-inserted symbol on the (near-impossible) case
+    # collision, matching the previous linear scan's first-match behavior.
+    symbol_lower_index: dict[str, str] = {}
+    for symbol in gene_index:
+        symbol_lower_index.setdefault(symbol.lower(), symbol)
+
     # Map each stable gene ID present in the dataset to its canonical symbol,
     # then fold the alias sidecar in through that ID so older names resolve to
     # the symbol the rest of the app keys on.
@@ -121,6 +129,7 @@ def load_data() -> dict:
 
     return {
         "gene_index": gene_index,
+        "symbol_lower_index": symbol_lower_index,
         "gene_list": gene_list,
         "anatomy_list": anatomy_list,
         "populated_stage_hours": populated_stage_hours,

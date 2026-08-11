@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class HumanOrtholog(BaseModel):
@@ -77,11 +77,15 @@ class CanonicalStage(BaseModel):
 
 
 class BatchRequest(BaseModel):
-    genes: list[str]
+    # Bound the request so a giant POST is rejected at validation (422) before
+    # the handler does any per-gene work — the comparison grid never sends more
+    # than a handful of genes, so 200 is generous headroom, and n_images caps
+    # how many images per stage are returned (GEN-4).
+    genes: list[str] = Field(max_length=200)
     stage_min: float | None = None
     stage_max: float | None = None
     anatomy: str | None = None
-    n_images: int = 1
+    n_images: int = Field(default=1, ge=1, le=10)
 
 
 class GeneFacetsRequest(BaseModel):
