@@ -6,6 +6,10 @@ COPY frontend/package*.json ./
 RUN npm ci
 
 COPY frontend/ ./
+# Bakes Sentry error reporting into the bundle (GEN-37); local `npm run build`
+# leaves it unset, so only image builds produce a reporting bundle. A DSN only
+# permits submitting events, so it is not a secret.
+ENV VITE_SENTRY_DSN=https://ec8aed6d6e3a722cb856e77d2dabf976@o4508060872409088.ingest.us.sentry.io/4511892462567424
 RUN npm run build
 
 # Bake the Thisse image index in a dedicated build stage. The extractor needs
