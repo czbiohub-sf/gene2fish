@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.0](https://github.com/czbiohub-sf/gene2fish/compare/v0.7.0...v0.8.0) (2026-08-11)
+
+
+### Features
+
+* report backend errors to Sentry (GEN-37) ([#119](https://github.com/czbiohub-sf/gene2fish/issues/119)) ([d788c40](https://github.com/czbiohub-sf/gene2fish/commit/d788c40c45bed123b87ff67b3f4f71430b074aef))
+* report frontend errors to Sentry (GEN-37) ([#121](https://github.com/czbiohub-sf/gene2fish/issues/121)) ([6e0e475](https://github.com/czbiohub-sf/gene2fish/commit/6e0e475f397ddb2d1e0e74e98dce4ff6bb86b439))
+
 ## [0.7.0](https://github.com/czbiohub-sf/gene2fish/compare/v0.6.3...v0.7.0) (2026-08-11)
 
 
