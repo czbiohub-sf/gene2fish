@@ -47,6 +47,9 @@ def test_csp_supports_spa_and_zfin_images(client):
     # font-src must permit data: (verified against the real SPA in a browser).
     assert "font-src 'self' data:" in csp
     assert "https://plausible.io" in csp
+    # @sentry/react POSTs error envelopes to the ingest endpoint from the
+    # browser (GEN-37); connect-src must allow it or events are dropped.
+    assert "connect-src 'self' https://plausible.io https://o4508060872409088.ingest.us.sentry.io" in csp
     assert "frame-ancestors 'none'" in csp
 
 

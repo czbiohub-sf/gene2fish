@@ -48,7 +48,9 @@ app = FastAPI(title="gene2image API", lifespan=lifespan)
 #    data: URIs, and https://zfin.org for any direct ZFIN hotlink.
 #  - font-src allows 'self' and data: — the JetBrains Mono webfonts are
 #    base64-inlined as data: URIs in the built CSS.
-#  - connect-src allows the same-origin API plus the Plausible event beacon.
+#  - connect-src allows the same-origin API, the Plausible event beacon, and
+#    the Sentry ingest endpoint — @sentry/react POSTs error envelopes there
+#    from the browser (GEN-37); without it the CSP silently drops every event.
 #  - frame-ancestors 'none' backs up X-Frame-Options: DENY (clickjacking).
 _CSP = (
     "default-src 'self'; "
@@ -56,7 +58,8 @@ _CSP = (
     "style-src 'self' 'unsafe-inline'; "
     "img-src 'self' data: https://zfin.org; "
     "font-src 'self' data:; "
-    "connect-src 'self' https://plausible.io; "
+    "connect-src 'self' https://plausible.io "
+    "https://o4508060872409088.ingest.us.sentry.io; "
     "object-src 'none'; "
     "base-uri 'self'; "
     "form-action 'self'; "
