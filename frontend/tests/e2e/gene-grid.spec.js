@@ -369,6 +369,122 @@ test("lightbox links key metadata identifiers", async ({ page }) => {
   );
 });
 
+test("tracks intentional image views once with dynamic Plausible properties", async ({ page }) => {
+  await page.goto("/?genes=pax2a");
+  await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length);
+  await page.evaluate(() => {
+    window.__plausibleCalls = [];
+    window.plausible = (...args) => window.__plausibleCalls.push(args);
+  });
+
+  // Loading the grid under React StrictMode must not create image-view events.
+  expect(await page.evaluate(() => window.__plausibleCalls)).toEqual([]);
+
+  await page.locator('img[alt^="pax2a at"]').first().click();
+  await expect(page.locator(".lightbox-overlay")).toBeVisible();
+  expect(await page.evaluate(() => window.__plausibleCalls)).toEqual([
+    ["Image View", {
+      props: {
+        image_id: "ZDB-IMAGE-pax2a-5-25-1",
+        gene_symbol: "pax2a",
+        stage: "50%-epiboly",
+        publication_id: "ZDB-PUB-040907-1",
+      },
+    }],
+  ]);
+
+  await page.getByRole("button", { name: "Next image" }).click();
+  await expect(page.getByRole("link", { name: "ZDB-IMAGE-pax2a-10-33-1" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Previous image" }).click();
+  await expect(page.getByRole("link", { name: "ZDB-IMAGE-pax2a-5-25-1" })).toBeVisible();
+
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByRole("link", { name: "ZDB-IMAGE-pax2a-10-33-1" })).toBeVisible();
+
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByRole("link", { name: "ZDB-IMAGE-pax2a-16-1" })).toBeVisible();
+
+  await page.keyboard.press("ArrowLeft");
+  await expect(page.getByRole("link", { name: "ZDB-IMAGE-pax2a-10-33-1" })).toBeVisible();
+
+  const calls = await page.evaluate(() => window.__plausibleCalls);
+  expect(calls).toHaveLength(6);
+  expect(calls.map(([, options]) => options.props.image_id)).toEqual([
+    "ZDB-IMAGE-pax2a-5-25-1",
+    "ZDB-IMAGE-pax2a-10-33-1",
+    "ZDB-IMAGE-pax2a-5-25-1",
+    "ZDB-IMAGE-pax2a-10-33-1",
+    "ZDB-IMAGE-pax2a-16-1",
+    "ZDB-IMAGE-pax2a-10-33-1",
+  ]);
+
+  await page.locator(".lightbox-close").click();
+  await expect(page.locator(".lightbox-overlay")).toHaveCount(0);
+  expect(await page.evaluate(() => window.__plausibleCalls)).toHaveLength(6);
+});
+
+test("omits unavailable analytics properties and tolerates blocked Plausible", async ({ page }) => {
+  await page.route("**/api/genes/batch", async (route) => {
+    const body = route.request().postDataJSON();
+    await route.fulfill({
+      json: {
+        pax2a: imagesFor("pax2a", body.n_images || 1).map((img) => ({
+          ...img,
+          publication_id: null,
+        })),
+      },
+    });
+  });
+  await page.goto("/?genes=pax2a");
+  await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length);
+  await page.evaluate(() => {
+    window.__plausibleCalls = [];
+    window.plausible = (...args) => window.__plausibleCalls.push(args);
+  });
+
+  await page.locator('img[alt^="pax2a at"]').first().click();
+
+  const options = await page.evaluate(() => window.__plausibleCalls[0][1]);
+  expect(options.props).toEqual({
+    image_id: "ZDB-IMAGE-pax2a-5-25-1",
+    gene_symbol: "pax2a",
+    stage: "50%-epiboly",
+  });
+
+  await page.locator(".lightbox-close").click();
+  await page.evaluate(() => {
+    window.plausible = undefined;
+  });
+
+  // An analytics blocker must never prevent the lightbox from opening.
+  await page.locator('img[alt^="pax2a at"]').first().click();
+  await expect(page.locator(".lightbox-overlay")).toBeVisible();
+});
+
+test("does not track thumbnail loads, image fallbacks, or PNG exports", async ({ page }) => {
+  await page.goto("/?genes=pax2a");
+  await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length);
+  await page.evaluate(() => {
+    window.__plausibleCalls = [];
+    window.plausible = (...args) => window.__plausibleCalls.push(args);
+  });
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export table PNG" }).click();
+  await downloadPromise;
+  expect(await page.evaluate(() => window.__plausibleCalls)).toEqual([]);
+
+  await page.locator('img[alt^="pax2a at"]').first().click();
+  await expect(page.locator(".lightbox-overlay")).toBeVisible();
+  await page.locator(".lightbox-img").evaluate((img) => {
+    img.dispatchEvent(new Event("error"));
+    img.dispatchEvent(new Event("error"));
+  });
+
+  expect(await page.evaluate(() => window.__plausibleCalls)).toHaveLength(1);
+});
+
 test("lightbox shows anatomy terms with a ZFA id linked to ZFIN", async ({ page }) => {
   await page.goto("/?genes=evx1");
 

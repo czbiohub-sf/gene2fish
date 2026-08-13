@@ -3,6 +3,7 @@ import { ImageCell } from "./ImageCell.jsx";
 import { Lightbox } from "./Lightbox.jsx";
 import emptyStateIllustration from "../assets/empty-state-illustration.png";
 import { exportExpressionTablePng } from "../utils/exportExpressionTable.js";
+import { trackImageView } from "../utils/analytics.js";
 
 const EMPTY_STATE_EXAMPLES = [
   { label: "Example: shhb", type: "gene", value: "shhb" },
@@ -147,6 +148,17 @@ export function ExpressionGrid({ genes, data, onRemoveGene, onAddGene, onSetAnat
     }
   }
 
+  function openImageAt(index) {
+    const image = flatImages[index];
+    if (!image) return;
+
+    // Track only explicit opens/navigation. Keeping analytics here prevents
+    // thumbnail loads, image retries, exports, renders, and StrictMode remounts
+    // from being counted as image views.
+    trackImageView(image);
+    setLightboxIndex(index);
+  }
+
   const hasRows = rows.length > 0;
 
   return (
@@ -231,7 +243,7 @@ export function ExpressionGrid({ genes, data, onRemoveGene, onAddGene, onSetAnat
                           colMax={colMaxImages[symbol]}
                           onClick={(img) => {
                             const idx = flatImages.findIndex((x) => x.image_id === img.image_id);
-                            if (idx !== -1) setLightboxIndex(idx);
+                            if (idx !== -1) openImageAt(idx);
                           }}
                         />
                       );
@@ -262,8 +274,8 @@ export function ExpressionGrid({ genes, data, onRemoveGene, onAddGene, onSetAnat
         <Lightbox
           image={flatImages[lightboxIndex]}
           onClose={() => setLightboxIndex(null)}
-          onPrev={() => setLightboxIndex((i) => i - 1)}
-          onNext={() => setLightboxIndex((i) => i + 1)}
+          onPrev={() => openImageAt(lightboxIndex - 1)}
+          onNext={() => openImageAt(lightboxIndex + 1)}
           hasPrev={lightboxIndex > 0}
           hasNext={lightboxIndex < flatImages.length - 1}
         />
