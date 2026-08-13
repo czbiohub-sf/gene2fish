@@ -18,7 +18,7 @@ dependencies = [
     "boto3>=1.34.0",
     # Error reporting; the fastapi extra pulls in the Starlette/FastAPI
     # integrations so unhandled route exceptions arrive with request context (GEN-37)
-    "sentry-sdk[fastapi]>=2.0.0",
+    "sentry-sdk[fastapi]>=2.66.1",
 ]
 
 [dependency-groups]
