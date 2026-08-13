@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0](https://github.com/czbiohub-sf/gene2fish/compare/v0.8.0...v0.9.0) (2026-08-13)
+
+
+### Features
+
+* track per-image Plausible views (GEN-40) ([#126](https://github.com/czbiohub-sf/gene2fish/issues/126)) ([0973002](https://github.com/czbiohub-sf/gene2fish/commit/0973002cb0305e1f68246a602288ad84f0d26363))
+
 ## [0.8.0](https://github.com/czbiohub-sf/gene2fish/compare/v0.7.0...v0.8.0) (2026-08-11)
 
 
