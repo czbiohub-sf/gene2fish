@@ -166,6 +166,43 @@ Useful flags: `--workers N` (concurrency), `--overwrite` (re-upload existing),
 4. Use the stage range slider to narrow the timepoint view
 5. Use the anatomy gene search to find additional genes expressed in a specific structure; selected genes are added as new columns without filtering images already open in the grid
 
+## Per-image analytics
+
+Gene2Fish records an `Image View` custom event in Plausible when a visitor
+intentionally opens a full-size image or navigates to the previous/next image in
+the lightbox. Automatically loaded grid thumbnails, image retries, preloads, and
+PNG exports are not counted.
+
+Each event contains these custom properties:
+
+| Property | Description |
+| --- | --- |
+| `image_id` | Stable ZFIN image identifier and primary reporting dimension |
+| `gene_symbol` | Gene associated with the image |
+| `stage` | Display label for the developmental stage |
+| `publication_id` | ZFIN publication identifier, when available |
+
+The Plausible site for `gene2fish.apps.czbiohub.org` must have an unrestricted
+custom event goal named exactly `Image View` and the four properties above
+enabled under **Settings → Custom properties**. Do not add fixed property values
+to the goal: values such as the image ID and gene symbol are supplied dynamically
+by each event.
+
+To report image usage, select the desired date range in Plausible, choose the
+`Image View` goal, open **Properties**, and select `image_id`. **Total** (or
+**Events** in the Stats API) is the number of intentional image opens;
+**Uniques** (or **Visitors**) is the number of distinct visitors who opened the
+image. The same report can be grouped or filtered by gene, stage, or publication.
+Use the dashboard's top-chart menu and **Export stats** to download the selected
+period as CSV for sharing with ZFIN.
+
+Tracking starts with the production deployment containing this feature. Existing
+pageviews cannot be backfilled or broken down by image. See the Plausible
+[custom event](https://plausible.io/docs/custom-event-goals),
+[custom property](https://plausible.io/docs/custom-props/props-dashboard), and
+[stats export](https://plausible.io/docs/export-stats) documentation for more
+details.
+
 ## Rate limiting
 
 gene2image loads images directly from ZFIN's image server (hotlinking). To avoid
