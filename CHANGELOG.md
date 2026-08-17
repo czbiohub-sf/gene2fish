@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.0](https://github.com/czbiohub-sf/gene2fish/compare/v0.9.0...v0.10.0) (2026-08-17)
+
+
+### Features
+
+* add clear controls to reset comparison filters (GEN-26) ([#129](https://github.com/czbiohub-sf/gene2fish/issues/129)) ([feb2768](https://github.com/czbiohub-sf/gene2fish/commit/feb2768a30df6044164270510843dfa8b69339a0))
+* sort enabled anatomy options above disabled ones (GEN-23) ([#131](https://github.com/czbiohub-sf/gene2fish/issues/131)) ([742dfe2](https://github.com/czbiohub-sf/gene2fish/commit/742dfe26de6e8a230c285548d30a0869153b50b8))
+
 ## [0.9.0](https://github.com/czbiohub-sf/gene2fish/compare/v0.8.0...v0.9.0) (2026-08-13)
 
 
