@@ -1159,6 +1159,36 @@ test("with no genes in the comparison every anatomy option stays enabled", async
   await expect(dropdown.locator(".autocomplete-count")).toHaveCount(0);
 });
 
+test("anatomy dropdown lists enabled options above disabled ones, each group alphabetical", async ({ page }) => {
+  // Only hindbrain and pronephros have images for the gene in the grid; the
+  // rest are disabled and must sink below the enabled group.
+  await page.route("**/api/genes/facets", async (route) => {
+    await route.fulfill({
+      json: {
+        stages: stages.map((s) => ({ begin_hours: s.begin_hours, image_count: 5 })),
+        anatomy: { hindbrain: 7, pronephros: 2 },
+      },
+    });
+  });
+
+  await page.goto("/?genes=pacsin2");
+  await expect(page.getByRole("columnheader").filter({ hasText: "pacsin2" })).toBeVisible();
+
+  await page.getByPlaceholder("e.g. hindbrain").click();
+  const items = page.locator(".anatomy-filter .autocomplete-dropdown .autocomplete-item-label");
+  await expect(items).toHaveText([
+    "hindbrain",
+    "pronephros",
+    "heart",
+    "liver primordium",
+    "optic tectum neuropil region",
+  ]);
+
+  // Typing filters both groups but keeps the enabled-first segmentation.
+  await page.getByPlaceholder("e.g. hindbrain").fill("pr");
+  await expect(items).toHaveText(["pronephros", "liver primordium"]);
+});
+
 test("clear-all button resets stage and anatomy filters and their URL params without a reload", async ({ page }) => {
   await page.goto("/?genes=pax2a&stage_min=10.33&stage_max=19&anatomy=hindbrain");
 

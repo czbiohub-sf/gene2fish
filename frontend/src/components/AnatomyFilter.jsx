@@ -56,6 +56,17 @@ export function AnatomyFilter({ value, onChange, anatomyFacets }) {
     )
   );
 
+  // Enabled options surface above disabled ones so users don't scan past
+  // unusable terms. Both groups stay alphabetical — the API's order, restated
+  // here because the segmentation would otherwise interleave them again.
+  const orderedSuggestions = availableSuggestions
+    .map((term) => ({ term, ...anatomyOptionState(term, anatomyFacets) }))
+    .sort(
+      (a, b) =>
+        (a.disabled ? 1 : 0) - (b.disabled ? 1 : 0)
+        || a.term.toLowerCase().localeCompare(b.term.toLowerCase())
+    );
+
   // Sync external changes from URL/examples while avoiding a redundant autocomplete fetch.
   useEffect(() => {
     const nextValue = selectedTermsKey;
@@ -164,25 +175,22 @@ export function AnatomyFilter({ value, onChange, anatomyFacets }) {
           </button>
           {isOpen && availableSuggestions.length > 0 && (
             <div id="anatomy-options" className="autocomplete-dropdown" role="listbox">
-              {availableSuggestions.map((s) => {
-                const { disabled, count } = anatomyOptionState(s, anatomyFacets);
-                return (
-                  <div
-                    key={s}
-                    className={`autocomplete-item${disabled ? " disabled" : ""}`}
-                    title={disabled ? NO_IMAGES_HINT : s}
-                    role="option"
-                    aria-selected="false"
-                    aria-disabled={disabled || undefined}
-                    onMouseDown={disabled ? undefined : () => select(s)}
-                  >
-                    <span className="autocomplete-item-label">{s}</span>
-                    {count != null && count > 0 && (
-                      <span className="autocomplete-count">{count}</span>
-                    )}
-                  </div>
-                );
-              })}
+              {orderedSuggestions.map(({ term, disabled, count }) => (
+                <div
+                  key={term}
+                  className={`autocomplete-item${disabled ? " disabled" : ""}`}
+                  title={disabled ? NO_IMAGES_HINT : term}
+                  role="option"
+                  aria-selected="false"
+                  aria-disabled={disabled || undefined}
+                  onMouseDown={disabled ? undefined : () => select(term)}
+                >
+                  <span className="autocomplete-item-label">{term}</span>
+                  {count != null && count > 0 && (
+                    <span className="autocomplete-count">{count}</span>
+                  )}
+                </div>
+              ))}
             </div>
           )}
           {(inputVal || selectedTerms.length > 0) && (
