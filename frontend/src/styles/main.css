@@ -233,6 +233,24 @@ select {
   align-items: end;
 }
 
+.filters-clear-all {
+  display: block;
+  margin: 10px 0 0 auto;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.filters-clear-all:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
 .request-status {
   position: absolute;
   top: 8px;

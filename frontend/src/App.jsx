@@ -54,6 +54,12 @@ export default function App() {
     [setUrlState]
   );
 
+  const clearFilters = useCallback(() => {
+    setUrlState((s) => ({ ...s, stageMin: null, stageMax: null, anatomy: [] }));
+  }, [setUrlState]);
+
+  const hasActiveFilters = stageMin != null || stageMax != null || anatomy.length > 0;
+
   const setNImages = useCallback(
     (n) => {
       setUrlState((s) => ({ ...s, nImages: n }));
@@ -116,6 +122,16 @@ export default function App() {
                 anatomyFacets={facets?.anatomy ?? null}
               />
             </div>
+            {hasActiveFilters && (
+              <button
+                type="button"
+                className="filters-clear-all"
+                title="Clear all filters"
+                onClick={clearFilters}
+              >
+                Clear all filters
+              </button>
+            )}
           </section>
         </div>
       </section>
