@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections import defaultdict
 from typing import NoReturn
 from urllib.error import HTTPError, URLError
@@ -85,26 +86,55 @@ class _NoRedirectHandler(HTTPRedirectHandler):
 install_opener(build_opener(_NoRedirectHandler))
 
 
+# ZFIN's image host fails intermittently (connection resets, timeouts,
+# sporadic 5xx) even when it is otherwise up, which showed as randomly missing
+# images in the grid (GEN-46). Those blips are short-lived, so a couple of
+# quick same-request retries turn most of them into a served image. 4xx
+# responses are definitive (e.g. a genuinely missing _annot.jpg variant) and
+# are never retried, so the caller's plain-variant fallback still gets a
+# single fast 404.
+_ZFIN_FETCH_ATTEMPTS = 3
+_ZFIN_FETCH_RETRY_DELAY_SECONDS = 0.3
+
+
 def _fetch_zfin_image(url: str) -> tuple[bytes, str]:
     _validate_zfin_image_url(url)
     request = UrlRequest(url, headers={"User-Agent": "gene2fish image export"})
-    try:
-        with urlopen(request, timeout=15) as resp:
-            media_type = resp.headers.get_content_type() or "image/jpeg"
-            if not media_type.startswith("image/"):
-                # The proxy only serves images. Refuse anything else so a
-                # non-image (e.g. text/html) upstream response can't be rendered
-                # as a document on our own origin (stored/reflected XSS).
+    last_err: Exception | None = None
+    for attempt in range(_ZFIN_FETCH_ATTEMPTS):
+        if attempt:
+            # Sync route → FastAPI runs this in a worker thread, so a short
+            # blocking sleep between attempts doesn't stall the event loop.
+            time.sleep(_ZFIN_FETCH_RETRY_DELAY_SECONDS)
+        try:
+            with urlopen(request, timeout=15) as resp:
+                media_type = resp.headers.get_content_type() or "image/jpeg"
+                if not media_type.startswith("image/"):
+                    # The proxy only serves images. Refuse anything else so a
+                    # non-image (e.g. text/html) upstream response can't be rendered
+                    # as a document on our own origin (stored/reflected XSS).
+                    raise HTTPException(
+                        status_code=502, detail="ZFIN returned non-image content"
+                    )
+                return resp.read(), media_type
+        except HTTPError as err:
+            if err.code < 500:
                 raise HTTPException(
-                    status_code=502, detail="ZFIN returned non-image content"
-                )
-            return resp.read(), media_type
-    except HTTPError as err:
-        raise HTTPException(status_code=err.code, detail="ZFIN image not found") from err
-    except URLError as err:
-        raise HTTPException(status_code=502, detail="Unable to fetch ZFIN image") from err
-    except TimeoutError as err:
-        raise HTTPException(status_code=502, detail="Unable to fetch ZFIN image") from err
+                    status_code=err.code, detail="ZFIN image not found"
+                ) from err
+            last_err = err
+        except (URLError, TimeoutError) as err:
+            last_err = err
+    if isinstance(last_err, HTTPError):
+        # Exhausted retries on a persistent 5xx — an upstream outage, not a
+        # missing image, so the detail must not read like a 404.
+        raise HTTPException(
+            status_code=last_err.code,
+            detail="ZFIN image temporarily unavailable (upstream error)",
+        ) from last_err
+    raise HTTPException(
+        status_code=502, detail="Unable to fetch ZFIN image"
+    ) from last_err
 
 
 def _plain_image_variant(url: str) -> str | None:

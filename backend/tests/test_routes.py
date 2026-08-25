@@ -180,6 +180,8 @@ def test_image_proxy_does_not_follow_redirects(client, monkeypatch):
 def test_image_proxy_returns_502_when_fetch_fails(client, monkeypatch):
     from gene2image import routes
 
+    monkeypatch.setattr(routes.time, "sleep", lambda seconds: None)
+
     def fake_urlopen(request, timeout):
         raise URLError("certificate verify failed")
 
@@ -191,6 +193,108 @@ def test_image_proxy_returns_502_when_fetch_fails(client, monkeypatch):
     )
 
     assert resp.status_code == 502
+
+
+class _FakeImageResponse:
+    class _Headers:
+        def get_content_type(self):
+            return "image/jpeg"
+
+    headers = _Headers()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def read(self):
+        return b"image-bytes"
+
+
+def test_image_proxy_retries_transient_failures(client, monkeypatch):
+    # ZFIN fails intermittently (resets/timeouts/sporadic 5xx) even when it is
+    # otherwise up; a transient failure must be retried and served, not
+    # surfaced as a broken image (GEN-46).
+    from gene2image import routes
+
+    monkeypatch.setattr(routes.time, "sleep", lambda seconds: None)
+
+    calls = {"n": 0}
+
+    def flaky_urlopen(request, timeout):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise URLError("connection reset by peer")
+        if calls["n"] == 2:
+            raise HTTPError(request.full_url, 503, "Service Unavailable", None, None)
+        return _FakeImageResponse()
+
+    monkeypatch.setattr(routes, "urlopen", flaky_urlopen)
+
+    resp = client.get(
+        "/api/image-proxy",
+        params={"url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"},
+    )
+
+    assert resp.status_code == 200
+    assert resp.content == b"image-bytes"
+    assert calls["n"] == 3
+
+
+def test_image_proxy_persistent_5xx_reports_upstream_error(client, monkeypatch):
+    # A 5xx that survives every retry is an upstream outage, not a missing
+    # image — the status code passes through but the detail must not read
+    # like a 404.
+    from gene2image import routes
+
+    monkeypatch.setattr(routes.time, "sleep", lambda seconds: None)
+
+    calls = {"n": 0}
+
+    def unavailable_urlopen(request, timeout):
+        calls["n"] += 1
+        raise HTTPError(request.full_url, 503, "Service Unavailable", None, None)
+
+    monkeypatch.setattr(routes, "urlopen", unavailable_urlopen)
+
+    resp = client.get(
+        "/api/image-proxy",
+        params={"url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"},
+    )
+
+    assert resp.status_code == 503
+    assert "temporarily unavailable" in resp.json()["detail"]
+    assert calls["n"] == 3
+
+
+def test_image_proxy_does_not_retry_4xx(client, monkeypatch):
+    # 4xx is definitive (e.g. a genuinely missing _annot.jpg variant) — the
+    # proxy must fail fast so the plain-variant fallback isn't delayed by
+    # pointless retries. The endpoint's annot→plain fallback means exactly two
+    # fetches happen (one per URL), never more.
+    from gene2image import routes
+
+    monkeypatch.setattr(routes.time, "sleep", lambda seconds: None)
+
+    urls = []
+
+    def notfound_urlopen(request, timeout):
+        urls.append(request.full_url)
+        raise HTTPError(request.full_url, 404, "Not Found", None, None)
+
+    monkeypatch.setattr(routes, "urlopen", notfound_urlopen)
+
+    resp = client.get(
+        "/api/image-proxy",
+        params={"url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1_annot.jpg"},
+    )
+
+    assert resp.status_code == 404
+    assert urls == [
+        "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1_annot.jpg",
+        "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg",
+    ]
 
 
 def test_image_proxy_serves_from_s3_when_mirrored(client, monkeypatch):

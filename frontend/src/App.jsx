@@ -79,9 +79,6 @@ export default function App() {
             <a href="https://github.com/czbiohub-sf/gene2fish#readme" target="_blank" rel="noopener noreferrer">
               About
             </a>
-            <a href="https://zebrahub.sf.czbiohub.org/" target="_blank" rel="noopener noreferrer">
-              ZebraHub <span aria-hidden="true">↗</span>
-            </a>
             <button
               className="theme-toggle"
               type="button"

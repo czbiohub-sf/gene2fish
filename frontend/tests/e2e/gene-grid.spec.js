@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { readFile } from "node:fs/promises";
+import { createServer } from "node:http";
 
 const stages = [
   { stage_name: "Gastrula:50%-epiboly", begin_hours: 5.25, display_label: "50%-epiboly" },
@@ -203,13 +204,53 @@ test.beforeEach(async ({ page }) => {
   await mockApi(page);
 });
 
-test("primary nav links to ZebraHub", async ({ page }) => {
+test("primary nav has no ZebraHub link and the theme toggle works", async ({ page }) => {
+  // Gene2Fish is embedded inside ZebraHub for the public launch (GEN-46), so
+  // the header must not duplicate ZebraHub navigation — but About and the
+  // theme toggle stay.
   await page.goto("/");
 
-  await expect(page.getByRole("link", { name: /ZebraHub/ })).toHaveAttribute(
-    "href",
-    "https://zebrahub.sf.czbiohub.org/"
-  );
+  await expect(page.getByRole("link", { name: "About" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /ZebraHub/ })).toHaveCount(0);
+
+  const root = page.locator(".app-root");
+  await expect(root).toHaveAttribute("data-theme", "light");
+  await page.getByRole("button", { name: "Toggle theme" }).click();
+  await expect(root).toHaveAttribute("data-theme", "dark");
+  await page.getByRole("button", { name: "Toggle theme" }).click();
+  await expect(root).toHaveAttribute("data-theme", "light");
+});
+
+test("renders and stays interactive inside a ZebraHub-style iframe embed", async ({ page }) => {
+  // Gene2Fish ships embedded in an iframe inside ZebraHub (GEN-46). Serve a
+  // host page on another origin that embeds the app and check the grid
+  // renders and responds to interaction inside the frame. The host must be a
+  // real loopback server (not a route.fulfill of a fake domain): Chrome's
+  // Local Network Access checks refuse to let a public-address-space page
+  // frame 127.0.0.1, and a Playwright-fulfilled response counts as public.
+  const server = createServer((req, res) => {
+    res.setHeader("Content-Type", "text/html");
+    res.end(`<!doctype html><html><body>
+      <nav>ZebraHub navigation</nav>
+      <iframe id="gene2fish" src="http://127.0.0.1:5173/?genes=pax2a"
+        style="width: 1100px; height: 800px; border: 0;"></iframe>
+    </body></html>`);
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+
+  try {
+    await page.goto(`http://127.0.0.1:${server.address().port}/zebrahub/`);
+    const app = page.frameLocator("#gene2fish");
+
+    await expect(app.getByRole("columnheader").filter({ hasText: "pax2a" })).toBeVisible();
+    await expect(app.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length);
+
+    // Interaction still works inside the frame: bump images-per-cell.
+    await app.getByRole("button", { name: "3", exact: true }).click();
+    await expect(app.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length * 3);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
 });
 
 test("changing images per cell keeps queued image cells loading and clickable", async ({ page }) => {

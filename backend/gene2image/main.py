@@ -25,7 +25,7 @@ if _sentry_dsn:
         dsn=_sentry_dsn,
         # Include request headers and client IP on events. Sentry's default
         # event scrubber still redacts sensitive keys (authorization, cookies,
-        # tokens), so prod's basic-auth header is filtered before upload.
+        # tokens) before upload.
         send_default_pii=True,
     )
 
@@ -51,7 +51,12 @@ app = FastAPI(title="gene2image API", lifespan=lifespan)
 #  - connect-src allows the same-origin API, the Plausible event beacon, and
 #    the Sentry ingest endpoint — @sentry/react POSTs error envelopes there
 #    from the browser (GEN-37); without it the CSP silently drops every event.
-#  - frame-ancestors 'none' backs up X-Frame-Options: DENY (clickjacking).
+#  - frame-ancestors allows Biohub-controlled sites: Gene2Fish is embedded in
+#    an iframe inside ZebraHub (zebrahub.sf.czbiohub.org) for the public
+#    launch (GEN-46). Anything outside *.czbiohub.org is still refused
+#    (clickjacking). X-Frame-Options is deliberately NOT sent: it cannot
+#    express an allowlist, and every browser that supports frame-ancestors
+#    ignores X-Frame-Options when both are present.
 _CSP = (
     "default-src 'self'; "
     "script-src 'self' 'unsafe-inline' https://plausible.io; "
@@ -63,14 +68,13 @@ _CSP = (
     "object-src 'none'; "
     "base-uri 'self'; "
     "form-action 'self'; "
-    "frame-ancestors 'none'"
+    "frame-ancestors 'self' https://*.czbiohub.org"
 )
 
 _SECURITY_HEADERS = {
     "Content-Security-Policy": _CSP,
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "strict-origin-when-cross-origin",
-    "X-Frame-Options": "DENY",
 }
 
 
@@ -80,9 +84,8 @@ async def add_security_headers(request, call_next):
 
     Uses setdefault so a route that already sets one of these (e.g. the image
     proxy sets X-Content-Type-Options) is not overwritten and no header is
-    duplicated. The deployed OIDC/nginx layer only injects a request header
-    (Authorization); it does not set these response headers, so there is no
-    conflict (GEN-6).
+    duplicated. The deployed nginx/ingress layer does not set these response
+    headers, so there is no conflict (GEN-6).
     """
     response = await call_next(request)
     for header, value in _SECURITY_HEADERS.items():
