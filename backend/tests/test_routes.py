@@ -242,6 +242,32 @@ def test_image_proxy_retries_transient_failures(client, monkeypatch):
     assert calls["n"] == 3
 
 
+def test_image_proxy_persistent_5xx_reports_upstream_error(client, monkeypatch):
+    # A 5xx that survives every retry is an upstream outage, not a missing
+    # image — the status code passes through but the detail must not read
+    # like a 404.
+    from gene2image import routes
+
+    monkeypatch.setattr(routes.time, "sleep", lambda seconds: None)
+
+    calls = {"n": 0}
+
+    def unavailable_urlopen(request, timeout):
+        calls["n"] += 1
+        raise HTTPError(request.full_url, 503, "Service Unavailable", None, None)
+
+    monkeypatch.setattr(routes, "urlopen", unavailable_urlopen)
+
+    resp = client.get(
+        "/api/image-proxy",
+        params={"url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"},
+    )
+
+    assert resp.status_code == 503
+    assert "temporarily unavailable" in resp.json()["detail"]
+    assert calls["n"] == 3
+
+
 def test_image_proxy_does_not_retry_4xx(client, monkeypatch):
     # 4xx is definitive (e.g. a genuinely missing _annot.jpg variant) — the
     # proxy must fail fast so the plain-variant fallback isn't delayed by

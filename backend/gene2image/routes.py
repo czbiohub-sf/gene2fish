@@ -126,8 +126,11 @@ def _fetch_zfin_image(url: str) -> tuple[bytes, str]:
         except (URLError, TimeoutError) as err:
             last_err = err
     if isinstance(last_err, HTTPError):
+        # Exhausted retries on a persistent 5xx — an upstream outage, not a
+        # missing image, so the detail must not read like a 404.
         raise HTTPException(
-            status_code=last_err.code, detail="ZFIN image not found"
+            status_code=last_err.code,
+            detail="ZFIN image temporarily unavailable (upstream error)",
         ) from last_err
     raise HTTPException(
         status_code=502, detail="Unable to fetch ZFIN image"
