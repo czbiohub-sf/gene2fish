@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.0](https://github.com/czbiohub-sf/gene2fish/compare/v0.10.0...v0.11.0) (2026-08-25)
+
+
+### Features
+
+* prepare Gene2Fish for public ZebraHub embed launch (GEN-46) ([#132](https://github.com/czbiohub-sf/gene2fish/issues/132)) ([581c569](https://github.com/czbiohub-sf/gene2fish/commit/581c569a776dfd4cd097f7c6904765be41ed071e))
+
 ## [0.10.0](https://github.com/czbiohub-sf/gene2fish/compare/v0.9.0...v0.10.0) (2026-08-17)
 
 
