@@ -4,6 +4,26 @@ stack:
     gene2fish:
       image:
         tag: sha-5275ec1
+      # Serve mirrored ZFIN images from the CZI-managed private bucket (GEN-45).
+      # Staging shares the -dev bucket with rdev (immutable image cache, one
+      # seed serves both). The IRSA role trusts exactly serviceaccount
+      # argus-gene2fish-staging:gene2fish (sfbiohub-infra
+      # terraform/accounts/biohub-nonprod/gene2fish-staging.tf), so the SA name
+      # here must stay in sync with that trust policy. Safe before the bucket
+      # is seeded: the image proxy falls back to live zfin.org on any S3 miss.
+      serviceAccount:
+        create: true
+        automount: true
+        name: gene2fish
+        annotations:
+          "eks.amazonaws.com/role-arn": arn:aws:iam::911167894392:role/gene2fish-staging
+      env:
+        - name: GENE2IMAGE_IMAGE_S3_BUCKET
+          value: "gene2fish-zfin-images-dev"
+        - name: GENE2IMAGE_IMAGE_S3_PREFIX
+          value: "gene2fish/zfin-images"
+        - name: GENE2IMAGE_IMAGE_S3_REGION
+          value: "us-west-2"
       ingress:
         rules:
           - host: gene2fish.apps-staging.czbiohub.org
