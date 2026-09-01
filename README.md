@@ -7,6 +7,10 @@ temporary ZFIN outages, images are served through the backend `/api/image-proxy`
 endpoint, which reads them from our own S3 mirror and falls back to fetching live
 from ZFIN when an object isn't mirrored. See [Image mirror](#image-mirror).
 
+## Ownership
+
+gene2fish is owned by the [Software Engineering team](https://github.com/orgs/czbiohub-sf/teams/software-engineering) at CZ Biohub SF and maintained by [@NetoRutes](https://github.com/NetoRutes). Pull requests are routed to the maintainer automatically through [`.github/CODEOWNERS`](.github/CODEOWNERS). For questions, bug reports, or access to the deployed app, open an issue in this repo or reach out to the Software Engineering team.
+
 ## Data
 
 > **Using Docker?** You can skip this section. The Docker image bakes the
@@ -238,3 +242,12 @@ cd frontend && npm audit --audit-level=high
 
 Images from ZFIN (zfin.org). Thisse et al. in situ hybridization data.
 Licensed under CC BY 4.0. Attribution: Thisse, B., Thisse, C. et al.
+
+## License
+
+The code in this repository is licensed under the [MIT License](LICENSE),
+copyright CZ Biohub SF, LLC.
+
+That license covers the code only. The ZFIN in situ hybridization images the app
+displays stay under CC BY 4.0 and belong to ZFIN, as described in
+[Attribution](#attribution) above.
