@@ -9,7 +9,7 @@ from ZFIN when an object isn't mirrored. See [Image mirror](#image-mirror).
 
 ## Ownership
 
-gene2fish is owned and maintained by the [Software Engineering team](https://github.com/orgs/czbiohub-sf/teams/software-engineering) at CZ Biohub SF. Pull requests are routed to that team automatically through [`.github/CODEOWNERS`](.github/CODEOWNERS). For questions, bug reports, or access to the deployed app, open an issue in this repo or reach out to the Software Engineering team.
+gene2fish is owned by the [Software Engineering team](https://github.com/orgs/czbiohub-sf/teams/software-engineering) at CZ Biohub SF and maintained by [@NetoRutes](https://github.com/NetoRutes). Pull requests are routed to the maintainer automatically through [`.github/CODEOWNERS`](.github/CODEOWNERS). For questions, bug reports, or access to the deployed app, open an issue in this repo or reach out to the Software Engineering team.
 
 ## Data
 
@@ -245,7 +245,7 @@ Licensed under CC BY 4.0. Attribution: Thisse, B., Thisse, C. et al.
 
 ## License
 
-The code in this repository is licensed under the [BSD 3-Clause License](LICENSE),
+The code in this repository is licensed under the [MIT License](LICENSE),
 copyright CZ Biohub SF, LLC.
 
 That license covers the code only. The ZFIN in situ hybridization images the app

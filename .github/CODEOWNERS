@@ -1,5 +1,5 @@
 # Default owners for everything in this repo.
 #
-# Every team or user listed here must have at least write access to the
+# Every user or team listed here must have at least write access to the
 # repository, otherwise GitHub will not request their review.
-*       @czbiohub-sf/software-engineering
+*       @NetoRutes
