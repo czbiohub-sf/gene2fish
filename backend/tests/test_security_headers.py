@@ -4,7 +4,7 @@ The middleware in ``gene2image.main`` adds Content-Security-Policy,
 X-Content-Type-Options and Referrer-Policy to both API and static-file
 responses. These tests pin that contract and the CSP shape the SPA needs
 (Vite bundles, inline analytics bootstrap, ZFIN images, the ZebraHub iframe
-embed, and temporary Biohub-owned Vercel preview embeds during DNS cutovers).
+embed, and temporary Vercel preview embeds during DNS cutovers).
 """
 
 import importlib
@@ -50,20 +50,19 @@ def test_csp_supports_spa_and_zfin_images(client):
     # @sentry/react POSTs error envelopes to the ingest endpoint from the
     # browser (GEN-37); connect-src must allow it or events are dropped.
     assert "connect-src 'self' https://plausible.io https://o4508060872409088.ingest.us.sentry.io" in csp
-    assert "frame-ancestors 'self' https://*.czbiohub.org https://*-czbiohub.vercel.app" in csp
-    assert "https://*.vercel.app" not in csp
+    assert "frame-ancestors 'self' https://*.czbiohub.org https://*.vercel.app" in csp
+    assert "https://*-czbiohub.vercel.app" not in csp
 
 
 def test_embeddable_in_zebrahub_but_not_elsewhere(client):
     # Gene2Fish is embedded in an iframe inside ZebraHub for the public launch
-    # (GEN-46): frame-ancestors must allow Biohub origins and Biohub-owned
-    # Vercel previews only, and X-Frame-Options must be absent — DENY would be
-    # honored by browsers that predate frame-ancestors and it cannot express an
-    # allowlist.
+    # (GEN-46): frame-ancestors must allow Biohub origins and temporary Vercel
+    # previews, and X-Frame-Options must be absent — DENY would be honored by
+    # browsers that predate frame-ancestors and it cannot express an allowlist.
     resp = client.get("/api/health")
     csp = resp.headers["content-security-policy"]
-    assert "frame-ancestors 'self' https://*.czbiohub.org https://*-czbiohub.vercel.app" in csp
-    assert "https://*.vercel.app" not in csp
+    assert "frame-ancestors 'self' https://*.czbiohub.org https://*.vercel.app" in csp
+    assert "https://*-czbiohub.vercel.app" not in csp
     assert "frame-ancestors 'none'" not in csp
     assert "x-frame-options" not in resp.headers
 
