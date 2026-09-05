@@ -54,9 +54,7 @@ app = FastAPI(title="gene2image API", lifespan=lifespan)
 #  - frame-ancestors allows Biohub-controlled sites: Gene2Fish is embedded in
 #    an iframe inside ZebraHub (zebrahub.sf.czbiohub.org) for the public
 #    launch (GEN-46), and in temporary Vercel preview deployments while DNS
-#    cutovers are in progress. CSP does not support partial-host wildcards such
-#    as *-czbiohub.vercel.app, so the Vercel allowlist uses the valid
-#    left-most-label wildcard. Anything outside those origins is still refused
+#    cutovers are in progress. Anything outside those origins is still refused
 #    (clickjacking). X-Frame-Options is deliberately NOT sent: it cannot express
 #    an allowlist, and every browser that supports frame-ancestors ignores
 #    X-Frame-Options when both are present.

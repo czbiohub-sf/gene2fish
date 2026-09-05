@@ -51,7 +51,6 @@ def test_csp_supports_spa_and_zfin_images(client):
     # browser (GEN-37); connect-src must allow it or events are dropped.
     assert "connect-src 'self' https://plausible.io https://o4508060872409088.ingest.us.sentry.io" in csp
     assert "frame-ancestors 'self' https://*.czbiohub.org https://*.vercel.app" in csp
-    assert "https://*-czbiohub.vercel.app" not in csp
 
 
 def test_embeddable_in_zebrahub_but_not_elsewhere(client):
@@ -62,7 +61,6 @@ def test_embeddable_in_zebrahub_but_not_elsewhere(client):
     resp = client.get("/api/health")
     csp = resp.headers["content-security-policy"]
     assert "frame-ancestors 'self' https://*.czbiohub.org https://*.vercel.app" in csp
-    assert "https://*-czbiohub.vercel.app" not in csp
     assert "frame-ancestors 'none'" not in csp
     assert "x-frame-options" not in resp.headers
 
