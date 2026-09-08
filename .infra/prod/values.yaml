@@ -18,7 +18,7 @@ stack:
   services:
     gene2fish:
       image:
-        tag: sha-5275ec1
+        tag: sha-af9b9fe
       ingress:
         # GEN-46: Gene2Fish is embedded publicly inside ZebraHub, so the
         # CNTR-101 HTTP basic auth gate (nginx auth-* annotations backed by
