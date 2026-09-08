@@ -62,25 +62,9 @@ def test_image_proxy_strips_query_and_fragment(client, monkeypatch):
     # never reach ZFIN.
     from gene2image import routes
 
-    class Headers:
-        def get_content_type(self):
-            return "image/jpeg"
-
-    class FakeResponse:
-        headers = Headers()
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def read(self):
-            return b"image-bytes"
-
     def fake_urlopen(request, timeout, context=None):
         assert request.full_url == "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"
-        return FakeResponse()
+        return _FakeImageResponse()
 
     monkeypatch.setattr(routes, "urlopen", fake_urlopen)
 
