@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.1](https://github.com/czbiohub-sf/gene2fish/compare/v0.11.0...v0.11.1) (2026-09-08)
+
+
+### Bug Fixes
+
+* allow Vercel iframe embeds ([#141](https://github.com/czbiohub-sf/gene2fish/issues/141)) ([d24ca6f](https://github.com/czbiohub-sf/gene2fish/commit/d24ca6f15a213e5d932b4579cc596e2c070790f2))
+
 ## [0.11.0](https://github.com/czbiohub-sf/gene2fish/compare/v0.10.0...v0.11.0) (2026-08-25)
 
 
