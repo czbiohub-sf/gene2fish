@@ -56,6 +56,45 @@ def test_image_proxy_restricts_to_zfin_imageloadup_urls(client):
     assert resp.status_code == 400
 
 
+def test_image_proxy_strips_query_and_fragment(client, monkeypatch):
+    # The validator returns a URL rebuilt from validated components (scheme,
+    # host, path only), so a query string or fragment on the incoming URL must
+    # never reach ZFIN.
+    from gene2image import routes
+
+    class Headers:
+        def get_content_type(self):
+            return "image/jpeg"
+
+    class FakeResponse:
+        headers = Headers()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return b"image-bytes"
+
+    def fake_urlopen(request, timeout, context=None):
+        assert request.full_url == "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"
+        return FakeResponse()
+
+    monkeypatch.setattr(routes, "urlopen", fake_urlopen)
+
+    resp = client.get(
+        "/api/image-proxy",
+        params={
+            "url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg?evil=1#frag"
+        },
+    )
+
+    assert resp.status_code == 200
+    assert resp.content == b"image-bytes"
+
+
 def test_image_proxy_returns_image_bytes(client, monkeypatch):
     from gene2image import routes
 
@@ -163,7 +202,7 @@ def test_image_proxy_does_not_follow_redirects(client, monkeypatch):
     try:
         # Bypass the zfin.org allowlist so the fetch can target the local
         # redirecting server; the redirect-following behavior is what we test.
-        monkeypatch.setattr(routes, "_validate_zfin_image_url", lambda url: None)
+        monkeypatch.setattr(routes, "_validate_zfin_image_url", lambda url: url)
         resp = client.get(
             "/api/image-proxy", params={"url": f"http://127.0.0.1:{port}/redirect"}
         )

@@ -6,7 +6,7 @@ import time
 from collections import defaultdict
 from typing import NoReturn
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 from urllib.request import HTTPRedirectHandler, build_opener, install_opener
 from urllib.request import Request as UrlRequest
 from urllib.request import urlopen
@@ -59,12 +59,20 @@ def _build_image_url(pub_id: str, image_id: str) -> tuple[str, str, str]:
     return f"{base}_annot.jpg", f"{base}.jpg", f"{base}_medium.jpg"
 
 
-def _validate_zfin_image_url(url: str) -> None:
+def _validate_zfin_image_url(url: str) -> str:
+    """Validate a ZFIN image URL and return it rebuilt from validated parts.
+
+    Returning a URL reconstructed from the checked components (rather than the
+    caller reusing its own tainted string) puts the sanitizer on the data path —
+    CodeQL's py/full-ssrf treats validate-by-exception as no barrier — and drops
+    any query string or fragment that would otherwise ride along to ZFIN.
+    """
     parsed = urlparse(url)
     if parsed.scheme != "https" or parsed.netloc != "zfin.org":
         raise HTTPException(status_code=400, detail="Only zfin.org image URLs are supported")
     if not parsed.path.startswith("/imageLoadUp/"):
         raise HTTPException(status_code=400, detail="Only ZFIN imageLoadUp URLs are supported")
+    return urlunparse(("https", "zfin.org", parsed.path, "", "", ""))
 
 
 class _NoRedirectHandler(HTTPRedirectHandler):
@@ -98,7 +106,7 @@ _ZFIN_FETCH_RETRY_DELAY_SECONDS = 0.3
 
 
 def _fetch_zfin_image(url: str) -> tuple[bytes, str]:
-    _validate_zfin_image_url(url)
+    url = _validate_zfin_image_url(url)
     request = UrlRequest(url, headers={"User-Agent": "gene2fish image export"})
     last_err: Exception | None = None
     for attempt in range(_ZFIN_FETCH_ATTEMPTS):
