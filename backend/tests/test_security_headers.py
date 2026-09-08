@@ -46,11 +46,11 @@ def test_csp_supports_spa_and_zfin_images(client):
     # JetBrains Mono is base64-inlined as data: URIs in the built CSS, so
     # font-src must permit data: (verified against the real SPA in a browser).
     assert "font-src 'self' data:" in csp
-    # CodeQL py/incomplete-url-substring-sanitization flags this line (alert #1,
-    # dismissed as test-only, GEN-48): it pattern-matches `"https://..." in var`
-    # as URL sanitization. This is a test assertion on a CSP header string — no
-    # untrusted input, no security decision — so substring matching is exactly
-    # what we want here.
+    # CodeQL rule py/incomplete-url-substring-sanitization (security/code-scanning/1;
+    # GEN-48) flags this assertion because it pattern-matches `"https://..." in <var>`
+    # as URL sanitization. This is only checking the Content-Security-Policy header
+    # string — no untrusted input and no security decision — so substring matching is
+    # appropriate here. Dismissed in GitHub as test-only.
     assert "https://plausible.io" in csp
     # @sentry/react POSTs error envelopes to the ingest endpoint from the
     # browser (GEN-37); connect-src must allow it or events are dropped.
