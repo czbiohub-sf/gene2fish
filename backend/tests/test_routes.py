@@ -414,6 +414,46 @@ def test_image_proxy_falls_back_to_plain_when_annotated_missing(client, monkeypa
     assert resp.content == b"plain-bytes"
 
 
+def test_image_proxy_falls_back_to_plain_when_annot_url_has_query(client, monkeypatch):
+    # The sanitizer used to rebuild the URL only inside _fetch_zfin_image, so
+    # a query-bearing `_annot.jpg` never matched endswith and skipped fallback.
+    from gene2image import routes
+
+    class Headers:
+        def get_content_type(self):
+            return "image/jpeg"
+
+    class FakeResponse:
+        headers = Headers()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return b"plain-bytes"
+
+    def fake_urlopen(request, timeout):
+        if request.full_url.endswith("_annot.jpg"):
+            raise HTTPError(request.full_url, 404, "Not Found", {}, None)
+        assert request.full_url == "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"
+        return FakeResponse()
+
+    monkeypatch.setattr(routes, "urlopen", fake_urlopen)
+
+    resp = client.get(
+        "/api/image-proxy",
+        params={
+            "url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1_annot.jpg?evil=1"
+        },
+    )
+
+    assert resp.status_code == 200
+    assert resp.content == b"plain-bytes"
+
+
 def test_image_proxy_404s_when_both_annotated_and_plain_missing(client, monkeypatch):
     # A genuine 404 (neither variant exists) must still surface, not be masked.
     from gene2image import routes

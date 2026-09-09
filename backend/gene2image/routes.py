@@ -452,6 +452,10 @@ def resolve_gene(symbol: str, request: Request) -> GeneResolveResult:
 
 @router.get("/image-proxy")
 def image_proxy(url: str = Query(...)) -> Response:
+    # Rebuild the URL from validated parts before S3 keying and annot-fallback
+    # so a query string or fragment cannot skip `_plain_image_variant`.
+    # `_fetch_zfin_image` still sanitizes immediately before UrlRequest (CodeQL).
+    url = _validate_zfin_image_url(url)
     # Serve the image from our own mirror first (S3) so a temporary ZFIN outage
     # doesn't break image loading; fall back to fetching live from ZFIN when the
     # object isn't mirrored or no bucket is configured (GEN-22).
