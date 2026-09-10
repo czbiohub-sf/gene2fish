@@ -394,10 +394,11 @@ def test_image_proxy_falls_back_to_plain_when_annotated_missing(client, monkeypa
 
 @pytest.mark.parametrize("suffix", ["?evil=1", "?evil=1#frag"])
 def test_image_proxy_strips_query_before_annot_fallback(client, monkeypatch, suffix):
-    # The sanitizer used to rebuild the URL only inside _fetch_zfin_image, so
-    # a query-bearing `_annot.jpg` never matched endswith and skipped fallback.
-    # Covers a bare query string and a query+fragment: both must canonicalize
-    # to the same annot/plain URLs before the exact-match fake sees them.
+    # A query string on an `_annot.jpg` URL used to defeat the `endswith` check
+    # in _plain_image_variant, so the plain-.jpg fallback was skipped; the URL
+    # is now rebuilt from validated parts before the suffix match. Covers a
+    # bare query string and a query+fragment: both must canonicalize to the
+    # same annot/plain URLs before the exact-match fake sees them.
     from gene2image import routes
 
     def fake_urlopen(request, timeout):
