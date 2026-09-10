@@ -186,7 +186,7 @@ def test_image_proxy_does_not_follow_redirects(client, monkeypatch):
     try:
         # Bypass the zfin.org allowlist so the fetch can target the local
         # redirecting server; the redirect-following behavior is what we test.
-        monkeypatch.setattr(routes, "_validate_zfin_image_url", lambda url: url)
+        monkeypatch.setattr(routes, "_canonical_zfin_image_url", lambda url: url)
         resp = client.get(
             "/api/image-proxy", params={"url": f"http://127.0.0.1:{port}/redirect"}
         )

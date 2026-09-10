@@ -59,7 +59,7 @@ def _build_image_url(pub_id: str, image_id: str) -> tuple[str, str, str]:
     return f"{base}_annot.jpg", f"{base}.jpg", f"{base}_medium.jpg"
 
 
-def _validate_zfin_image_url(url: str) -> str:
+def _canonical_zfin_image_url(url: str) -> str:
     """Validate a ZFIN image URL and return it rebuilt from validated parts.
 
     Returning a URL reconstructed from the checked components (rather than the
@@ -83,7 +83,7 @@ def _validate_zfin_image_url(url: str) -> str:
 class _NoRedirectHandler(HTTPRedirectHandler):
     """SSRF guard: never follow redirects when fetching ZFIN images.
 
-    ``_validate_zfin_image_url`` only checks the *initial* URL. urllib follows
+    ``_canonical_zfin_image_url`` only checks the *initial* URL. urllib follows
     3xx redirects by default and does not re-validate the target, so a redirect
     (e.g. via an open redirect on zfin.org) could point the fetch at an internal
     host such as the cloud metadata endpoint. Returning ``None`` turns any
@@ -111,7 +111,7 @@ _ZFIN_FETCH_RETRY_DELAY_SECONDS = 0.3
 
 
 def _fetch_zfin_image(url: str) -> tuple[bytes, str]:
-    url = _validate_zfin_image_url(url)
+    url = _canonical_zfin_image_url(url)
     request = UrlRequest(url, headers={"User-Agent": "gene2fish image export"})
     last_err: Exception | None = None
     for attempt in range(_ZFIN_FETCH_ATTEMPTS):
@@ -470,7 +470,7 @@ def image_proxy(url: str = Query(...)) -> Response:
     # Rebuild the URL from validated parts before S3 keying and annot-fallback
     # so a query string or fragment cannot skip `_plain_image_variant`.
     # `_fetch_zfin_image` still sanitizes immediately before UrlRequest (CodeQL).
-    url = _validate_zfin_image_url(url)
+    url = _canonical_zfin_image_url(url)
     # Serve the image from our own mirror first (S3) so a temporary ZFIN outage
     # doesn't break image loading; fall back to fetching live from ZFIN when the
     # object isn't mirrored or no bucket is configured (GEN-22).
