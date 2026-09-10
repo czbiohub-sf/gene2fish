@@ -132,8 +132,18 @@ def _fetch_zfin_image(url: str) -> tuple[bytes, str]:
                 return resp.read(), media_type
         except HTTPError as err:
             if err.code < 500:
+                if err.code == 404:
+                    # Load-bearing: image_proxy's _annot.jpg -> plain .jpg
+                    # fallback keys on this exact status.
+                    raise HTTPException(
+                        status_code=404, detail="ZFIN image not found"
+                    ) from err
+                # Any other non-5xx upstream status (redirect refused by
+                # _NoRedirectHandler, 401/403/429) is a gateway condition for
+                # our caller, not a status our own resource can carry.
                 raise HTTPException(
-                    status_code=err.code, detail="ZFIN image not found"
+                    status_code=502,
+                    detail=f"ZFIN rejected the image request (upstream {err.code})",
                 ) from err
             last_err = err
         except (URLError, TimeoutError) as err:

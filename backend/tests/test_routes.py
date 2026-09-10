@@ -1061,3 +1061,23 @@ def test_image_proxy_malformed_ipv6_url_returns_400(client):
         "/api/image-proxy", params={"url": "https://[::1/imageLoadUp/x.jpg"}
     )
     assert resp.status_code == 400
+
+
+def test_image_proxy_reports_502_on_blocked_upstream_redirect(client, monkeypatch):
+    # _NoRedirectHandler turns a followed 3xx into an HTTPError carrying the
+    # redirect's own code. That upstream status is not a valid status for our
+    # resource -- echoing it verbatim answers with e.g. a 302 that has no
+    # Location header, which is not a usable redirect for any client.
+    from gene2image import routes
+
+    def fake_urlopen(request, timeout, context=None):
+        raise HTTPError(request.full_url, 302, "Found", {}, None)
+
+    monkeypatch.setattr(routes, "urlopen", fake_urlopen)
+
+    resp = client.get(
+        "/api/image-proxy",
+        params={"url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"},
+    )
+
+    assert resp.status_code == 502
