@@ -377,6 +377,35 @@ def test_image_proxy_falls_back_to_zfin_when_not_mirrored(client, monkeypatch):
     assert resp.content == b"zfin-bytes"
 
 
+def test_image_proxy_mirror_lookup_uses_sanitized_url(client, monkeypatch):
+    # The route-level sanitize (`url = _validate_zfin_image_url(url)`) exists to
+    # protect two consumers: the annot fallback and the S3 mirror key. Without
+    # it, a query-bearing URL keys S3 with the raw string, misses the mirror,
+    # and silently falls through to a live ZFIN fetch (GEN-22).
+    from gene2image import routes, s3_images
+
+    seen = []
+
+    def boom(*args, **kwargs):
+        raise AssertionError("ZFIN must not be fetched when the mirror has the object")
+
+    def fake_fetch(url):
+        seen.append(url)
+        return (b"s3-bytes", "image/jpeg")
+
+    monkeypatch.setattr(routes, "urlopen", boom)
+    monkeypatch.setattr(s3_images, "s3_enabled", lambda: True)
+    monkeypatch.setattr(s3_images, "fetch_image", fake_fetch)
+
+    resp = client.get(
+        "/api/image-proxy",
+        params={"url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg?evil=1"},
+    )
+
+    assert resp.status_code == 200
+    assert seen == ["https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"]
+
+
 def test_image_proxy_falls_back_to_plain_when_annotated_missing(client, monkeypatch):
     # ZFIN has no `_annot.jpg` for many images (404); the proxy must retry the
     # plain `.jpg` server-side so the browser gets one 200 instead of a 404.
