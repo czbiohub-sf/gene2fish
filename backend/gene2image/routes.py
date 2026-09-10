@@ -67,7 +67,12 @@ def _validate_zfin_image_url(url: str) -> str:
     CodeQL's py/full-ssrf treats validate-by-exception as no barrier — and drops
     any query string or fragment that would otherwise ride along to ZFIN.
     """
-    parsed = urlparse(url)
+    try:
+        parsed = urlparse(url)
+    except ValueError as err:  # e.g. 'Invalid IPv6 URL' from a malformed authority
+        raise HTTPException(
+            status_code=400, detail="Only zfin.org image URLs are supported"
+        ) from err
     if parsed.scheme != "https" or parsed.netloc != "zfin.org":
         raise HTTPException(status_code=400, detail="Only zfin.org image URLs are supported")
     if not parsed.path.startswith("/imageLoadUp/"):

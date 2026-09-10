@@ -1051,3 +1051,13 @@ def test_case_insensitive_lookup_resolves_without_linear_scan(tmp_path, monkeypa
         assert list(batch.keys()) == ["pax2A"]
         # Unknown symbol still resolves to nothing (empty column), not an error.
         assert c.get("/api/genes/nope/resolve").status_code == 404
+
+
+def test_image_proxy_malformed_ipv6_url_returns_400(client):
+    # A malformed authority (unbalanced IPv6 brackets) makes urlparse() raise
+    # ValueError before any of our own scheme/host checks run; that must still
+    # surface as a clean 400, not an unhandled 500.
+    resp = client.get(
+        "/api/image-proxy", params={"url": "https://[::1/imageLoadUp/x.jpg"}
+    )
+    assert resp.status_code == 400
