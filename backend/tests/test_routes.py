@@ -82,26 +82,10 @@ def test_image_proxy_strips_query_and_fragment(client, monkeypatch):
 def test_image_proxy_returns_image_bytes(client, monkeypatch):
     from gene2image import routes
 
-    class Headers:
-        def get_content_type(self):
-            return "image/jpeg"
-
-    class FakeResponse:
-        headers = Headers()
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def read(self):
-            return b"image-bytes"
-
     def fake_urlopen(request, timeout, context=None):
         assert request.full_url == "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"
         assert timeout == 15
-        return FakeResponse()
+        return _FakeImageResponse()
 
     monkeypatch.setattr(routes, "urlopen", fake_urlopen)
 
@@ -124,24 +108,12 @@ def test_image_proxy_rejects_non_image_content(client, monkeypatch):
     # check this returns 200 + the HTML body.
     from gene2image import routes
 
-    class Headers:
-        def get_content_type(self):
-            return "text/html"
-
-    class FakeResponse:
-        headers = Headers()
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def read(self):
-            return b"<script>alert(document.domain)</script>"
-
     monkeypatch.setattr(
-        routes, "urlopen", lambda request, timeout, context=None: FakeResponse()
+        routes,
+        "urlopen",
+        lambda request, timeout, context=None: _FakeImageResponse(
+            b"<script>alert(document.domain)</script>", "text/html"
+        ),
     )
 
     resp = client.get(
@@ -186,7 +158,7 @@ def test_image_proxy_does_not_follow_redirects(client, monkeypatch):
     try:
         # Bypass the zfin.org allowlist so the fetch can target the local
         # redirecting server; the redirect-following behavior is what we test.
-        monkeypatch.setattr(routes, "_validate_zfin_image_url", lambda url: url)
+        monkeypatch.setattr(routes, "_canonical_zfin_image_url", lambda url: url)
         resp = client.get(
             "/api/image-proxy", params={"url": f"http://127.0.0.1:{port}/redirect"}
         )
@@ -220,10 +192,15 @@ def test_image_proxy_returns_502_when_fetch_fails(client, monkeypatch):
 
 class _FakeImageResponse:
     class _Headers:
-        def get_content_type(self):
-            return "image/jpeg"
+        def __init__(self, content_type: str):
+            self._content_type = content_type
 
-    headers = _Headers()
+        def get_content_type(self):
+            return self._content_type
+
+    def __init__(self, body: bytes = b"image-bytes", content_type: str = "image/jpeg"):
+        self._body = body
+        self.headers = self._Headers(content_type)
 
     def __enter__(self):
         return self
@@ -232,7 +209,7 @@ class _FakeImageResponse:
         return False
 
     def read(self):
-        return b"image-bytes"
+        return self._body
 
 
 def test_image_proxy_retries_transient_failures(client, monkeypatch):
@@ -348,23 +325,11 @@ def test_image_proxy_falls_back_to_zfin_when_not_mirrored(client, monkeypatch):
     # S3 enabled but object missing (fetch_image returns None) → live ZFIN fetch.
     from gene2image import routes, s3_images
 
-    class Headers:
-        def get_content_type(self):
-            return "image/jpeg"
-
-    class FakeResponse:
-        headers = Headers()
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def read(self):
-            return b"zfin-bytes"
-
-    monkeypatch.setattr(routes, "urlopen", lambda request, timeout, context=None: FakeResponse())
+    monkeypatch.setattr(
+        routes,
+        "urlopen",
+        lambda request, timeout, context=None: _FakeImageResponse(b"zfin-bytes"),
+    )
     monkeypatch.setattr(s3_images, "s3_enabled", lambda: True)
     monkeypatch.setattr(s3_images, "fetch_image", lambda url: None)
 
@@ -377,37 +342,82 @@ def test_image_proxy_falls_back_to_zfin_when_not_mirrored(client, monkeypatch):
     assert resp.content == b"zfin-bytes"
 
 
+def test_image_proxy_mirror_lookup_uses_sanitized_url(client, monkeypatch):
+    # The route-level sanitize (`url = _validate_zfin_image_url(url)`) exists to
+    # protect two consumers: the annot fallback and the S3 mirror key. Without
+    # it, a query-bearing URL keys S3 with the raw string, misses the mirror,
+    # and silently falls through to a live ZFIN fetch (GEN-22).
+    from gene2image import routes, s3_images
+
+    seen = []
+
+    def boom(*args, **kwargs):
+        raise AssertionError("ZFIN must not be fetched when the mirror has the object")
+
+    def fake_fetch(url):
+        seen.append(url)
+        return (b"s3-bytes", "image/jpeg")
+
+    monkeypatch.setattr(routes, "urlopen", boom)
+    monkeypatch.setattr(s3_images, "s3_enabled", lambda: True)
+    monkeypatch.setattr(s3_images, "fetch_image", fake_fetch)
+
+    resp = client.get(
+        "/api/image-proxy",
+        params={"url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg?evil=1"},
+    )
+
+    assert resp.status_code == 200
+    assert seen == ["https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"]
+
+
 def test_image_proxy_falls_back_to_plain_when_annotated_missing(client, monkeypatch):
     # ZFIN has no `_annot.jpg` for many images (404); the proxy must retry the
     # plain `.jpg` server-side so the browser gets one 200 instead of a 404.
     from gene2image import routes
 
-    class Headers:
-        def get_content_type(self):
-            return "image/jpeg"
-
-    class FakeResponse:
-        headers = Headers()
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def read(self):
-            return b"plain-bytes"
-
     def fake_urlopen(request, timeout):
         if request.full_url.endswith("_annot.jpg"):
             raise HTTPError(request.full_url, 404, "Not Found", {}, None)
-        return FakeResponse()
+        return _FakeImageResponse(b"plain-bytes")
 
     monkeypatch.setattr(routes, "urlopen", fake_urlopen)
 
     resp = client.get(
         "/api/image-proxy",
         params={"url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1_annot.jpg"},
+    )
+
+    assert resp.status_code == 200
+    assert resp.content == b"plain-bytes"
+
+
+@pytest.mark.parametrize("suffix", ["?evil=1", "?evil=1#frag"])
+def test_image_proxy_strips_query_before_annot_fallback(client, monkeypatch, suffix):
+    # A query string on an `_annot.jpg` URL used to defeat the `endswith` check
+    # in _plain_image_variant, so the plain-.jpg fallback was skipped; the URL
+    # is now rebuilt from validated parts before the suffix match. Covers a
+    # bare query string and a query+fragment: both must canonicalize to the
+    # same annot/plain URLs before the exact-match fake sees them.
+    from gene2image import routes
+
+    def fake_urlopen(request, timeout):
+        if request.full_url == (
+            "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1_annot.jpg"
+        ):
+            raise HTTPError(request.full_url, 404, "Not Found", {}, None)
+        assert request.full_url == (
+            "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"
+        )
+        return _FakeImageResponse(b"plain-bytes")
+
+    monkeypatch.setattr(routes, "urlopen", fake_urlopen)
+
+    resp = client.get(
+        "/api/image-proxy",
+        params={
+            "url": f"https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1_annot.jpg{suffix}"
+        },
     )
 
     assert resp.status_code == 200
@@ -967,3 +977,33 @@ def test_case_insensitive_lookup_resolves_without_linear_scan(tmp_path, monkeypa
         assert list(batch.keys()) == ["pax2A"]
         # Unknown symbol still resolves to nothing (empty column), not an error.
         assert c.get("/api/genes/nope/resolve").status_code == 404
+
+
+def test_image_proxy_malformed_ipv6_url_returns_400(client):
+    # A malformed authority (unbalanced IPv6 brackets) makes urlparse() raise
+    # ValueError before any of our own scheme/host checks run; that must still
+    # surface as a clean 400, not an unhandled 500.
+    resp = client.get(
+        "/api/image-proxy", params={"url": "https://[::1/imageLoadUp/x.jpg"}
+    )
+    assert resp.status_code == 400
+
+
+def test_image_proxy_reports_502_on_blocked_upstream_redirect(client, monkeypatch):
+    # _NoRedirectHandler turns a followed 3xx into an HTTPError carrying the
+    # redirect's own code. That upstream status is not a valid status for our
+    # resource -- echoing it verbatim answers with e.g. a 302 that has no
+    # Location header, which is not a usable redirect for any client.
+    from gene2image import routes
+
+    def fake_urlopen(request, timeout, context=None):
+        raise HTTPError(request.full_url, 302, "Found", {}, None)
+
+    monkeypatch.setattr(routes, "urlopen", fake_urlopen)
+
+    resp = client.get(
+        "/api/image-proxy",
+        params={"url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"},
+    )
+
+    assert resp.status_code == 502
