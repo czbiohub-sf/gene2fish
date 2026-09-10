@@ -392,33 +392,12 @@ def test_image_proxy_falls_back_to_plain_when_annotated_missing(client, monkeypa
     assert resp.content == b"plain-bytes"
 
 
-def test_image_proxy_falls_back_to_plain_when_annot_url_has_query(client, monkeypatch):
+@pytest.mark.parametrize("suffix", ["?evil=1", "?evil=1#frag"])
+def test_image_proxy_strips_query_before_annot_fallback(client, monkeypatch, suffix):
     # The sanitizer used to rebuild the URL only inside _fetch_zfin_image, so
     # a query-bearing `_annot.jpg` never matched endswith and skipped fallback.
-    from gene2image import routes
-
-    def fake_urlopen(request, timeout):
-        if request.full_url.endswith("_annot.jpg"):
-            raise HTTPError(request.full_url, 404, "Not Found", {}, None)
-        assert request.full_url == "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"
-        return _FakeImageResponse(b"plain-bytes")
-
-    monkeypatch.setattr(routes, "urlopen", fake_urlopen)
-
-    resp = client.get(
-        "/api/image-proxy",
-        params={
-            "url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1_annot.jpg?evil=1"
-        },
-    )
-
-    assert resp.status_code == 200
-    assert resp.content == b"plain-bytes"
-
-
-def test_image_proxy_strips_query_before_annot_fallback(client, monkeypatch):
-    # Query/fragment on `_annot.jpg` must be stripped before suffix matching so
-    # a missing annotated variant still retries the sanitized plain `.jpg`.
+    # Covers a bare query string and a query+fragment: both must canonicalize
+    # to the same annot/plain URLs before the exact-match fake sees them.
     from gene2image import routes
 
     def fake_urlopen(request, timeout):
@@ -436,7 +415,7 @@ def test_image_proxy_strips_query_before_annot_fallback(client, monkeypatch):
     resp = client.get(
         "/api/image-proxy",
         params={
-            "url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1_annot.jpg?evil=1#frag"
+            "url": f"https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1_annot.jpg{suffix}"
         },
     )
 
