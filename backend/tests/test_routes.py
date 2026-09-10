@@ -82,26 +82,10 @@ def test_image_proxy_strips_query_and_fragment(client, monkeypatch):
 def test_image_proxy_returns_image_bytes(client, monkeypatch):
     from gene2image import routes
 
-    class Headers:
-        def get_content_type(self):
-            return "image/jpeg"
-
-    class FakeResponse:
-        headers = Headers()
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def read(self):
-            return b"image-bytes"
-
     def fake_urlopen(request, timeout, context=None):
         assert request.full_url == "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"
         assert timeout == 15
-        return FakeResponse()
+        return _FakeImageResponse()
 
     monkeypatch.setattr(routes, "urlopen", fake_urlopen)
 
@@ -124,24 +108,12 @@ def test_image_proxy_rejects_non_image_content(client, monkeypatch):
     # check this returns 200 + the HTML body.
     from gene2image import routes
 
-    class Headers:
-        def get_content_type(self):
-            return "text/html"
-
-    class FakeResponse:
-        headers = Headers()
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def read(self):
-            return b"<script>alert(document.domain)</script>"
-
     monkeypatch.setattr(
-        routes, "urlopen", lambda request, timeout, context=None: FakeResponse()
+        routes,
+        "urlopen",
+        lambda request, timeout, context=None: _FakeImageResponse(
+            b"<script>alert(document.domain)</script>", "text/html"
+        ),
     )
 
     resp = client.get(
@@ -220,10 +192,15 @@ def test_image_proxy_returns_502_when_fetch_fails(client, monkeypatch):
 
 class _FakeImageResponse:
     class _Headers:
-        def get_content_type(self):
-            return "image/jpeg"
+        def __init__(self, content_type: str):
+            self._content_type = content_type
 
-    headers = _Headers()
+        def get_content_type(self):
+            return self._content_type
+
+    def __init__(self, body: bytes = b"image-bytes", content_type: str = "image/jpeg"):
+        self._body = body
+        self.headers = self._Headers(content_type)
 
     def __enter__(self):
         return self
@@ -232,7 +209,7 @@ class _FakeImageResponse:
         return False
 
     def read(self):
-        return b"image-bytes"
+        return self._body
 
 
 def test_image_proxy_retries_transient_failures(client, monkeypatch):
@@ -348,23 +325,11 @@ def test_image_proxy_falls_back_to_zfin_when_not_mirrored(client, monkeypatch):
     # S3 enabled but object missing (fetch_image returns None) → live ZFIN fetch.
     from gene2image import routes, s3_images
 
-    class Headers:
-        def get_content_type(self):
-            return "image/jpeg"
-
-    class FakeResponse:
-        headers = Headers()
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def read(self):
-            return b"zfin-bytes"
-
-    monkeypatch.setattr(routes, "urlopen", lambda request, timeout, context=None: FakeResponse())
+    monkeypatch.setattr(
+        routes,
+        "urlopen",
+        lambda request, timeout, context=None: _FakeImageResponse(b"zfin-bytes"),
+    )
     monkeypatch.setattr(s3_images, "s3_enabled", lambda: True)
     monkeypatch.setattr(s3_images, "fetch_image", lambda url: None)
 
@@ -411,26 +376,10 @@ def test_image_proxy_falls_back_to_plain_when_annotated_missing(client, monkeypa
     # plain `.jpg` server-side so the browser gets one 200 instead of a 404.
     from gene2image import routes
 
-    class Headers:
-        def get_content_type(self):
-            return "image/jpeg"
-
-    class FakeResponse:
-        headers = Headers()
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def read(self):
-            return b"plain-bytes"
-
     def fake_urlopen(request, timeout):
         if request.full_url.endswith("_annot.jpg"):
             raise HTTPError(request.full_url, 404, "Not Found", {}, None)
-        return FakeResponse()
+        return _FakeImageResponse(b"plain-bytes")
 
     monkeypatch.setattr(routes, "urlopen", fake_urlopen)
 
@@ -448,27 +397,11 @@ def test_image_proxy_falls_back_to_plain_when_annot_url_has_query(client, monkey
     # a query-bearing `_annot.jpg` never matched endswith and skipped fallback.
     from gene2image import routes
 
-    class Headers:
-        def get_content_type(self):
-            return "image/jpeg"
-
-    class FakeResponse:
-        headers = Headers()
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def read(self):
-            return b"plain-bytes"
-
     def fake_urlopen(request, timeout):
         if request.full_url.endswith("_annot.jpg"):
             raise HTTPError(request.full_url, 404, "Not Found", {}, None)
         assert request.full_url == "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"
-        return FakeResponse()
+        return _FakeImageResponse(b"plain-bytes")
 
     monkeypatch.setattr(routes, "urlopen", fake_urlopen)
 
@@ -488,22 +421,6 @@ def test_image_proxy_strips_query_before_annot_fallback(client, monkeypatch):
     # a missing annotated variant still retries the sanitized plain `.jpg`.
     from gene2image import routes
 
-    class Headers:
-        def get_content_type(self):
-            return "image/jpeg"
-
-    class FakeResponse:
-        headers = Headers()
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def read(self):
-            return b"plain-bytes"
-
     def fake_urlopen(request, timeout):
         if request.full_url == (
             "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1_annot.jpg"
@@ -512,7 +429,7 @@ def test_image_proxy_strips_query_before_annot_fallback(client, monkeypatch):
         assert request.full_url == (
             "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"
         )
-        return FakeResponse()
+        return _FakeImageResponse(b"plain-bytes")
 
     monkeypatch.setattr(routes, "urlopen", fake_urlopen)
 
