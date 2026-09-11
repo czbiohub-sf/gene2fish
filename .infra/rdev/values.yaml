@@ -3,4 +3,24 @@ stack:
   services:
     gene2fish:
       image:
-        tag: sha-dc5acbe
+        tag: sha-89be53d
+      # Serve mirrored ZFIN images from the CZI-managed private bucket (GEN-45).
+      # The IRSA role trusts exactly serviceaccount argus-gene2fish-rdev:gene2fish
+      # (sfbiohub-infra terraform/accounts/biohub-nonprod/gene2fish-dev.tf), so the
+      # SA name here must stay in sync with that trust policy.
+      # The mirror holds exactly the ZFIN-provided Thisse image package (legal
+      # requirement); the image proxy falls back to live zfin.org for anything
+      # not in the mirror.
+      serviceAccount:
+        create: true
+        automount: true
+        name: gene2fish
+        annotations:
+          "eks.amazonaws.com/role-arn": arn:aws:iam::911167894392:role/gene2fish-dev
+      env:
+        - name: GENE2IMAGE_IMAGE_S3_BUCKET
+          value: "gene2fish-zfin-images-dev"
+        - name: GENE2IMAGE_IMAGE_S3_PREFIX
+          value: "gene2fish/zfin-images"
+        - name: GENE2IMAGE_IMAGE_S3_REGION
+          value: "us-west-2"
