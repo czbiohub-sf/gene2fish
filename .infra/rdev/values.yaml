@@ -3,7 +3,7 @@ stack:
   services:
     gene2fish:
       image:
-        tag: sha-89be53d
+        tag: sha-d9255cb
       # Serve mirrored ZFIN images from the CZI-managed private bucket (GEN-45).
       # The IRSA role trusts exactly serviceaccount argus-gene2fish-rdev:gene2fish
       # (sfbiohub-infra terraform/accounts/biohub-nonprod/gene2fish-dev.tf), so the
