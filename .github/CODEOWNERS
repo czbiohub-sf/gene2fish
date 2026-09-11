@@ -1,0 +1,5 @@
+# Default owners for everything in this repo.
+#
+# Every user or team listed here must have at least write access to the
+# repository, otherwise GitHub will not request their review.
+*       @NetoRutes

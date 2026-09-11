@@ -6,7 +6,7 @@ import time
 from collections import defaultdict
 from typing import NoReturn
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 from urllib.request import HTTPRedirectHandler, build_opener, install_opener
 from urllib.request import Request as UrlRequest
 from urllib.request import urlopen
@@ -59,18 +59,31 @@ def _build_image_url(pub_id: str, image_id: str) -> tuple[str, str, str]:
     return f"{base}_annot.jpg", f"{base}.jpg", f"{base}_medium.jpg"
 
 
-def _validate_zfin_image_url(url: str) -> None:
-    parsed = urlparse(url)
+def _canonical_zfin_image_url(url: str) -> str:
+    """Validate a ZFIN image URL and return it rebuilt from validated parts.
+
+    Returning a URL reconstructed from the checked components (rather than the
+    caller reusing its own tainted string) puts the sanitizer on the data path —
+    CodeQL's py/full-ssrf treats validate-by-exception as no barrier — and drops
+    any query string or fragment that would otherwise ride along to ZFIN.
+    """
+    try:
+        parsed = urlparse(url)
+    except ValueError as err:  # e.g. 'Invalid IPv6 URL' from a malformed authority
+        raise HTTPException(
+            status_code=400, detail="Only zfin.org image URLs are supported"
+        ) from err
     if parsed.scheme != "https" or parsed.netloc != "zfin.org":
         raise HTTPException(status_code=400, detail="Only zfin.org image URLs are supported")
     if not parsed.path.startswith("/imageLoadUp/"):
         raise HTTPException(status_code=400, detail="Only ZFIN imageLoadUp URLs are supported")
+    return urlunparse(("https", "zfin.org", parsed.path, "", "", ""))
 
 
 class _NoRedirectHandler(HTTPRedirectHandler):
     """SSRF guard: never follow redirects when fetching ZFIN images.
 
-    ``_validate_zfin_image_url`` only checks the *initial* URL. urllib follows
+    ``_canonical_zfin_image_url`` only checks the *initial* URL. urllib follows
     3xx redirects by default and does not re-validate the target, so a redirect
     (e.g. via an open redirect on zfin.org) could point the fetch at an internal
     host such as the cloud metadata endpoint. Returning ``None`` turns any
@@ -98,7 +111,7 @@ _ZFIN_FETCH_RETRY_DELAY_SECONDS = 0.3
 
 
 def _fetch_zfin_image(url: str) -> tuple[bytes, str]:
-    _validate_zfin_image_url(url)
+    url = _canonical_zfin_image_url(url)
     request = UrlRequest(url, headers={"User-Agent": "gene2fish image export"})
     last_err: Exception | None = None
     for attempt in range(_ZFIN_FETCH_ATTEMPTS):
@@ -119,8 +132,18 @@ def _fetch_zfin_image(url: str) -> tuple[bytes, str]:
                 return resp.read(), media_type
         except HTTPError as err:
             if err.code < 500:
+                if err.code == 404:
+                    # Load-bearing: image_proxy's _annot.jpg -> plain .jpg
+                    # fallback keys on this exact status.
+                    raise HTTPException(
+                        status_code=404, detail="ZFIN image not found"
+                    ) from err
+                # Any other non-5xx upstream status (redirect refused by
+                # _NoRedirectHandler, 401/403/429) is a gateway condition for
+                # our caller, not a status our own resource can carry.
                 raise HTTPException(
-                    status_code=err.code, detail="ZFIN image not found"
+                    status_code=502,
+                    detail=f"ZFIN rejected the image request (upstream {err.code})",
                 ) from err
             last_err = err
         except (URLError, TimeoutError) as err:
@@ -444,6 +467,10 @@ def resolve_gene(symbol: str, request: Request) -> GeneResolveResult:
 
 @router.get("/image-proxy")
 def image_proxy(url: str = Query(...)) -> Response:
+    # Rebuild the URL from validated parts before S3 keying and annot-fallback
+    # so a query string or fragment cannot skip `_plain_image_variant`.
+    # `_fetch_zfin_image` still sanitizes immediately before UrlRequest (CodeQL).
+    url = _canonical_zfin_image_url(url)
     # Serve the image from our own mirror first (S3) so a temporary ZFIN outage
     # doesn't break image loading; fall back to fetching live from ZFIN when the
     # object isn't mirrored or no bucket is configured (GEN-22).
