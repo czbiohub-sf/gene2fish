@@ -5,5 +5,12 @@ stack:
       image:
         tag: sha-af9b9fe
       ingress:
+        enabled: true
         rules:
           - host: gene2fish.apps-staging.czbiohub.org
+      gateway:
+        dnsOwner: ingress
+        rules:
+          - host: gene2fish.apps-staging.czbiohub.org
+            vanity:
+              enabled: true

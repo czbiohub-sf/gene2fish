@@ -32,6 +32,7 @@ stack:
       gateway:
         enabled: true
         dnsOwner: ingress
+        securityPolicy: none
         paths:
           - path: /
             pathType: Prefix
