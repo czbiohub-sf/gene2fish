@@ -13,9 +13,6 @@ stack:
       # the ZFIN-provided Thisse image package (legal requirement); the image
       # proxy falls back to live zfin.org for anything not in the mirror.
       serviceAccount:
-        create: true
-        automount: true
-        name: gene2fish
         annotations:
           "eks.amazonaws.com/role-arn": arn:aws:iam::911167894392:role/gene2fish-staging
       env:
