@@ -12,6 +12,10 @@ stack:
       # here must stay in sync with that trust policy. The mirror holds exactly
       # the ZFIN-provided Thisse image package (legal requirement); the image
       # proxy falls back to live zfin.org for anything not in the mirror.
+      # Requires sfbiohub-infra role gene2fish-staging (and prod's
+      # gene2fish-prod) to already exist; applying this before that role is
+      # provisioned leaves the pod unable to assume the IRSA role and the
+      # S3 image proxy will fail.
       serviceAccount:
         annotations:
           "eks.amazonaws.com/role-arn": arn:aws:iam::911167894392:role/gene2fish-staging
