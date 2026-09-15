@@ -9,13 +9,16 @@ stack:
       # seed serves both). The IRSA role trusts exactly serviceaccount
       # argus-gene2fish-staging:gene2fish (sfbiohub-infra
       # terraform/accounts/biohub-nonprod/gene2fish-staging.tf), so the SA name
-      # here must stay in sync with that trust policy. The mirror holds exactly
+      # set in common.yaml must stay in sync with that trust policy. The mirror holds exactly
       # the ZFIN-provided Thisse image package (legal requirement); the image
       # proxy falls back to live zfin.org for anything not in the mirror.
-      # Requires sfbiohub-infra role gene2fish-staging (and prod's
-      # gene2fish-prod) to already exist; applying this before that role is
-      # provisioned leaves the pod unable to assume the IRSA role and the
-      # S3 image proxy will fail.
+      # Requires sfbiohub-infra role gene2fish-staging to already exist (created
+      # by sfbiohub-infra #82); applying this before that role is provisioned
+      # leaves the pod unable to assume the IRSA role. This fails SILENTLY: the
+      # image proxy swallows S3 errors and falls back to live zfin.org with no
+      # log line, so the pod stays healthy and probes pass while every image is
+      # served from ZFIN. Verify by checking S3 is actually the source, not by
+      # waiting for an error.
       serviceAccount:
         annotations:
           "eks.amazonaws.com/role-arn": arn:aws:iam::911167894392:role/gene2fish-staging
