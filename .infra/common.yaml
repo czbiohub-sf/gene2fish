@@ -17,6 +17,17 @@ stack:
     gene2fish:
       image:
         repository: 533267185808.dkr.ecr.us-west-2.amazonaws.com/core-platform/gene2fish/gene2fish
+      # serviceAccount is a map, so it deep-merges with each env's
+      # annotations."eks.amazonaws.com/role-arn" override (create/automount/
+      # name are env-invariant; only the IRSA role-arn annotation varies).
+      # automount: false — the backend has no Kubernetes API client (verified
+      # by grep), so the default K8s bearer token is unused; IRSA S3 access
+      # arrives via a separate aws-iam-token projected volume from the EKS
+      # Pod Identity Webhook, independent of this setting.
+      serviceAccount:
+        create: true
+        automount: false
+        name: gene2fish
       # The app loads the full ~115MB image_metadata.json into memory at
       # startup and builds in-memory indexes (measured peak ~565MB RSS for
       # 53k records). 1Gi gives headroom over that plus serving + ZFIN data
