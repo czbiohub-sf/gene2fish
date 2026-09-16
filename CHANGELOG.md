@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.12.0](https://github.com/czbiohub-sf/gene2fish/compare/v0.11.1...v0.12.0) (2026-09-15)
+
+
+### Features
+
+* serve mirrored ZFIN images from CZI S3 buckets in staging/prod (GEN-45) ([#135](https://github.com/czbiohub-sf/gene2fish/issues/135)) ([ccac9a0](https://github.com/czbiohub-sf/gene2fish/commit/ccac9a063de0a69b236cef54f27f3901eaa40d0f))
+* serve mirrored ZFIN images from CZI-managed S3 bucket in rdev (GEN-45) ([#134](https://github.com/czbiohub-sf/gene2fish/issues/134)) ([cd48e99](https://github.com/czbiohub-sf/gene2fish/commit/cd48e99aff56ef805d20456549367d94b24f2306))
+
+
+### Bug Fixes
+
+* return sanitized URL from ZFIN image validator (CodeQL py/full-ssrf) ([#143](https://github.com/czbiohub-sf/gene2fish/issues/143)) ([19f496b](https://github.com/czbiohub-sf/gene2fish/commit/19f496bb98c9f4454eb8fe77ce64ea56eed7dae2))
+
 ## [0.11.1](https://github.com/czbiohub-sf/gene2fish/compare/v0.11.0...v0.11.1) (2026-09-08)
 
 
