@@ -34,7 +34,7 @@ dev = ["pytest", "httpx", { include-group = "build" }]
 # (GEN-5). pillow is a transitive-via-matplotlib security floor (PYSEC-2026-2253..
 # 2257, fixed 12.3.0), so it moves here alongside matplotlib rather than runtime.
 build = [
-    "pandas>=3.0.2",
+    "pandas>=3.0.5",
     "matplotlib>=3.10.8",
     "pillow>=12.3.0",
 ]
