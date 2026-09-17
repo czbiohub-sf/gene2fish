@@ -44,3 +44,9 @@ stack:
         paths:
           - path: /
             pathType: Prefix
+      gateway:
+        enabled: true
+        securityPolicy: oidc-protected-default
+        paths:
+          - path: /
+            pathType: Prefix

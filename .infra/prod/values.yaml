@@ -42,6 +42,7 @@ stack:
         - name: GENE2IMAGE_IMAGE_S3_REGION
           value: "us-west-2"
       ingress:
+        enabled: true
         # GEN-46: Gene2Fish is embedded publicly inside ZebraHub, so the
         # CNTR-101 HTTP basic auth gate (nginx auth-* annotations backed by
         # the out-of-band `basic-auth` secret) is removed along with the Okta
@@ -50,3 +51,14 @@ stack:
         oidcProtected: false
         rules:
           - host: gene2fish.apps.czbiohub.org
+      gateway:
+        enabled: true
+        dnsOwner: ingress
+        securityPolicy: none
+        paths:
+          - path: /
+            pathType: Prefix
+        rules:
+          - host: gene2fish.apps.czbiohub.org
+            vanity:
+              enabled: true
