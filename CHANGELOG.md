@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.13.1](https://github.com/czbiohub-sf/gene2fish/compare/v0.13.0...v0.13.1) (2026-09-17)
+
+
+### Misc
+
+* bump @fontsource/jetbrains-mono from 5.2.8 to 5.3.0 in /frontend ([#88](https://github.com/czbiohub-sf/gene2fish/issues/88)) ([08942dd](https://github.com/czbiohub-sf/gene2fish/commit/08942dd889e339344673f1bf805e8e103c9077b3))
+* bump @playwright/test from 1.60.0 to 1.63.0 in /frontend ([#146](https://github.com/czbiohub-sf/gene2fish/issues/146)) ([cafbf81](https://github.com/czbiohub-sf/gene2fish/commit/cafbf814d69d24cabb832337939d0356714a7c6a))
+* bump @sentry/react from 10.70.0 to 10.73.0 in /frontend ([#145](https://github.com/czbiohub-sf/gene2fish/issues/145)) ([56e2980](https://github.com/czbiohub-sf/gene2fish/commit/56e2980cd3fb111673306ad3f6c94e72ed6feb7f))
+* bump @vitejs/plugin-react from 5.2.0 to 6.1.1 in /frontend ([#139](https://github.com/czbiohub-sf/gene2fish/issues/139)) ([11c4408](https://github.com/czbiohub-sf/gene2fish/commit/11c4408a1a1783f19f5b356b5eb12b33aacd4fb5))
+* bump actions/checkout from 4.4.0 to 7.0.1 ([#117](https://github.com/czbiohub-sf/gene2fish/issues/117)) ([986e760](https://github.com/czbiohub-sf/gene2fish/commit/986e7608beed86871101a77a156087f71142ce93))
+* bump actions/setup-node from 4.4.0 to 7.0.0 ([#118](https://github.com/czbiohub-sf/gene2fish/issues/118)) ([74026be](https://github.com/czbiohub-sf/gene2fish/commit/74026be9a610e4a904ee475596d8c7b3470903ac))
+* bump boto3 from 1.43.36 to 1.43.67 ([#125](https://github.com/czbiohub-sf/gene2fish/issues/125)) ([f8f78a2](https://github.com/czbiohub-sf/gene2fish/commit/f8f78a2f6eb14a3321336a6579eb418822147005))
+* bump fastapi from 0.135.3 to 0.141.1 ([#98](https://github.com/czbiohub-sf/gene2fish/issues/98)) ([c5145ad](https://github.com/czbiohub-sf/gene2fish/commit/c5145ad35fbfd66d38e9cec5d302eeb212813437))
+* bump idna from 3.17 to 3.19 ([#33](https://github.com/czbiohub-sf/gene2fish/issues/33)) ([6fb91bb](https://github.com/czbiohub-sf/gene2fish/commit/6fb91bbd468e71cb53083cc14be78e00ad57200b))
+* bump matplotlib from 3.10.8 to 3.11.2 ([#87](https://github.com/czbiohub-sf/gene2fish/issues/87)) ([dda1652](https://github.com/czbiohub-sf/gene2fish/commit/dda165258fccbb847f79acbdb9d1ac161ef34c87))
+* bump pandas from 3.0.2 to 3.0.5 ([#90](https://github.com/czbiohub-sf/gene2fish/issues/90)) ([d703af7](https://github.com/czbiohub-sf/gene2fish/commit/d703af7e3ae1cf45a16831835f18a92b59b0568f))
+* bump pydantic from 2.13.0 to 2.13.5 ([#18](https://github.com/czbiohub-sf/gene2fish/issues/18)) ([4cb96b9](https://github.com/czbiohub-sf/gene2fish/commit/4cb96b90893501ec0752e7135fae21cfce17bd40))
+* bump pytest from 9.0.3 to 9.1.1 ([#53](https://github.com/czbiohub-sf/gene2fish/issues/53)) ([7a706a8](https://github.com/czbiohub-sf/gene2fish/commit/7a706a8eb2326d4f139b4670c662415f07ebb7c4))
+* bump starlette from 1.3.1 to 1.6.0 ([#124](https://github.com/czbiohub-sf/gene2fish/issues/124)) ([96dbc29](https://github.com/czbiohub-sf/gene2fish/commit/96dbc295ad2d001ada628af9fc550d0946cd01b9))
+* bump vite from 8.0.16 to 8.2.2 in /frontend ([#137](https://github.com/czbiohub-sf/gene2fish/issues/137)) ([4761559](https://github.com/czbiohub-sf/gene2fish/commit/4761559a83902107ef1bd3e838197f6fd725f9da))
+
 ## [0.13.0](https://github.com/czbiohub-sf/gene2fish/compare/v0.12.0...v0.13.0) (2026-09-17)
 
 
