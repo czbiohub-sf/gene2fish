@@ -3,7 +3,7 @@ stack:
   services:
     gene2fish:
       image:
-        tag: sha-9030540
+        tag: sha-487f2bd
       # Serve mirrored ZFIN images from the CZI-managed private bucket (GEN-45).
       # Staging shares the -dev bucket with rdev (immutable image cache, one
       # seed serves both). The IRSA role trusts exactly serviceaccount
