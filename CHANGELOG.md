@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.0](https://github.com/czbiohub-sf/gene2fish/compare/v0.12.0...v0.13.0) (2026-09-17)
+
+
+### Features
+
+* **infra:** migrate all environments to the Envoy Gateway ([#149](https://github.com/czbiohub-sf/gene2fish/issues/149)) ([33b8328](https://github.com/czbiohub-sf/gene2fish/commit/33b83282497d413081f976c76877f566f3109830))
+
 ## [0.12.0](https://github.com/czbiohub-sf/gene2fish/compare/v0.11.1...v0.12.0) (2026-09-15)
 
 
