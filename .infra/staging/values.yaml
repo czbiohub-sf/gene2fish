@@ -29,12 +29,7 @@ stack:
           value: "gene2fish/zfin-images"
         - name: GENE2IMAGE_IMAGE_S3_REGION
           value: "us-west-2"
-      ingress:
-        enabled: true
-        rules:
-          - host: gene2fish.apps-staging.czbiohub.org
       gateway:
-        dnsOwner: gateway
         rules:
           - host: gene2fish.apps-staging.czbiohub.org
             vanity:
