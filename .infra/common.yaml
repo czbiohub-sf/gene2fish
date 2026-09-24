@@ -9,10 +9,9 @@ stack:
     nodeSelector:
       kubernetes.io/arch: arm64
     oidcProxy:
-      enabled: true
+      enabled: false
       extraArgs:
         - "--trusted-ip=204.102.230.5"
-
   services:
     gene2fish:
       image:
@@ -39,11 +38,6 @@ stack:
         requests:
           cpu: 500m
           memory: 1Gi
-      ingress:
-        oidcProtected: true
-        paths:
-          - path: /
-            pathType: Prefix
       gateway:
         enabled: true
         securityPolicy: oidc-protected-default
