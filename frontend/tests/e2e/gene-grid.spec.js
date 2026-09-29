@@ -568,6 +568,24 @@ test("lightbox lists 'expression not found' terms apart from expressed anatomy",
   await expect(notDetected).toContainText("whole organism");
 });
 
+test("grid hover text never lists 'expression not found' terms as expression", async ({ page }) => {
+  await page.route("**/api/genes/batch", async (route) => {
+    const img = {
+      ...image("nosignal", stages[0]),
+      anatomy_terms: [
+        { anatomy_name: "whole organism", anatomy_id: "ZFA:0001094", expression_found: false },
+      ],
+    };
+    await route.fulfill({ json: { nosignal: [img] } });
+  });
+
+  await page.goto("/?genes=nosignal");
+  const cellImage = page.locator('img[alt^="nosignal at"]').first();
+  await expect(cellImage).toHaveAttribute("title", /no expression detected/);
+  await expect(cellImage).not.toHaveAttribute("title", /whole organism/);
+  await expect(page.locator(".cell-tooltip").first()).toContainText("no expression detected");
+});
+
 test("lightbox keeps the header fixed while the modal body scrolls", async ({ page }) => {
   await page.setViewportSize({ width: 1000, height: 460 });
   await page.route("**/api/genes/batch", async (route) => {

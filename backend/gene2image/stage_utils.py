@@ -86,7 +86,13 @@ def _score_image(img: dict) -> tuple[int, int]:
     is_whole_mount = int(
         (img.get("image_info") or {}).get("image_preparation", "") == "whole-mount"
     )
-    anatomy_count = len(img.get("anatomical_locations") or [])
+    # Only positive annotations: an "expression not found" term must not make a
+    # no-signal image outrank one with real expression data.
+    anatomy_count = sum(
+        1
+        for loc in img.get("anatomical_locations") or []
+        if loc.get("expression_found") not in ("f", False)
+    )
     return (is_whole_mount, anatomy_count)
 
 

@@ -252,3 +252,25 @@ def test_build_anatomy_ontology_keeps_substructure_edges_only():
 
 def test_build_anatomy_ontology_tolerates_missing_inputs():
     assert build_anatomy_ontology(None, None) == {"parents": {}, "names": {}}
+
+
+# --- representative-image ranking ----------------------------------------------
+
+
+def test_not_found_terms_do_not_boost_image_ranking():
+    from gene2image.stage_utils import select_top_n
+
+    def img(image_id, locations):
+        return {
+            "image_id": image_id,
+            "image_info": {"image_preparation": "whole-mount"},
+            "anatomical_locations": locations,
+        }
+
+    no_signal = img("ZDB-IMAGE-9", [_loc("whole organism", "ZFA:0001094", found="f"),
+                                    _loc("unspecified", "ZFA:0001093", found="f")])
+    expressed = img("ZDB-IMAGE-1", [_loc("hindbrain", HINDBRAIN)])
+
+    # The image with real expression wins despite having fewer annotations
+    # (and a lower image ID, the final tie-breaker).
+    assert [i["image_id"] for i in select_top_n([no_signal, expressed], 1)] == ["ZDB-IMAGE-1"]

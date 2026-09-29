@@ -33,7 +33,8 @@ def load_anatomy_gene_counts(json_path: Path) -> dict[str, int]:
         all_genes.add(sym)
         for loc in r.get("anatomical_locations") or []:
             name = loc.get("anatomy_name")
-            if name:
+            # Skip ZFIN "expression not found" annotations, as the app does.
+            if name and loc.get("expression_found") not in ("f", False):
                 anatomy_to_genes[name].add(sym)
 
     counts = {name: len(genes) for name, genes in anatomy_to_genes.items()}
