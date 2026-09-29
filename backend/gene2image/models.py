@@ -18,6 +18,9 @@ class AnatomyTerm(BaseModel):
     # ZFA ontology identifier, e.g. "ZFA:0000615". May be absent for records
     # that only carry a free-text anatomy label.
     anatomy_id: str | None = None
+    # False when ZFIN recorded this structure as expression NOT found. Such
+    # terms are shown (labelled) in the lightbox but never drive anatomy search.
+    expression_found: bool = True
 
 
 class DiseaseAssociation(BaseModel):
@@ -90,6 +93,9 @@ class BatchRequest(BaseModel):
 
 class GeneFacetsRequest(BaseModel):
     genes: list[str]
+    # Count an anatomy option when an image is annotated to it OR to one of its
+    # substructures, matching the anatomy search's default semantics.
+    include_substructures: bool = True
 
 
 class StageFacet(BaseModel):
