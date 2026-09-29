@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 // filter options actually have images (GEN-23). Returns null when there are no
 // genes OR when the request fails — callers treat null as "no constraint" so
 // every option stays enabled rather than being wrongly greyed out.
-export function useGeneFacets(genes) {
+export function useGeneFacets(genes, includeSubstructures = true) {
   const [facets, setFacets] = useState(null);
   // Resilient to a falsy `genes` so the memoized key never throws before the
   // effect's own fail-open guard runs.
@@ -23,7 +23,7 @@ export function useGeneFacets(genes) {
         const res = await fetch("/api/genes/facets", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ genes }),
+          body: JSON.stringify({ genes, include_substructures: includeSubstructures }),
         });
         if (!res.ok) throw new Error(`API error: ${res.status}`);
         const json = await res.json();
@@ -44,7 +44,7 @@ export function useGeneFacets(genes) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [genesKey]);
+  }, [genesKey, includeSubstructures]);
 
   return facets;
 }

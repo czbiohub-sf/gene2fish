@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-export function useAnatomyGenes(anatomy, limit) {
+export function useAnatomyGenes(anatomy, limit, includeSubstructures = true) {
   const anatomyTerms = Array.isArray(anatomy) ? anatomy : (anatomy ? [anatomy] : []);
   const anatomyKey = anatomyTerms.join("\n");
   const [suggestions, setSuggestions] = useState([]);
@@ -25,11 +25,13 @@ export function useAnatomyGenes(anatomy, limit) {
       setError(null);
       setNotFound(false);
       try {
+        const query = [["limit", limit]];
+        if (!includeSubstructures) query.push(["include_substructures", "false"]);
         const url = anatomyTerms.length === 1
-          ? `/api/anatomy/${encodeURIComponent(anatomyTerms[0])}/genes?limit=${limit}`
+          ? `/api/anatomy/${encodeURIComponent(anatomyTerms[0])}/genes?${new URLSearchParams(query).toString()}`
           : `/api/anatomy/genes?${new URLSearchParams([
             ...anatomyTerms.map((term) => ["anatomy", term]),
-            ["limit", limit],
+            ...query,
           ]).toString()}`;
         const res = await fetch(url);
         if (!res.ok) {
@@ -60,7 +62,7 @@ export function useAnatomyGenes(anatomy, limit) {
     return () => {
       cancelled = true;
     };
-  }, [anatomyKey, limit]);
+  }, [anatomyKey, limit, includeSubstructures]);
 
   return { suggestions, total, loading, error, notFound };
 }

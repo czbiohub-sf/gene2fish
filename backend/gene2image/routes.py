@@ -14,6 +14,7 @@ from urllib.request import urlopen
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 
 from . import s3_images
+from .data_loader import is_expression_found
 from .models import (
     AnatomyGene,
     AnatomyGenesResponse,
@@ -209,6 +210,7 @@ def _record_to_model(record: dict) -> ImageRecord:
         AnatomyTerm(
             anatomy_name=loc["anatomy_name"],
             anatomy_id=loc.get("anatomy_id"),
+            expression_found=is_expression_found(loc),
         )
         for loc in (record.get("anatomical_locations") or [])
         if loc.get("anatomy_name")
@@ -264,25 +266,48 @@ def _record_to_model(record: dict) -> ImageRecord:
     )
 
 
+def _anatomy_terms_of(r: dict, include_substructures: bool) -> frozenset[str]:
+    """Lowercased anatomy terms an image matches (positive annotations only).
+
+    With ``include_substructures`` the set also holds every ancestor of each
+    annotated term, so selecting "brain" matches an image annotated "hindbrain".
+    load_data() caches both sets on the record; the fallback covers records
+    built without it.
+    """
+    key = "_anatomy_substructures" if include_substructures else "_anatomy_direct"
+    cached = r.get(key)
+    if cached is not None:
+        return cached
+    return frozenset(
+        loc["anatomy_name"].lower()
+        for loc in (r.get("anatomical_locations") or [])
+        if loc.get("anatomy_name") and is_expression_found(loc)
+    )
+
+
 def _record_matches_anatomy(r: dict, anatomy_lower: str) -> bool:
-    """True if any anatomy term on this image contains the search substring."""
-    return any(
-        anatomy_lower in (loc.get("anatomy_name", "").lower())
-        for loc in (r.get("anatomical_locations") or [])
-    )
+    """True if any positive anatomy term on this image contains the search substring."""
+    return any(anatomy_lower in term for term in _anatomy_terms_of(r, False))
 
 
-def _record_matches_exact_anatomy(r: dict, anatomy_terms_lower: set[str]) -> bool:
-    """True if any anatomy term on this image exactly matches a selected term."""
-    return any(
-        loc.get("anatomy_name", "").lower() in anatomy_terms_lower
-        for loc in (r.get("anatomical_locations") or [])
-    )
+def _record_matches_exact_anatomy(
+    r: dict, anatomy_terms_lower: set[str], include_substructures: bool
+) -> bool:
+    """True if this image matches a selected term (or, optionally, a substructure of it)."""
+    return not anatomy_terms_lower.isdisjoint(_anatomy_terms_of(r, include_substructures))
+
+
+def _anatomy_index(request: Request, include_substructures: bool) -> dict:
+    data = request.app.state.data
+    if include_substructures:
+        return data.get("anatomy_index_substructures", data["anatomy_index"])
+    return data["anatomy_index"]
 
 
 def _get_anatomy_gene_pairs(
     anatomy_terms: list[str],
     request: Request,
+    include_substructures: bool = True,
 ) -> list[tuple[str, int]] | None:
     """Return alphabetized genes that are present in every selected anatomy term."""
     terms = []
@@ -296,7 +321,7 @@ def _get_anatomy_gene_pairs(
     if not terms:
         return []
 
-    idx: dict[str, list[tuple[str, int]]] = request.app.state.data["anatomy_index"]
+    idx: dict[str, list[tuple[str, int]]] = _anatomy_index(request, include_substructures)
     per_term_symbols = []
     for term in terms:
         pairs = idx.get(term)
@@ -311,7 +336,9 @@ def _get_anatomy_gene_pairs(
     for symbol in matched_symbols:
         records = gene_index.get(symbol) or []
         image_count = sum(
-            1 for record in records if _record_matches_exact_anatomy(record, terms_set)
+            1
+            for record in records
+            if _record_matches_exact_anatomy(record, terms_set, include_substructures)
         )
         pairs.append((symbol, image_count))
 
@@ -555,10 +582,8 @@ def gene_facets(body: GeneFacetsRequest, request: Request) -> GeneFacetsResponse
             ch = record.get("_canonical_hours")
             if ch is not None:
                 stage_counts[ch] += 1
-            for loc in record.get("anatomical_locations") or []:
-                name = loc.get("anatomy_name")
-                if name:
-                    anatomy_counts[name.lower()] += 1
+            for term in _anatomy_terms_of(record, body.include_substructures):
+                anatomy_counts[term] += 1
 
     stages = [
         StageFacet(begin_hours=hours, image_count=count)
@@ -586,8 +611,11 @@ def get_anatomy_genes_for_terms(
     request: Request,
     anatomy: list[str] | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=1000),
+    # Default mirrors ZFIN's "include substructures" expression search: a term
+    # also matches images annotated to its is_a / part of descendants.
+    include_substructures: bool = Query(default=True),
 ) -> AnatomyGenesResponse:
-    pairs = _get_anatomy_gene_pairs(anatomy or [], request)
+    pairs = _get_anatomy_gene_pairs(anatomy or [], request, include_substructures)
     if pairs is None:
         raise HTTPException(status_code=404, detail="Anatomy term not found")
     return AnatomyGenesResponse(
@@ -601,11 +629,14 @@ def get_anatomy_genes(
     anatomy_name: str,
     request: Request,
     limit: int = Query(default=50, ge=1, le=1000),
+    # Default mirrors ZFIN's "include substructures" expression search: a term
+    # also matches images annotated to its is_a / part of descendants.
+    include_substructures: bool = Query(default=True),
 ) -> AnatomyGenesResponse:
     # Exact lowercased lookup (the client passes a verbatim term from the
     # autocomplete dropdown). Note: the image-grid filter in _filter_records
     # uses substring semantics — that asymmetry is intentional.
-    idx: dict[str, list[tuple[str, int]]] = request.app.state.data["anatomy_index"]
+    idx: dict[str, list[tuple[str, int]]] = _anatomy_index(request, include_substructures)
     pairs = idx.get(anatomy_name.lower())
     if pairs is None:
         raise HTTPException(status_code=404, detail="Anatomy term not found")
