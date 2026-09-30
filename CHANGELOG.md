@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.14.0](https://github.com/czbiohub-sf/gene2fish/compare/v0.13.1...v0.14.0) (2026-09-30)
+
+
+### Features
+
+* **infra:** flip gene2fish prod DNS to the Envoy Gateway ([#168](https://github.com/czbiohub-sf/gene2fish/issues/168)) ([80b37a5](https://github.com/czbiohub-sf/gene2fish/commit/80b37a50579676c099629f7968ad32ea5e0c05d2))
+* **infra:** flip gene2fish staging DNS to the Envoy Gateway ([#160](https://github.com/czbiohub-sf/gene2fish/issues/160)) ([3575268](https://github.com/czbiohub-sf/gene2fish/commit/35752684e9ec0bc37cbdc83aa127d4d47fd6e533))
+
+
+### Misc
+
+* **infra:** bump the gene2fish stack chart to 2.59.0 ([#167](https://github.com/czbiohub-sf/gene2fish/issues/167)) ([be27e75](https://github.com/czbiohub-sf/gene2fish/commit/be27e75e7c60c9b0a14df3d71ddcda9b256229d5))
+
 ## [0.13.1](https://github.com/czbiohub-sf/gene2fish/compare/v0.13.0...v0.13.1) (2026-09-17)
 
 
