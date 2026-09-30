@@ -1,8 +1,5 @@
 ###### Generated using `argus bootstrap` command ######
 stack:
-  global:
-    oidcProxy:
-      enabled: false
   services:
     gene2fish:
       image:

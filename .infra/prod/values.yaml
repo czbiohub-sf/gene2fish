@@ -9,12 +9,10 @@ stack:
       maxReplicas: 4
       targetCPUUtilizationPercentage: 70
       targetMemoryUtilizationPercentage: 70
-    # GEN-46: prod is publicly accessible for the ZebraHub embed launch, so
-    # the Okta/oauth2-proxy gatekeeping stays disabled. Turning the proxy off
-    # here avoids deploying an oauth2-proxy pod that nothing routes to.
-    # Staging keeps the Okta protection inherited from common.yaml.
-    oidcProxy:
-      enabled: false
+    # GEN-46: prod is publicly accessible for the ZebraHub embed launch, so it
+    # carries no auth at all: gateway.securityPolicy is "none" below. Staging is
+    # gated by the gateway SecurityPolicy (Envoy-native OIDC), not by the retired
+    # oauth2-proxy.
   services:
     gene2fish:
       image:
@@ -41,23 +39,8 @@ stack:
           value: "gene2fish/zfin-images"
         - name: GENE2IMAGE_IMAGE_S3_REGION
           value: "us-west-2"
-      ingress:
-        enabled: true
-        # GEN-46: Gene2Fish is embedded publicly inside ZebraHub, so the
-        # CNTR-101 HTTP basic auth gate (nginx auth-* annotations backed by
-        # the out-of-band `basic-auth` secret) is removed along with the Okta
-        # gatekeeping. The `basic-auth` secret in the prod namespace becomes
-        # unused and can be deleted out-of-band.
-        oidcProtected: false
-        rules:
-          - host: gene2fish.apps.czbiohub.org
       gateway:
-        enabled: true
-        dnsOwner: gateway
         securityPolicy: none
-        paths:
-          - path: /
-            pathType: Prefix
         rules:
           - host: gene2fish.apps.czbiohub.org
             vanity:
