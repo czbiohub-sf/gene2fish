@@ -1024,6 +1024,36 @@ test("grid hotlinks zfin.org directly when an image isn't in the mirror", async 
   expect(zfinRequests.every((url) => url.endsWith("_medium.jpg"))).toBe(true);
 });
 
+test("grid tries every mirrored variant before hotlinking zfin.org", async ({ page }) => {
+  // The mirror has the plain .jpg but not the _medium.jpg. The grid must fall
+  // back to the mirrored plain variant instead of hotlinking zfin.org.
+  await mockZfinBatch(page);
+  await page.route("**/api/image-proxy**", async (route) => {
+    const url = new URL(route.request().url()).searchParams.get("url");
+    if (url.endsWith("_medium.jpg")) {
+      await route.fulfill({ status: 404, json: { detail: "Image not in mirror" } });
+      return;
+    }
+    await route.fulfill({ contentType: "image/png", body: MOCK_PNG });
+  });
+  const zfinRequests = [];
+  await page.route("https://zfin.org/imageLoadUp/**", async (route) => {
+    zfinRequests.push(route.request().url());
+    await route.fulfill({ contentType: "image/png", body: MOCK_PNG });
+  });
+
+  await page.goto("/?genes=pax2a");
+
+  const images = page.locator('img[alt^="pax2a at"]');
+  await expect(images).toHaveCount(stages.length);
+  await expect(images.first()).toHaveAttribute(
+    "src",
+    /^\/api\/image-proxy\?url=.*ZDB-IMAGE-pax2a-[\d-]+\.jpg$/
+  );
+  await expect(images.first()).not.toHaveAttribute("src", /_medium\.jpg$/);
+  expect(zfinRequests).toHaveLength(0);
+});
+
 test("lightbox hotlinks zfin.org directly when an image isn't in the mirror", async ({ page }) => {
   // Only the grid's medium variant is mirrored here, so the lightbox's full-res
   // request misses the mirror and must fall back to zfin.org: annotated first,
