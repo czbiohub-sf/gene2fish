@@ -152,6 +152,32 @@ def test_image_proxy_reports_502_when_the_mirror_is_unreadable(client, monkeypat
     assert "Image mirror read failed" in caplog.text
 
 
+def test_image_proxy_502_log_shows_why_the_s3_client_could_not_be_created(
+    client, monkeypatch, caplog
+):
+    # A construction failure (bad region, bad profile) must reach the pod logs:
+    # the 502 traceback has to carry the original error, not just a bare
+    # "S3 client could not be created".
+    import boto3
+    from gene2image import s3_images
+
+    monkeypatch.setenv("GENE2IMAGE_IMAGE_S3_BUCKET", "test-bucket")
+    monkeypatch.setattr(s3_images, "_client", None)
+    monkeypatch.setattr(s3_images, "_client_unavailable", False)
+    monkeypatch.setattr(s3_images, "_client_error", None)
+
+    def bad_client(*args, **kwargs):
+        raise ValueError("bad-region")
+
+    monkeypatch.setattr(boto3, "client", bad_client)
+
+    with caplog.at_level("WARNING", logger="gene2image.routes"):
+        resp = client.get("/api/image-proxy", params={"url": PLAIN})
+
+    assert resp.status_code == 502
+    assert "bad-region" in caplog.text
+
+
 def test_image_proxy_mirror_lookup_uses_sanitized_url(client, monkeypatch):
     # The route-level sanitize (`url = _canonical_zfin_image_url(url)`) protects
     # two consumers: the annot fallback and the S3 mirror key. Without it, a

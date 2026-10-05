@@ -42,6 +42,7 @@ class ImageMirrorError(Exception):
 # construction fails so we don't retry it on every request.
 _client = None
 _client_unavailable = False
+_client_error: Exception | None = None  # why construction failed, chained by fetch_image
 _client_lock = threading.Lock()
 
 
@@ -62,7 +63,7 @@ def s3_key_for_url(url: str) -> str | None:
 
 
 def _get_client():
-    global _client, _client_unavailable
+    global _client, _client_unavailable, _client_error
     if _client is not None or _client_unavailable:
         return _client
     with _client_lock:
@@ -79,7 +80,8 @@ def _get_client():
                         retries={"max_attempts": 2, "mode": "standard"},
                     ),
                 )
-            except Exception:  # noqa: BLE001 — fetch_image raises ImageMirrorError
+            except Exception as err:  # noqa: BLE001 — fetch_image raises ImageMirrorError
+                _client_error = err
                 _client_unavailable = True
     return _client
 
@@ -100,7 +102,7 @@ def fetch_image(url: str) -> tuple[bytes, str] | None:
         return None
     client = _get_client()
     if client is None:
-        raise ImageMirrorError("S3 client could not be created")
+        raise ImageMirrorError("S3 client could not be created") from _client_error
     try:
         resp = client.get_object(Bucket=bucket, Key=key)
         stream = resp["Body"]

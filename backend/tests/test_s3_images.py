@@ -101,6 +101,26 @@ def test_fetch_image_raises_when_the_s3_client_is_unavailable(monkeypatch):
         s3_images.fetch_image(URL)
 
 
+def test_fetch_image_chains_the_s3_client_construction_error(monkeypatch):
+    import boto3
+
+    boom = ValueError("bad region")
+
+    def bad_client(*args, **kwargs):
+        raise boom
+
+    monkeypatch.setenv("GENE2IMAGE_IMAGE_S3_BUCKET", "test-bucket")
+    monkeypatch.setattr(s3_images, "_client", None)
+    monkeypatch.setattr(s3_images, "_client_unavailable", False)
+    monkeypatch.setattr(s3_images, "_client_error", None)
+    monkeypatch.setattr(boto3, "client", bad_client)
+
+    with pytest.raises(s3_images.ImageMirrorError) as excinfo:
+        s3_images.fetch_image(URL)
+
+    assert excinfo.value.__cause__ is boom
+
+
 def test_fetch_image_non_zfin_url_is_a_miss_without_touching_s3(mirror):
     fake = mirror({"Body": _Body(b"x"), "ContentType": "image/jpeg"})
 
