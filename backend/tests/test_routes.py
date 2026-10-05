@@ -827,8 +827,8 @@ def test_gene_batch_includes_lightbox_identifier_metadata(tmp_path, monkeypatch)
     # Anatomy terms carry their ZFA ontology id so the lightbox can link to
     # ZFIN; a term without an id still passes through with anatomy_id None.
     assert image["anatomy_terms"] == [
-        {"anatomy_name": "neural tube", "anatomy_id": "ZFA:0001135"},
-        {"anatomy_name": "unmapped region", "anatomy_id": None},
+        {"anatomy_name": "neural tube", "anatomy_id": "ZFA:0001135", "expression_found": True},
+        {"anatomy_name": "unmapped region", "anatomy_id": None, "expression_found": True},
     ]
 
 
