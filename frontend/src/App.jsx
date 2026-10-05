@@ -11,14 +11,14 @@ import { Attribution } from "./components/Attribution.jsx";
 
 export default function App() {
   const [urlState, setUrlState] = useUrlState();
-  const { genes, stageMin, stageMax, anatomy, nImages } = urlState;
+  const { genes, stageMin, stageMax, anatomy, includeSubstructures, nImages } = urlState;
   const [theme, setTheme] = useState("light");
 
   const { data, loading, error } = useGeneData(genes, stageMin, stageMax, nImages);
   // Which filter options have images for the genes in the grid — drives the
   // context-aware disabling of stage/anatomy options (GEN-23). Null when no
   // genes are present, in which case every option stays enabled.
-  const facets = useGeneFacets(genes);
+  const facets = useGeneFacets(genes, includeSubstructures);
 
   const addGene = useCallback(
     (symbol) => {
@@ -50,6 +50,13 @@ export default function App() {
     (terms) => {
       const nextTerms = Array.isArray(terms) ? terms : (terms ? [terms] : []);
       setUrlState((s) => ({ ...s, anatomy: nextTerms }));
+    },
+    [setUrlState]
+  );
+
+  const setIncludeSubstructures = useCallback(
+    (value) => {
+      setUrlState((s) => ({ ...s, includeSubstructures: value }));
     },
     [setUrlState]
   );
@@ -136,6 +143,8 @@ export default function App() {
       <div className="app-shell">
         <AnatomySuggestedGenes
           anatomy={anatomy}
+          includeSubstructures={includeSubstructures}
+          onSetIncludeSubstructures={setIncludeSubstructures}
           queriedGenes={genes}
           onAddGene={addGene}
         />

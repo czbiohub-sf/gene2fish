@@ -21,6 +21,8 @@ Required TSV files (auto-downloaded from https://zfin.org/downloads):
 11. human_orthos.txt              - Human ortholog information
 12. gene2DiseaseViaOrthology.txt  - Disease associations via orthologs
 13. uniprot.txt                   - UniProt protein IDs
+14. aliases.txt                   - Previous gene names/aliases (for alias search)
+15. anatomy_relationship.txt      - ZFA parent/child edges (substructure search)
 
 Usage:
     # Process all images (auto-downloads files to ./zfin_data):
@@ -64,12 +66,23 @@ REQUIRED_FILES = {
     "gene2DiseaseViaOrthology.txt": "https://zfin.org/downloads/file/gene2DiseaseViaOrthology.txt",
     "uniprot.txt": "https://zfin.org/downloads/file/uniprot.txt",
     "aliases.txt": "https://zfin.org/downloads/file/aliases.txt",
+    "anatomy_relationship.txt": "https://zfin.org/downloads/file/anatomy_relationship.txt",
 }
 
 # Sidecar file (written next to image_metadata.json) mapping each canonical ZFIN
 # gene ID to its previous/alias names, so the backend can resolve searches like
 # "oct4" → "pou5f3" through the stable gene ID. See build_alias_map().
 ALIASES_OUTPUT_NAME = "gene_aliases.json"
+
+# Sidecar (written next to image_metadata.json) holding the ZFA hierarchy, so
+# the backend can match an anatomy term together with its substructures (e.g.
+# "brain" also finds genes annotated to "hindbrain"). See build_anatomy_ontology().
+ANATOMY_ONTOLOGY_OUTPUT_NAME = "anatomy_ontology.json"
+
+# ZFA relationship types that make the child a substructure of the parent. This
+# matches ZFIN's own "include substructures" expression search; developmental
+# lineage ("develops from") and "overlaps" are deliberately not followed.
+SUBSTRUCTURE_RELATIONSHIPS = ("is_a", "part of")
 
 # Column name mappings for each file
 COLUMN_NAMES = {
@@ -108,6 +121,7 @@ COLUMN_NAMES = {
     "aliases.txt": [
         "Current ZFIN ID", "Current Name", "Current Symbol", "Previous Name", "SO ID"
     ],
+    "anatomy_relationship.txt": ["Parent Item ID", "Child Item ID", "Relationship Type ID"],
 }
 
 
@@ -666,6 +680,43 @@ def build_alias_map(aliases_df: pd.DataFrame, gene_ids: set) -> Dict[str, List[s
     return {gid: sorted(names, key=str.lower) for gid, names in alias_map.items()}
 
 
+def build_anatomy_ontology(
+    relationship_df: Optional[pd.DataFrame], anatomy_df: Optional[pd.DataFrame]
+) -> Dict[str, Dict[str, Any]]:
+    """Build the ZFA substructure hierarchy sidecar.
+
+    Returns ``{"parents": {child_id: [parent_id, ...]}, "names": {id: name}}``,
+    keeping only ``is_a`` / ``part of`` edges (SUBSTRUCTURE_RELATIONSHIPS). The
+    backend walks ``parents`` transitively so an image annotated to a term also
+    counts for every ancestor of that term; ``names`` labels those ancestors.
+    Missing inputs yield an empty sidecar, and the backend then falls back to
+    exact-term matching.
+    """
+    parents: Dict[str, List[str]] = {}
+    if relationship_df is not None:
+        for _, row in relationship_df.iterrows():
+            if row.get("Relationship Type ID") not in SUBSTRUCTURE_RELATIONSHIPS:
+                continue
+            parent, child = row.get("Parent Item ID"), row.get("Child Item ID")
+            if not isinstance(parent, str) or not isinstance(child, str):
+                continue
+            bucket = parents.setdefault(child, [])
+            if parent not in bucket:
+                bucket.append(parent)
+
+    names: Dict[str, str] = {}
+    if anatomy_df is not None:
+        for _, row in anatomy_df.iterrows():
+            aid, name = row.get("Anatomy ID"), row.get("Anatomy Name")
+            if isinstance(aid, str) and isinstance(name, str):
+                names[aid] = name
+
+    return {
+        "parents": {child: sorted(ps) for child, ps in sorted(parents.items())},
+        "names": dict(sorted(names.items())),
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Extract metadata for ZFIN images (auto-downloads required files)",
@@ -788,6 +839,19 @@ def main():
     with open(aliases_path, "w", encoding="utf-8") as f:
         json.dump(alias_map, f, indent=2, ensure_ascii=False)
     print(f"  ✓ Saved aliases for {len(alias_map):,} genes")
+
+    # Save the anatomy-hierarchy sidecar so anatomy search can include
+    # substructures. Written for the whole ZFA ontology: it is small, and the
+    # backend only walks the part reachable from terms actually in the index.
+    ontology = build_anatomy_ontology(
+        extractor.data.get("anatomy_relationship.txt"),
+        extractor.data.get("anatomy_item.txt"),
+    )
+    ontology_path = Path(json_path).parent / ANATOMY_ONTOLOGY_OUTPUT_NAME
+    print(f"\nSaving anatomy ontology to: {ontology_path}")
+    with open(ontology_path, "w", encoding="utf-8") as f:
+        json.dump(ontology, f, indent=2, ensure_ascii=False)
+    print(f"  ✓ Saved {sum(len(v) for v in ontology['parents'].values()):,} substructure links")
 
     # Save TSV output
     tsv_path = f"{args.output_prefix}.tsv"
