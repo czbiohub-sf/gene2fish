@@ -17,6 +17,33 @@ function uniprotQueryUrl(id) {
   return `https://www.uniprot.org/uniparc?query=(dbid:${encodeURIComponent(id)})`;
 }
 
+// Anatomy terms for one image. ZFIN records negative results ("expression not
+// found") too; those are listed separately so they never read as expression.
+function AnatomyGroup({ label, note, terms, muted = false }) {
+  if (!terms.length) return null;
+  return (
+    <div className="meta-group">
+      <div className="meta-label">{label}</div>
+      {note && <div className="meta-note">{note}</div>}
+      <ul className="meta-list">
+        {terms.map((a) => (
+          <li
+            key={a.anatomy_id || a.anatomy_name}
+            className={`meta-tag anatomy-tag${muted ? " anatomy-tag-muted" : ""}`}
+          >
+            <span className="anatomy-tag-name">{a.anatomy_name}</span>
+            {a.anatomy_id && (
+              <ExternalLink href={zfinUrl(a.anatomy_id)}>
+                <span className="anatomy-tag-id mono">{a.anatomy_id}</span>
+              </ExternalLink>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function Lightbox({ image, onClose, onPrev, onNext, hasPrev, hasNext }) {
   useEffect(() => {
     function handleKey(e) {
@@ -89,23 +116,16 @@ export function Lightbox({ image, onClose, onPrev, onNext, hasPrev, hasNext }) {
             <GeneMeta image={image} />
             <MetaGroup label="Stage" value={image.stage_display_label} />
             <MetaGroup label="Image preparation" value={image.image_preparation} />
-            {image.anatomy_terms?.length > 0 && (
-              <div className="meta-group">
-                <div className="meta-label">Anatomy</div>
-                <ul className="meta-list">
-                  {image.anatomy_terms.map((a) => (
-                    <li key={a.anatomy_id || a.anatomy_name} className="meta-tag anatomy-tag">
-                      <span className="anatomy-tag-name">{a.anatomy_name}</span>
-                      {a.anatomy_id && (
-                        <ExternalLink href={zfinUrl(a.anatomy_id)}>
-                          <span className="anatomy-tag-id mono">{a.anatomy_id}</span>
-                        </ExternalLink>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            <AnatomyGroup
+              label="Anatomy"
+              note="Annotated per ZFIN figure (all views of this gene at this stage)"
+              terms={(image.anatomy_terms || []).filter((a) => a.expression_found !== false)}
+            />
+            <AnatomyGroup
+              label="Not detected in"
+              terms={(image.anatomy_terms || []).filter((a) => a.expression_found === false)}
+              muted
+            />
             {(image.est_symbol || image.est_id) && (
               <div className="meta-group">
                 <div className="meta-label">Clone / probe</div>
