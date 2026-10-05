@@ -7,6 +7,7 @@ import os
 import re
 from pathlib import Path
 
+from .models import is_expression_found
 from .stage_utils import assign_canonical_stage
 
 # Sidecar written by the extractor next to image_metadata.json: maps each
@@ -46,16 +47,6 @@ def _parse_stage_hours(record: dict) -> None:
                     stage[key] = float(val)
                 except (ValueError, TypeError):
                     stage[key] = None
-
-
-def is_expression_found(loc: dict) -> bool:
-    """True unless ZFIN recorded this anatomy term as expression NOT found.
-
-    ZFIN annotations carry an ``expression_found`` flag ("t"/"f"); a negative
-    result must not make a gene match that structure. Records without the flag
-    (older builds, hand-written fixtures) are treated as positive.
-    """
-    return loc.get("expression_found") not in ("f", False)
 
 
 def load_data() -> dict:
@@ -112,6 +103,11 @@ def load_data() -> dict:
             anatomy_set.add(name)
             direct.add(name.lower())
             with_substructures.add(name.lower())
+            # Positive substructure evidence deliberately wins over an explicit
+            # negative on an ancestor: an image annotated "rhombomere 1" (found)
+            # and "brain" (not found) still matches a "brain" substructure
+            # search. ZFIN negatives are coarse (mostly "whole organism" on
+            # no-signal images) and must not veto finer-grained positives.
             with_substructures.update(ancestors_of(loc.get("anatomy_id")))
         record["_anatomy_direct"] = frozenset(direct)
         record["_anatomy_substructures"] = frozenset(with_substructures)

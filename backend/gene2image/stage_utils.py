@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .models import is_expression_found
+
 # Each entry: (stage_name, begin_hours, display_label)
 CANONICAL_STAGES: list[tuple[str, float, str]] = [
     ("Zygote:1-cell",               0.00,    "unspecified"),
@@ -89,9 +91,7 @@ def _score_image(img: dict) -> tuple[int, int]:
     # Only positive annotations: an "expression not found" term must not make a
     # no-signal image outrank one with real expression data.
     anatomy_count = sum(
-        1
-        for loc in img.get("anatomical_locations") or []
-        if loc.get("expression_found") not in ("f", False)
+        1 for loc in img.get("anatomical_locations") or [] if is_expression_found(loc)
     )
     return (is_whole_mount, anatomy_count)
 

@@ -5,6 +5,19 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 
+def is_expression_found(loc: dict) -> bool:
+    """True unless ZFIN recorded this anatomy term as expression NOT found.
+
+    ZFIN annotations carry an ``expression_found`` flag ("t"/"f"); a negative
+    result must not make a gene match that structure. Records without the flag
+    (older builds, hand-written fixtures) are treated as positive.
+
+    Lives here (not in data_loader) so stage_utils can use it too: data_loader
+    imports stage_utils, and this module is below both in the import graph.
+    """
+    return loc.get("expression_found") not in ("f", False)
+
+
 class HumanOrtholog(BaseModel):
     human_symbol: str | None = None
     human_name: str | None = None

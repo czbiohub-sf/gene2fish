@@ -14,7 +14,6 @@ from urllib.request import urlopen
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 
 from . import s3_images
-from .data_loader import is_expression_found
 from .models import (
     AnatomyGene,
     AnatomyGenesResponse,
@@ -30,6 +29,7 @@ from .models import (
     HumanOrtholog,
     ImageRecord,
     StageFacet,
+    is_expression_found,
 )
 from .stage_utils import CANONICAL_STAGES, get_stage_info, select_representative, select_top_n
 

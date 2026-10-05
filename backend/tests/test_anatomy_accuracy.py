@@ -145,6 +145,29 @@ def test_anatomy_search_includes_substructures_by_default(tmp_path, monkeypatch)
     assert hindbrain == {"hbgene": 2}
 
 
+def test_positive_substructure_evidence_wins_over_negative_ancestor(tmp_path, monkeypatch):
+    """A positive in a substructure deliberately beats an explicit negative above it.
+
+    ZFIN negatives are coarse (mostly "whole organism" on no-signal images); an
+    image annotated "rhombomere 1" (found) and "brain" (not found) must still
+    match a "brain" substructure search — the finer-grained positive wins. The
+    negative still keeps the image out of exact-term "brain" matching.
+    """
+    records = RECORDS + [
+        _record(
+            "mixedgene",
+            "ZDB-IMAGE-8",
+            [_loc("rhombomere 1", RHOMBOMERE_1), _loc("brain", BRAIN, found="f")],
+        )
+    ]
+    with _client(tmp_path, monkeypatch, records=records) as c:
+        brain = _genes(c.get("/api/anatomy/brain/genes"))
+        exact = _genes(c.get("/api/anatomy/brain/genes", params={"include_substructures": False}))
+
+    assert brain == {"braingene": 1, "hbgene": 2, "mixedgene": 1}
+    assert "mixedgene" not in exact
+
+
 def test_exact_term_matching_can_be_requested(tmp_path, monkeypatch):
     with _client(tmp_path, monkeypatch) as c:
         brain = _genes(c.get("/api/anatomy/brain/genes", params={"include_substructures": False}))
