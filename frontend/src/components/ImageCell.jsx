@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useImageQueue } from "../hooks/useImageQueue.js";
-import { proxiedImageSrc } from "../utils/imageProxy.js";
+import { imageSrcCandidates, nextImageSrc } from "../utils/imageProxy.js";
 
 // Hover text for a cell: the structures with expression. ZFIN also records
 // "expression not found" annotations; those must not read as expression.
@@ -16,8 +16,8 @@ function SingleImage({ image, onClick, compact, onFail }) {
   const [failed, setFailed] = useState(false);
   const enqueue = useImageQueue();
 
-  // Load through the backend proxy (our S3 mirror, with live-ZFIN fallback) so
-  // images keep loading during temporary ZFIN outages (GEN-22).
+  // Load from our S3 mirror through the backend proxy, hotlinking zfin.org
+  // directly when an image isn't mirrored (see imageSrcCandidates).
   //
   // The grid serves ZFIN's medium variant (~15KB, 500x374) instead of the
   // full-res image (~377KB): a comparison view of N images then transfers
@@ -26,19 +26,19 @@ function SingleImage({ image, onClick, compact, onFail }) {
   // 86x64 thumbnail looked blurry upscaled into the cell (GEN-36). The lightbox
   // still loads full-res. If the medium variant is missing we fall back to the
   // plain full-res image.
-  const primarySrc = proxiedImageSrc(image.image_medium_url);
-  const fallbackSrc = proxiedImageSrc(image.image_url_fallback);
+  const candidates = imageSrcCandidates(image.image_medium_url, image.image_url_fallback);
 
   useEffect(() => {
     setSrc(null);
     setFailed(false);
-    const dequeue = enqueue(setSrc, primarySrc);
+    const dequeue = enqueue(setSrc, candidates[0]);
     return dequeue; // remove from queue if unmounted before turn
   }, [image.image_medium_url]); // re-enqueue if image changes
 
   function handleError(e) {
-    if (src === primarySrc && fallbackSrc !== primarySrc) {
-      setSrc(fallbackSrc);
+    const next = nextImageSrc(candidates, src);
+    if (next) {
+      setSrc(next);
     } else {
       e.target.onerror = null;
       setFailed(true);

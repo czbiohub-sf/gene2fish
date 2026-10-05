@@ -1,5 +1,4 @@
 import json
-from urllib.error import HTTPError, URLError
 
 import pytest
 from fastapi.testclient import TestClient
@@ -56,340 +55,128 @@ def test_image_proxy_restricts_to_zfin_imageloadup_urls(client):
     assert resp.status_code == 400
 
 
-def test_image_proxy_strips_query_and_fragment(client, monkeypatch):
-    # The validator returns a URL rebuilt from validated components (scheme,
-    # host, path only), so a query string or fragment on the incoming URL must
-    # never reach ZFIN.
-    from gene2image import routes
+def _mirror(monkeypatch, objects):
+    # Stand in for the S3 mirror: serve `objects` ({canonical ZFIN URL: bytes})
+    # and record every lookup the proxy makes.
+    from gene2image import s3_images
 
-    def fake_urlopen(request, timeout, context=None):
-        assert request.full_url == "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"
-        return _FakeImageResponse()
+    lookups = []
 
-    monkeypatch.setattr(routes, "urlopen", fake_urlopen)
+    def fake_fetch(url):
+        lookups.append(url)
+        body = objects.get(url)
+        return None if body is None else (body, "image/jpeg")
 
-    resp = client.get(
-        "/api/image-proxy",
-        params={
-            "url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg?evil=1#frag"
-        },
-    )
+    monkeypatch.setattr(s3_images, "fetch_image", fake_fetch)
+    return lookups
+
+
+def _forbid_network(monkeypatch):
+    # The proxy serves only our S3 mirror of the ZFIN-provided Thisse package
+    # (legal requirement). It must never fetch an image itself, from ZFIN or
+    # anywhere else, or it becomes a way to redistribute images outside that
+    # package through our infrastructure.
+    import socket
+
+    def boom(*args, **kwargs):
+        raise AssertionError("the image proxy must not open network connections")
+
+    monkeypatch.setattr(socket, "getaddrinfo", boom)
+    monkeypatch.setattr(socket.socket, "connect", boom)
+
+
+PLAIN = "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"
+ANNOT = "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1_annot.jpg"
+
+
+def test_image_proxy_serves_mirrored_image(client, monkeypatch):
+    _forbid_network(monkeypatch)
+    _mirror(monkeypatch, {PLAIN: b"s3-bytes"})
+
+    resp = client.get("/api/image-proxy", params={"url": PLAIN})
 
     assert resp.status_code == 200
-    assert resp.content == b"image-bytes"
-
-
-def test_image_proxy_returns_image_bytes(client, monkeypatch):
-    from gene2image import routes
-
-    def fake_urlopen(request, timeout, context=None):
-        assert request.full_url == "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"
-        assert timeout == 15
-        return _FakeImageResponse()
-
-    monkeypatch.setattr(routes, "urlopen", fake_urlopen)
-
-    resp = client.get(
-        "/api/image-proxy",
-        params={"url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"},
-    )
-
-    assert resp.status_code == 200
-    assert resp.content == b"image-bytes"
+    assert resp.content == b"s3-bytes"
     assert resp.headers["content-type"] == "image/jpeg"
+    assert resp.headers["cache-control"] == "public, max-age=86400"
     assert resp.headers["access-control-allow-origin"] == "*"
     assert resp.headers["x-content-type-options"] == "nosniff"
 
 
-def test_image_proxy_rejects_non_image_content(client, monkeypatch):
-    # Content-type hardening: the proxy serves only images. If ZFIN returns a
-    # non-image (e.g. text/html) body, it must be refused — never returned so it
-    # could render as a document on our own origin (XSS). Without the image/*
-    # check this returns 200 + the HTML body.
-    from gene2image import routes
+def test_image_proxy_404s_unmirrored_image_without_fetching_zfin(client, monkeypatch):
+    # A non-Thisse ZFIN image is not in the package, so it is not ours to serve:
+    # the proxy answers 404 (the browser may hotlink zfin.org itself) and never
+    # fetches it from ZFIN on the caller's behalf.
+    _forbid_network(monkeypatch)
+    url = "https://zfin.org/imageLoadUp/2006/ZDB-PUB-060503-2/ZDB-IMAGE-981125-4_medium.jpg"
+    lookups = _mirror(monkeypatch, {})
 
-    monkeypatch.setattr(
-        routes,
-        "urlopen",
-        lambda request, timeout, context=None: _FakeImageResponse(
-            b"<script>alert(document.domain)</script>", "text/html"
-        ),
-    )
-
-    resp = client.get(
-        "/api/image-proxy",
-        params={"url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"},
-    )
-
-    assert resp.status_code == 502
-    assert b"<script>" not in resp.content
-
-
-def test_image_proxy_does_not_follow_redirects(client, monkeypatch):
-    # SSRF guard: the allowlist only validates the *initial* URL. If ZFIN (or an
-    # open redirect on it) 3xx-redirects to an internal host, the proxy must NOT
-    # follow it. Stand up a local server that redirects to a "secret" path and
-    # assert the secret is never fetched or returned to the caller.
-    import http.server
-    import threading
-
-    from gene2image import routes
-
-    secret = b"INTERNAL-SECRET"
-
-    class Handler(http.server.BaseHTTPRequestHandler):
-        def do_GET(self):
-            if self.path == "/secret":
-                self.send_response(200)
-                self.end_headers()
-                self.wfile.write(secret)
-            else:
-                self.send_response(302)
-                self.send_header("Location", "/secret")
-                self.end_headers()
-
-        def log_message(self, format, *args):  # silence test-server logging
-            pass
-
-    server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
-    port = server.server_address[1]
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        # Bypass the zfin.org allowlist so the fetch can target the local
-        # redirecting server; the redirect-following behavior is what we test.
-        monkeypatch.setattr(routes, "_canonical_zfin_image_url", lambda url: url)
-        resp = client.get(
-            "/api/image-proxy", params={"url": f"http://127.0.0.1:{port}/redirect"}
-        )
-    finally:
-        server.shutdown()
-        thread.join(timeout=5)
-
-    # Redirect refused → surfaced as a non-2xx error, and the secret body is
-    # never returned. Without the no-redirect opener this returns 200 + secret.
-    assert resp.status_code != 200
-    assert secret not in resp.content
-
-
-def test_image_proxy_returns_502_when_fetch_fails(client, monkeypatch):
-    from gene2image import routes
-
-    monkeypatch.setattr(routes.time, "sleep", lambda seconds: None)
-
-    def fake_urlopen(request, timeout):
-        raise URLError("certificate verify failed")
-
-    monkeypatch.setattr(routes, "urlopen", fake_urlopen)
-
-    resp = client.get(
-        "/api/image-proxy",
-        params={"url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"},
-    )
-
-    assert resp.status_code == 502
-
-
-class _FakeImageResponse:
-    class _Headers:
-        def __init__(self, content_type: str):
-            self._content_type = content_type
-
-        def get_content_type(self):
-            return self._content_type
-
-    def __init__(self, body: bytes = b"image-bytes", content_type: str = "image/jpeg"):
-        self._body = body
-        self.headers = self._Headers(content_type)
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc, tb):
-        return False
-
-    def read(self):
-        return self._body
-
-
-def test_image_proxy_retries_transient_failures(client, monkeypatch):
-    # ZFIN fails intermittently (resets/timeouts/sporadic 5xx) even when it is
-    # otherwise up; a transient failure must be retried and served, not
-    # surfaced as a broken image (GEN-46).
-    from gene2image import routes
-
-    monkeypatch.setattr(routes.time, "sleep", lambda seconds: None)
-
-    calls = {"n": 0}
-
-    def flaky_urlopen(request, timeout):
-        calls["n"] += 1
-        if calls["n"] == 1:
-            raise URLError("connection reset by peer")
-        if calls["n"] == 2:
-            raise HTTPError(request.full_url, 503, "Service Unavailable", None, None)
-        return _FakeImageResponse()
-
-    monkeypatch.setattr(routes, "urlopen", flaky_urlopen)
-
-    resp = client.get(
-        "/api/image-proxy",
-        params={"url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"},
-    )
-
-    assert resp.status_code == 200
-    assert resp.content == b"image-bytes"
-    assert calls["n"] == 3
-
-
-def test_image_proxy_persistent_5xx_reports_upstream_error(client, monkeypatch):
-    # A 5xx that survives every retry is an upstream outage, not a missing
-    # image — the status code passes through but the detail must not read
-    # like a 404.
-    from gene2image import routes
-
-    monkeypatch.setattr(routes.time, "sleep", lambda seconds: None)
-
-    calls = {"n": 0}
-
-    def unavailable_urlopen(request, timeout):
-        calls["n"] += 1
-        raise HTTPError(request.full_url, 503, "Service Unavailable", None, None)
-
-    monkeypatch.setattr(routes, "urlopen", unavailable_urlopen)
-
-    resp = client.get(
-        "/api/image-proxy",
-        params={"url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"},
-    )
-
-    assert resp.status_code == 503
-    assert "temporarily unavailable" in resp.json()["detail"]
-    assert calls["n"] == 3
-
-
-def test_image_proxy_does_not_retry_4xx(client, monkeypatch):
-    # 4xx is definitive (e.g. a genuinely missing _annot.jpg variant) — the
-    # proxy must fail fast so the plain-variant fallback isn't delayed by
-    # pointless retries. The endpoint's annot→plain fallback means exactly two
-    # fetches happen (one per URL), never more.
-    from gene2image import routes
-
-    monkeypatch.setattr(routes.time, "sleep", lambda seconds: None)
-
-    urls = []
-
-    def notfound_urlopen(request, timeout):
-        urls.append(request.full_url)
-        raise HTTPError(request.full_url, 404, "Not Found", None, None)
-
-    monkeypatch.setattr(routes, "urlopen", notfound_urlopen)
-
-    resp = client.get(
-        "/api/image-proxy",
-        params={"url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1_annot.jpg"},
-    )
+    resp = client.get("/api/image-proxy", params={"url": url})
 
     assert resp.status_code == 404
-    assert urls == [
-        "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1_annot.jpg",
-        "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg",
-    ]
+    assert lookups == [url]
 
 
-def test_image_proxy_serves_from_s3_when_mirrored(client, monkeypatch):
-    # When the mirror bucket is configured and holds the object, the proxy must
-    # serve the S3 bytes and never touch ZFIN (GEN-22).
-    from gene2image import routes, s3_images
+def test_image_proxy_404s_when_no_mirror_is_configured(client, monkeypatch):
+    # No bucket (e.g. local dev) means nothing is mirrored: every image is a 404
+    # and the browser loads it from zfin.org directly. The proxy must not turn
+    # into a ZFIN passthrough.
+    _forbid_network(monkeypatch)
+    monkeypatch.delenv("GENE2IMAGE_IMAGE_S3_BUCKET", raising=False)
 
-    def boom(*args, **kwargs):  # ZFIN must not be hit on an S3 hit
-        raise AssertionError("ZFIN should not be fetched when S3 has the image")
+    resp = client.get("/api/image-proxy", params={"url": PLAIN})
 
-    monkeypatch.setattr(routes, "urlopen", boom)
-    monkeypatch.setattr(s3_images, "s3_enabled", lambda: True)
-    monkeypatch.setattr(
-        s3_images, "fetch_image", lambda url: (b"s3-bytes", "image/jpeg")
-    )
-
-    resp = client.get(
-        "/api/image-proxy",
-        params={"url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"},
-    )
-
-    assert resp.status_code == 200
-    assert resp.content == b"s3-bytes"
-    assert resp.headers["cache-control"] == "public, max-age=86400"
+    assert resp.status_code == 404
 
 
-def test_image_proxy_falls_back_to_zfin_when_not_mirrored(client, monkeypatch):
-    # S3 enabled but object missing (fetch_image returns None) → live ZFIN fetch.
-    from gene2image import routes, s3_images
+def test_image_proxy_reports_502_when_the_mirror_is_unreadable(client, monkeypatch, caplog):
+    # A broken mirror (credentials, permissions, network) is not "not mirrored":
+    # it must surface as a 502 and a log line, not pass silently as a miss. It
+    # also must not trigger the annot -> plain retry, which is for misses only.
+    from gene2image import s3_images
 
-    monkeypatch.setattr(
-        routes,
-        "urlopen",
-        lambda request, timeout, context=None: _FakeImageResponse(b"zfin-bytes"),
-    )
-    monkeypatch.setattr(s3_images, "s3_enabled", lambda: True)
-    monkeypatch.setattr(s3_images, "fetch_image", lambda url: None)
+    _forbid_network(monkeypatch)
+    lookups = []
 
-    resp = client.get(
-        "/api/image-proxy",
-        params={"url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"},
-    )
+    def broken_fetch(url):
+        lookups.append(url)
+        raise s3_images.ImageMirrorError("AccessDenied")
 
-    assert resp.status_code == 200
-    assert resp.content == b"zfin-bytes"
+    monkeypatch.setattr(s3_images, "fetch_image", broken_fetch)
+
+    with caplog.at_level("WARNING", logger="gene2image.routes"):
+        resp = client.get("/api/image-proxy", params={"url": ANNOT})
+
+    assert resp.status_code == 502
+    assert lookups == [ANNOT]
+    assert "Image mirror read failed" in caplog.text
 
 
 def test_image_proxy_mirror_lookup_uses_sanitized_url(client, monkeypatch):
-    # The route-level sanitize (`url = _validate_zfin_image_url(url)`) exists to
-    # protect two consumers: the annot fallback and the S3 mirror key. Without
-    # it, a query-bearing URL keys S3 with the raw string, misses the mirror,
-    # and silently falls through to a live ZFIN fetch (GEN-22).
-    from gene2image import routes, s3_images
+    # The route-level sanitize (`url = _canonical_zfin_image_url(url)`) protects
+    # two consumers: the annot fallback and the S3 mirror key. Without it, a
+    # query-bearing URL keys S3 with the raw string and misses the mirror.
+    _forbid_network(monkeypatch)
+    lookups = _mirror(monkeypatch, {PLAIN: b"s3-bytes"})
 
-    seen = []
-
-    def boom(*args, **kwargs):
-        raise AssertionError("ZFIN must not be fetched when the mirror has the object")
-
-    def fake_fetch(url):
-        seen.append(url)
-        return (b"s3-bytes", "image/jpeg")
-
-    monkeypatch.setattr(routes, "urlopen", boom)
-    monkeypatch.setattr(s3_images, "s3_enabled", lambda: True)
-    monkeypatch.setattr(s3_images, "fetch_image", fake_fetch)
-
-    resp = client.get(
-        "/api/image-proxy",
-        params={"url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg?evil=1"},
-    )
+    resp = client.get("/api/image-proxy", params={"url": f"{PLAIN}?evil=1"})
 
     assert resp.status_code == 200
-    assert seen == ["https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"]
+    assert lookups == [PLAIN]
 
 
-def test_image_proxy_falls_back_to_plain_when_annotated_missing(client, monkeypatch):
-    # ZFIN has no `_annot.jpg` for many images (404); the proxy must retry the
-    # plain `.jpg` server-side so the browser gets one 200 instead of a 404.
-    from gene2image import routes
+def test_image_proxy_falls_back_to_plain_when_annotated_not_mirrored(client, monkeypatch):
+    # The package has `_annot.jpg` variants for only some images; the proxy must
+    # serve the mirrored plain `.jpg` instead so the browser gets one 200 rather
+    # than a 404 plus a client-side refetch.
+    _forbid_network(monkeypatch)
+    lookups = _mirror(monkeypatch, {PLAIN: b"plain-bytes"})
 
-    def fake_urlopen(request, timeout):
-        if request.full_url.endswith("_annot.jpg"):
-            raise HTTPError(request.full_url, 404, "Not Found", {}, None)
-        return _FakeImageResponse(b"plain-bytes")
-
-    monkeypatch.setattr(routes, "urlopen", fake_urlopen)
-
-    resp = client.get(
-        "/api/image-proxy",
-        params={"url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1_annot.jpg"},
-    )
+    resp = client.get("/api/image-proxy", params={"url": ANNOT})
 
     assert resp.status_code == 200
     assert resp.content == b"plain-bytes"
+    assert lookups == [ANNOT, PLAIN]
 
 
 @pytest.mark.parametrize("suffix", ["?evil=1", "?evil=1#frag"])
@@ -398,47 +185,26 @@ def test_image_proxy_strips_query_before_annot_fallback(client, monkeypatch, suf
     # in _plain_image_variant, so the plain-.jpg fallback was skipped; the URL
     # is now rebuilt from validated parts before the suffix match. Covers a
     # bare query string and a query+fragment: both must canonicalize to the
-    # same annot/plain URLs before the exact-match fake sees them.
-    from gene2image import routes
+    # same annot/plain URLs.
+    _forbid_network(monkeypatch)
+    lookups = _mirror(monkeypatch, {PLAIN: b"plain-bytes"})
 
-    def fake_urlopen(request, timeout):
-        if request.full_url == (
-            "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1_annot.jpg"
-        ):
-            raise HTTPError(request.full_url, 404, "Not Found", {}, None)
-        assert request.full_url == (
-            "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"
-        )
-        return _FakeImageResponse(b"plain-bytes")
-
-    monkeypatch.setattr(routes, "urlopen", fake_urlopen)
-
-    resp = client.get(
-        "/api/image-proxy",
-        params={
-            "url": f"https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1_annot.jpg{suffix}"
-        },
-    )
+    resp = client.get("/api/image-proxy", params={"url": f"{ANNOT}{suffix}"})
 
     assert resp.status_code == 200
     assert resp.content == b"plain-bytes"
+    assert lookups == [ANNOT, PLAIN]
 
 
-def test_image_proxy_404s_when_both_annotated_and_plain_missing(client, monkeypatch):
-    # A genuine 404 (neither variant exists) must still surface, not be masked.
-    from gene2image import routes
+def test_image_proxy_404s_when_neither_variant_is_mirrored(client, monkeypatch):
+    # A genuine miss (neither variant mirrored) must still surface as a 404.
+    _forbid_network(monkeypatch)
+    lookups = _mirror(monkeypatch, {})
 
-    def fake_urlopen(request, timeout):
-        raise HTTPError(request.full_url, 404, "Not Found", {}, None)
-
-    monkeypatch.setattr(routes, "urlopen", fake_urlopen)
-
-    resp = client.get(
-        "/api/image-proxy",
-        params={"url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1_annot.jpg"},
-    )
+    resp = client.get("/api/image-proxy", params={"url": ANNOT})
 
     assert resp.status_code == 404
+    assert lookups == [ANNOT, PLAIN]
 
 
 def test_build_image_url_includes_medium():
@@ -465,11 +231,10 @@ def test_s3_key_for_url_mirrors_zfin_path():
 
 
 def test_s3_disabled_by_default(monkeypatch):
-    # No bucket env → S3 path is skipped entirely (proxy stays a ZFIN passthrough).
+    # No bucket env → nothing is mirrored, so every lookup is a miss.
     from gene2image import s3_images
 
     monkeypatch.delenv("GENE2IMAGE_IMAGE_S3_BUCKET", raising=False)
-    assert s3_images.s3_enabled() is False
     assert s3_images.fetch_image(
         "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"
     ) is None
@@ -987,23 +752,3 @@ def test_image_proxy_malformed_ipv6_url_returns_400(client):
         "/api/image-proxy", params={"url": "https://[::1/imageLoadUp/x.jpg"}
     )
     assert resp.status_code == 400
-
-
-def test_image_proxy_reports_502_on_blocked_upstream_redirect(client, monkeypatch):
-    # _NoRedirectHandler turns a followed 3xx into an HTTPError carrying the
-    # redirect's own code. That upstream status is not a valid status for our
-    # resource -- echoing it verbatim answers with e.g. a 302 that has no
-    # Location header, which is not a usable redirect for any client.
-    from gene2image import routes
-
-    def fake_urlopen(request, timeout, context=None):
-        raise HTTPError(request.full_url, 302, "Found", {}, None)
-
-    monkeypatch.setattr(routes, "urlopen", fake_urlopen)
-
-    resp = client.get(
-        "/api/image-proxy",
-        params={"url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"},
-    )
-
-    assert resp.status_code == 502

@@ -1,7 +1,9 @@
-// Route ZFIN image hotlinks through the backend image proxy (/api/image-proxy)
-// so images are served from our own cloud — an S3 mirror of ZFIN, with a
-// live-ZFIN fallback on the backend — instead of loading directly from
-// zfin.org. This keeps images loading during temporary ZFIN outages (GEN-22).
+// Images load from our S3 mirror of the ZFIN-provided Thisse package through
+// the backend image proxy (/api/image-proxy). The proxy serves only what is in
+// that package and answers 404 for anything else; it never fetches from ZFIN
+// itself. On a miss (or a mirror outage) the browser loads the image straight
+// from zfin.org instead: a plain hotlink, which ZFIN permits for the Thisse
+// images and prefers for its own usage statistics (GEN-22, GEN-45).
 //
 // Non-ZFIN, relative, or malformed URLs are returned unchanged.
 export function proxiedImageSrc(src) {
@@ -15,4 +17,18 @@ export function proxiedImageSrc(src) {
     // Keep relative or malformed URLs unchanged so the normal image error path handles them.
   }
   return src;
+}
+
+// Sources to try, in order, for an image whose variant URLs are given best
+// first: each variant from our mirror, then the same variants hotlinked from
+// zfin.org. URLs the proxy leaves unchanged appear only once.
+export function imageSrcCandidates(...urls) {
+  const present = urls.filter(Boolean);
+  return [...new Set([...present.map(proxiedImageSrc), ...present])];
+}
+
+// The candidate to try after `current` failed to load, or undefined when none are left.
+export function nextImageSrc(candidates, current) {
+  const index = candidates.indexOf(current);
+  return index === -1 ? undefined : candidates[index + 1];
 }

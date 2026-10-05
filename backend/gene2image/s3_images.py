@@ -1,16 +1,16 @@
-"""Serve mirrored ZFIN images from our own S3 bucket (GEN-22).
+"""Serve the mirrored ZFIN Thisse images from our own S3 bucket (GEN-22, GEN-45).
 
-The application used to hotlink in-situ images straight from zfin.org, so a
-momentary ZFIN outage broke image loading in the UI. To decouple from ZFIN's
-live availability, the images are mirrored into our own bucket
-(``zfin_image_mirror.py``) and the backend image proxy now tries S3 first,
-falling back to live ZFIN only when the object is missing or S3 is unreachable.
+The bucket holds exactly the image package ZFIN provided for the Thisse
+datasets, which is all legal cleared us to host. The backend image proxy serves
+images from this bucket and nowhere else: it never fetches from ZFIN itself, so
+it can't be used to redistribute images outside that package. An image that
+isn't mirrored is a 404, and the browser then hotlinks it straight from zfin.org
+(see frontend/src/utils/imageProxy.js).
 
 This module keeps the bucket private: it fetches objects with the deployment's
 own AWS credentials (standard credential chain) rather than exposing the bucket
-publicly. It is *opt-in*: when ``GENE2IMAGE_IMAGE_S3_BUCKET`` is unset, S3 is
-skipped entirely and the proxy behaves exactly as before (a ZFIN passthrough),
-so the change is a no-op until the bucket is configured in deployment.
+publicly. When ``GENE2IMAGE_IMAGE_S3_BUCKET`` is unset nothing is mirrored, so
+every lookup is a miss and every image loads from zfin.org (e.g. in local dev).
 
 The S3 key layout mirrors the ZFIN path 1:1, so a canonical ZFIN image URL maps
 to a key by a simple prefix swap (see ``s3_key_for_url``).
@@ -21,14 +21,25 @@ from __future__ import annotations
 import os
 import threading
 
+from botocore.exceptions import ClientError
+
 # Canonical ZFIN image URL prefix (matches routes._build_image_url output).
 ZFIN_IMAGELOADUP_PREFIX = "https://zfin.org/imageLoadUp/"
 
 DEFAULT_PREFIX = "gene2fish/zfin-images"
 DEFAULT_REGION = "us-west-2"
 
+
+class ImageMirrorError(Exception):
+    """The mirror could not be read (credentials, permissions, network, bad object).
+
+    Distinct from a miss: the proxy reports it as an error instead of passing it
+    off as "not mirrored", so a broken mirror is visible rather than silent.
+    """
+
+
 # boto3 client is built lazily and cached. _client_unavailable latches True once
-# construction fails (e.g. boto3 missing) so we don't retry it on every request.
+# construction fails so we don't retry it on every request.
 _client = None
 _client_unavailable = False
 _client_lock = threading.Lock()
@@ -40,11 +51,6 @@ def _bucket() -> str | None:
 
 def _prefix() -> str:
     return os.environ.get("GENE2IMAGE_IMAGE_S3_PREFIX", DEFAULT_PREFIX).rstrip("/")
-
-
-def s3_enabled() -> bool:
-    """True when a mirror bucket is configured (otherwise the proxy is ZFIN-only)."""
-    return _bucket() is not None
 
 
 def s3_key_for_url(url: str) -> str | None:
@@ -73,18 +79,18 @@ def _get_client():
                         retries={"max_attempts": 2, "mode": "standard"},
                     ),
                 )
-            except Exception:  # noqa: BLE001 — any failure → fall back to ZFIN
+            except Exception:  # noqa: BLE001 — fetch_image raises ImageMirrorError
                 _client_unavailable = True
     return _client
 
 
 def fetch_image(url: str) -> tuple[bytes, str] | None:
-    """Return ``(bytes, media_type)`` for a mirrored image, or None to fall back.
+    """Return ``(bytes, media_type)`` for a mirrored image, or None if it isn't mirrored.
 
-    Returns None — signalling the caller to fetch live from ZFIN — when no bucket
-    is configured, the URL is not a ZFIN imageLoadUp URL, the object is absent, or
-    any S3/credential error occurs. The goal is that S3 can only *improve*
-    availability and never breaks image loading.
+    None means the image is not in the mirror: no bucket is configured, the URL
+    is not a ZFIN imageLoadUp URL, or the object does not exist. Anything else
+    (credentials, permissions, network, a non-image object) raises
+    ImageMirrorError.
     """
     bucket = _bucket()
     if not bucket:
@@ -94,7 +100,7 @@ def fetch_image(url: str) -> tuple[bytes, str] | None:
         return None
     client = _get_client()
     if client is None:
-        return None
+        raise ImageMirrorError("S3 client could not be created")
     try:
         resp = client.get_object(Bucket=bucket, Key=key)
         stream = resp["Body"]
@@ -102,7 +108,15 @@ def fetch_image(url: str) -> tuple[bytes, str] | None:
             body = stream.read()
         finally:
             stream.close()  # release the HTTP connection back to the pool
-        media_type = resp.get("ContentType") or "image/jpeg"
-        return body, media_type
-    except Exception:  # noqa: BLE001 — missing key / network / creds → ZFIN fallback
-        return None
+    except ClientError as err:
+        if err.response.get("Error", {}).get("Code") == "NoSuchKey":
+            return None
+        raise ImageMirrorError(f"S3 read failed for {key}") from err
+    except Exception as err:  # credentials / network / stream errors
+        raise ImageMirrorError(f"S3 read failed for {key}") from err
+    media_type = resp.get("ContentType") or "image/jpeg"
+    if not media_type.startswith("image/"):
+        # The proxy serves these bytes from our own origin: a non-image (e.g.
+        # HTML) object must never be returned where it could render as a page.
+        raise ImageMirrorError(f"S3 object {key} is not an image ({media_type})")
+    return body, media_type
