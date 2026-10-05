@@ -12,6 +12,8 @@ function parseUrl() {
     stageMin: params.get("stage_min") ? parseFloat(params.get("stage_min")) : null,
     stageMax: params.get("stage_max") ? parseFloat(params.get("stage_max")) : null,
     anatomy: anatomyParams,
+    // Anatomy search includes substructures unless the URL opts out.
+    includeSubstructures: params.get("substructures") !== "0",
     nImages: VALID_N_IMAGES.includes(nImagesParam) ? nImagesParam : 1,
   };
 }
@@ -34,6 +36,7 @@ export function useUrlState() {
         for (const term of next.anatomy || []) {
           params.append("anatomy", term);
         }
+        if (next.includeSubstructures === false) params.set("substructures", "0");
         if (next.nImages && next.nImages !== 1) params.set("n_images", next.nImages);
         const search = params.toString();
         window.history.replaceState(null, "", search ? `?${search}` : window.location.pathname);

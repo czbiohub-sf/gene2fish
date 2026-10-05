@@ -9,7 +9,13 @@ const LIMIT_OPTIONS = [
 
 const ALL_LIMIT = 1000;
 
-export function AnatomySuggestedGenes({ anatomy, queriedGenes, onAddGene }) {
+export function AnatomySuggestedGenes({
+  anatomy,
+  includeSubstructures = true,
+  onSetIncludeSubstructures,
+  queriedGenes,
+  onAddGene,
+}) {
   const anatomyTerms = Array.isArray(anatomy) ? anatomy : (anatomy ? [anatomy] : []);
   const [limit, setLimit] = useState(50);
 
@@ -19,7 +25,11 @@ export function AnatomySuggestedGenes({ anatomy, queriedGenes, onAddGene }) {
   }, [anatomyTerms.join("\n")]);
 
   const effectiveLimit = limit === "all" ? ALL_LIMIT : limit;
-  const { suggestions, total, loading, error, notFound } = useAnatomyGenes(anatomy, effectiveLimit);
+  const { suggestions, total, loading, error, notFound } = useAnatomyGenes(
+    anatomy,
+    effectiveLimit,
+    includeSubstructures
+  );
 
   const queriedSet = useMemo(() => new Set(queriedGenes), [queriedGenes]);
 
@@ -62,6 +72,19 @@ export function AnatomySuggestedGenes({ anatomy, queriedGenes, onAddGene }) {
             ))}
           </select>
         </label>
+        {onSetIncludeSubstructures && (
+          <label
+            className="suggested-genes-substructures"
+            title="Also match genes annotated to parts of the selected structure (e.g. hindbrain for brain), as in ZFIN's expression search"
+          >
+            <input
+              type="checkbox"
+              checked={includeSubstructures}
+              onChange={(e) => onSetIncludeSubstructures(e.target.checked)}
+            />
+            Include substructures
+          </label>
+        )}
         {loading && <span className="suggested-genes-loading">Loading…</span>}
         {error && <span className="suggested-genes-error">Error: {error}</span>}
       </div>
