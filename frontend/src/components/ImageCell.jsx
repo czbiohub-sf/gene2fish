@@ -2,6 +2,15 @@ import { useEffect, useState } from "react";
 import { useImageQueue } from "../hooks/useImageQueue.js";
 import { proxiedImageSrc } from "../utils/imageProxy.js";
 
+// Hover text for a cell: the structures with expression. ZFIN also records
+// "expression not found" annotations; those must not read as expression.
+function anatomySummary(image) {
+  const terms = image.anatomy_terms || [];
+  const expressed = terms.filter((a) => a.expression_found !== false).map((a) => a.anatomy_name);
+  if (expressed.length) return expressed.join(", ");
+  return terms.length ? "no expression detected" : null;
+}
+
 function SingleImage({ image, onClick, compact, onFail }) {
   const [src, setSrc] = useState(null); // null = waiting in queue, not yet requested
   const [failed, setFailed] = useState(false);
@@ -48,7 +57,7 @@ function SingleImage({ image, onClick, compact, onFail }) {
         onClick={(e) => { e.stopPropagation(); onClick(image); }}
         title={[
           image.stage_display_label,
-          image.anatomy_terms?.length ? image.anatomy_terms.map((a) => a.anatomy_name).join(", ") : null,
+          anatomySummary(image),
           image.image_id,
         ].filter(Boolean).join(" · ")}
       />
@@ -64,7 +73,7 @@ function SingleImage({ image, onClick, compact, onFail }) {
       onClick={(e) => { e.stopPropagation(); onClick(image); }}
       title={[
         image.stage_display_label,
-        image.anatomy_terms?.length ? image.anatomy_terms.map((a) => a.anatomy_name).join(", ") : null,
+        anatomySummary(image),
         image.image_id,
       ].filter(Boolean).join(" · ")}
     />
@@ -80,7 +89,7 @@ function SingleCell({ image, onClick }) {
 
   const tooltipText = [
     image.stage_display_label,
-    image.anatomy_terms?.length ? image.anatomy_terms.map((a) => a.anatomy_name).join(", ") : null,
+    anatomySummary(image),
     image.image_id,
     image.publication_id,
   ].filter(Boolean).join(" · ");

@@ -34,7 +34,7 @@ stack:
         rules:
           - host: gene2fish.apps-staging.czbiohub.org
       gateway:
-        dnsOwner: ingress
+        dnsOwner: gateway
         rules:
           - host: gene2fish.apps-staging.czbiohub.org
             vanity:
