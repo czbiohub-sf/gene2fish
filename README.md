@@ -29,7 +29,7 @@ The backend looks for `image_metadata_v2.json` first and falls back to `image_me
 
 ## Building the data file (local dev)
 
-`zfin_image_metadata_extractor.py` downloads the 14 required TSVs from ZFIN, joins them, and writes `image_metadata.json` + `image_metadata.tsv` + `gene_aliases.json`. Pick a directory where the data should live (e.g. `~/projects/gene2image_data`) and run the extractor from there:
+`zfin_image_metadata_extractor.py` downloads the 15 required TSVs from ZFIN, joins them, and writes `image_metadata.json` + `image_metadata.tsv` + `gene_aliases.json` + `anatomy_ontology.json`. Pick a directory where the data should live (e.g. `~/projects/gene2image_data`) and run the extractor from there:
 
 ```bash
 mkdir -p /path/to/gene2image_data
@@ -38,10 +38,11 @@ uv run python /path/to/gene2image/zfin_image_metadata_extractor.py
 ```
 
 By default the extractor:
-- Downloads the 14 ZFIN TSV files into `./zfin_data/` (skipped if already present)
+- Downloads the 15 ZFIN TSV files into `./zfin_data/` (skipped if already present)
 - Filters to the 5 Thisse publications (`ZDB-PUB-040907-1`, `ZDB-PUB-010810-1`, `ZDB-PUB-051025-1`, `ZDB-PUB-080227-22`, `ZDB-PUB-080220-1`)
 - Writes `image_metadata.json` and `image_metadata.tsv` to the current working directory
 - Writes `gene_aliases.json` (next to the JSON index): each in-dataset gene's stable ZFIN ID mapped to its previous/alias names (from ZFIN's `aliases.txt`), so the backend can resolve searches by older names (e.g. `oct4` → `pou5f3`). The backend loads it automatically when present; absent, gene search degrades to current symbols only.
+- Writes `anatomy_ontology.json` (next to the JSON index): the ZFA substructure hierarchy (`is_a` / `part of` edges from ZFIN's `anatomy_relationship.txt`), so anatomy search can include substructures (e.g. `brain` also finds genes annotated to `hindbrain`), as ZFIN's own expression search does. Absent, anatomy search degrades to exact-term matching.
 
 Useful flags:
 - `--all-images` — process every ZFIN image, not just the Thisse subset
@@ -168,7 +169,7 @@ Useful flags: `--workers N` (concurrency), `--overwrite` (re-upload existing),
 2. The expression grid shows images for each developmental stage where expression data exists
 3. Hover an image for a quick summary; click for full metadata
 4. Use the stage range slider to narrow the timepoint view
-5. Use the anatomy gene search to find additional genes expressed in a specific structure; selected genes are added as new columns without filtering images already open in the grid
+5. Use the anatomy gene search to find additional genes expressed in a specific structure; selected genes are added as new columns without filtering images already open in the grid. By default a term also matches its substructures (untick *Include substructures* for exact-term matches), and ZFIN annotations recorded as "expression not found" never count as expression
 
 ## Per-image analytics
 

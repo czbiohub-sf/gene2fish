@@ -5,6 +5,19 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 
+def is_expression_found(loc: dict) -> bool:
+    """True unless ZFIN recorded this anatomy term as expression NOT found.
+
+    ZFIN annotations carry an ``expression_found`` flag ("t"/"f"); a negative
+    result must not make a gene match that structure. Records without the flag
+    (older builds, hand-written fixtures) are treated as positive.
+
+    Lives here (not in data_loader) so stage_utils can use it too: data_loader
+    imports stage_utils, and this module is below both in the import graph.
+    """
+    return loc.get("expression_found") not in ("f", False)
+
+
 class HumanOrtholog(BaseModel):
     human_symbol: str | None = None
     human_name: str | None = None
@@ -18,6 +31,9 @@ class AnatomyTerm(BaseModel):
     # ZFA ontology identifier, e.g. "ZFA:0000615". May be absent for records
     # that only carry a free-text anatomy label.
     anatomy_id: str | None = None
+    # False when ZFIN recorded this structure as expression NOT found. Such
+    # terms are shown (labelled) in the lightbox but never drive anatomy search.
+    expression_found: bool = True
 
 
 class DiseaseAssociation(BaseModel):
@@ -90,6 +106,9 @@ class BatchRequest(BaseModel):
 
 class GeneFacetsRequest(BaseModel):
     genes: list[str]
+    # Count an anatomy option when an image is annotated to it OR to one of its
+    # substructures, matching the anatomy search's default semantics.
+    include_substructures: bool = True
 
 
 class StageFacet(BaseModel):
