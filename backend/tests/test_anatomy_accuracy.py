@@ -234,6 +234,17 @@ def test_malformed_ontology_falls_back_to_exact_matching(tmp_path, monkeypatch):
     assert brain == {"braingene": 1}
 
 
+def test_wrong_shape_ontology_falls_back_to_exact_matching(tmp_path, monkeypatch):
+    # Parseable JSON that is not a valid sidecar (here: missing "names") is
+    # rejected as a whole — a partially usable file would silently produce
+    # incomplete substructure results instead of the documented fallback.
+    for bad in ([1, 2], {"parents": {HINDBRAIN: [BRAIN]}}, {"parents": [], "names": {}}):
+        with _client(tmp_path, monkeypatch, ontology=bad) as c:
+            brain = _genes(c.get("/api/anatomy/brain/genes"))
+
+        assert brain == {"braingene": 1}
+
+
 def test_ontology_cycle_does_not_hang(tmp_path, monkeypatch):
     ontology = {
         "parents": {HINDBRAIN: [BRAIN], BRAIN: [HINDBRAIN]},

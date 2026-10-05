@@ -21,6 +21,8 @@ Required TSV files (auto-downloaded from https://zfin.org/downloads):
 11. human_orthos.txt              - Human ortholog information
 12. gene2DiseaseViaOrthology.txt  - Disease associations via orthologs
 13. uniprot.txt                   - UniProt protein IDs
+14. aliases.txt                   - Previous gene names/aliases (for alias search)
+15. anatomy_relationship.txt      - ZFA parent/child edges (substructure search)
 
 Usage:
     # Process all images (auto-downloads files to ./zfin_data):

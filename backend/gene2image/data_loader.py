@@ -180,19 +180,31 @@ def _load_anatomy_ancestors(data_dir: Path):
     names: dict[str, str] = {}
     ontology_path = data_dir / ANATOMY_ONTOLOGY_FILE_NAME
     if ontology_path.exists():
+        raw = None
         try:
             raw = json.loads(ontology_path.read_text(encoding="utf-8"))
-            if isinstance(raw, dict):
-                if isinstance(raw.get("parents"), dict):
-                    parents = {
-                        k: [p for p in v if isinstance(p, str)]
-                        for k, v in raw["parents"].items()
-                        if isinstance(v, list)
-                    }
-                if isinstance(raw.get("names"), dict):
-                    names = {k: v for k, v in raw["names"].items() if isinstance(v, str)}
         except (json.JSONDecodeError, OSError) as err:
             print(f"Warning: could not read {ontology_path}: {err}")
+        # Accept the sidecar only as a whole: both sections present and
+        # well-typed. A partially usable file (e.g. parents without names)
+        # would silently produce incomplete substructure results, which is
+        # worse than the documented exact-match fallback.
+        if (
+            isinstance(raw, dict)
+            and isinstance(raw.get("parents"), dict)
+            and isinstance(raw.get("names"), dict)
+        ):
+            parents = {
+                k: [p for p in v if isinstance(p, str)]
+                for k, v in raw["parents"].items()
+                if isinstance(v, list)
+            }
+            names = {k: v for k, v in raw["names"].items() if isinstance(v, str)}
+        elif raw is not None:
+            print(
+                f"Warning: {ontology_path.name} is not a valid anatomy ontology "
+                "sidecar; anatomy search is exact-term only."
+            )
     else:
         print(f"Note: {ontology_path.name} not found; anatomy search is exact-term only.")
 
