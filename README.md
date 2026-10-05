@@ -222,15 +222,17 @@ details.
 
 ## Rate limiting
 
-gene2image loads images directly from ZFIN's image server (hotlinking). To avoid
-triggering ZFIN's per-IP rate limit, images are loaded sequentially with a 150 ms
-delay between requests rather than all at once. A grid with 30 images will fully
-load in approximately 4–5 seconds — the grid fills in progressively as each image
-arrives.
+Images are served from our own S3 mirror through the backend proxy, so normal
+use never touches ZFIN's image server or its per-IP rate limit. The grid still
+loads images through a small client-side queue that releases 4 images every
+40 ms, so a large comparison grid fills in progressively instead of firing every
+request at once. Starting a new gene or stage search cancels any loads still
+queued from the previous one.
 
-If you do hit a rate limit (images stop loading or show as broken), wait a few
-minutes before searching for new genes. Searching for a new gene automatically
-cancels any pending loads from the previous search.
+An image that isn't in the mirror is loaded by the browser straight from
+zfin.org (see [Image mirror](#image-mirror)). Those requests come from each
+visitor's own IP, so ZFIN's per-IP limit applies per visitor; if ZFIN starts
+refusing them, only images missing from the mirror stop loading.
 
 ## Security / dependency auditing
 

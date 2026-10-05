@@ -23,14 +23,16 @@ stack:
       # The IRSA role trusts exactly serviceaccount argus-gene2fish-prod:gene2fish
       # (sfbiohub-infra terraform/accounts/biohub-prod/gene2fish-prod.tf), so the
       # SA name set in common.yaml must stay in sync with that trust policy. The mirror holds
-      # exactly the ZFIN-provided Thisse image package (legal requirement); the
-      # image proxy falls back to live zfin.org for anything not in the mirror.
+      # exactly the ZFIN-provided Thisse image package (legal requirement). The
+      # image proxy serves only from it and answers 404 for anything else; the
+      # browser then loads that image from zfin.org directly.
       # Requires sfbiohub-infra role gene2fish-prod and the gene2fish-zfin-images-prod
       # bucket to already exist (created by sfbiohub-infra #82); applying this before
-      # they are provisioned leaves the pod unable to assume the IRSA role. This fails
-      # SILENTLY: the image proxy swallows S3 errors and falls back to live zfin.org
-      # with no log line, so the pod stays healthy and probes pass while every image
-      # is served from ZFIN. Verify by checking S3 is actually the source.
+      # they are provisioned leaves the pod unable to assume the IRSA role. Probes
+      # don't touch S3, so the pod still looks healthy, but every image request
+      # returns 502 and logs "Image mirror read failed", and the browser falls back
+      # to zfin.org for every image. Check the pod logs after changing this block.
+      # (An empty bucket shows up only as 404s, which are not logged.)
       serviceAccount:
         annotations:
           "eks.amazonaws.com/role-arn": arn:aws:iam::060795925407:role/gene2fish-prod
