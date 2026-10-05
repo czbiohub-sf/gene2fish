@@ -91,23 +91,21 @@ def _plain_image_variant(url: str) -> str | None:
     return None
 
 
-def _resolve_image(url: str) -> tuple[bytes, str]:
-    """Serve an image from the S3 mirror of the ZFIN Thisse package, never from ZFIN.
+def _mirror_image(url: str) -> tuple[bytes, str] | None:
+    """Read an image from the S3 mirror of the ZFIN Thisse package, never from ZFIN.
 
-    A miss is a 404: the browser then hotlinks the image from zfin.org itself
-    (frontend/src/utils/imageProxy.js). The backend never fetches from ZFIN, so
-    the proxy can only serve the package ZFIN provided (legal requirement).
+    Returns None on a miss (the browser then hotlinks the image from zfin.org
+    itself, see frontend/src/utils/imageProxy.js). A broken mirror raises a 502
+    instead. The backend never fetches from ZFIN, so the proxy can only serve
+    the package ZFIN provided (legal requirement).
     """
     try:
-        result = s3_images.fetch_image(url)
+        return s3_images.fetch_image(url)
     except s3_images.ImageMirrorError as err:
         # Logged on purpose: a broken mirror used to fall back to ZFIN silently.
         # WARNING, not ERROR, because Sentry already reports the 502 below.
         logger.warning("Image mirror read failed for %s", url, exc_info=True)
         raise HTTPException(status_code=502, detail="Image mirror unavailable") from err
-    if result is None:
-        raise HTTPException(status_code=404, detail="Image not in mirror")
-    return result
 
 
 def _record_to_model(record: dict) -> ImageRecord:
@@ -421,17 +419,16 @@ def image_proxy(url: str = Query(...)) -> Response:
     url = _canonical_zfin_image_url(url)
     # Serve only from our S3 mirror of the ZFIN-provided Thisse package; a miss
     # is a 404 and the browser hotlinks zfin.org itself (GEN-22, GEN-45).
-    try:
-        data, media_type = _resolve_image(url)
-    except HTTPException as err:
+    result = _mirror_image(url)
+    if result is None and (plain := _plain_image_variant(url)) is not None:
         # The package has annotated (`_annot.jpg`) variants for only some images;
         # serve the plain `.jpg` instead so the browser gets a single 200 rather
-        # than a 404 (plus a client-side refetch) per image.
-        plain = _plain_image_variant(url)
-        if err.status_code == 404 and plain is not None:
-            data, media_type = _resolve_image(plain)
-        else:
-            raise
+        # than a 404 (plus a client-side refetch) per image. Only a miss gets
+        # here: a 502 from the lookup above propagates without a second try.
+        result = _mirror_image(plain)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Image not in mirror")
+    data, media_type = result
     return Response(
         content=data,
         media_type=media_type,
