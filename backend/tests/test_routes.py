@@ -163,8 +163,6 @@ def test_image_proxy_502_log_shows_why_the_s3_client_could_not_be_created(
 
     monkeypatch.setenv("GENE2IMAGE_IMAGE_S3_BUCKET", "test-bucket")
     monkeypatch.setattr(s3_images, "_client", None)
-    monkeypatch.setattr(s3_images, "_client_unavailable", False)
-    monkeypatch.setattr(s3_images, "_client_error", None)
 
     def bad_client(*args, **kwargs):
         raise ValueError("bad-region")
