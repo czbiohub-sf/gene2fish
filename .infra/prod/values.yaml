@@ -53,7 +53,7 @@ stack:
           - host: gene2fish.apps.czbiohub.org
       gateway:
         enabled: true
-        dnsOwner: ingress
+        dnsOwner: gateway
         securityPolicy: none
         paths:
           - path: /

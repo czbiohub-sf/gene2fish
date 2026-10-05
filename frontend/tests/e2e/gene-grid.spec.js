@@ -542,6 +542,50 @@ test("lightbox shows anatomy terms with a ZFA id linked to ZFIN", async ({ page 
   );
 });
 
+test("lightbox lists 'expression not found' terms apart from expressed anatomy", async ({ page }) => {
+  await page.route("**/api/genes/batch", async (route) => {
+    const img = {
+      ...image("nodetect", stages[0]),
+      anatomy_terms: [
+        { anatomy_name: "hindbrain", anatomy_id: "ZFA:0000029", expression_found: true },
+        { anatomy_name: "whole organism", anatomy_id: "ZFA:0001094", expression_found: false },
+      ],
+    };
+    await route.fulfill({ json: { nodetect: [img] } });
+  });
+
+  await page.goto("/?genes=nodetect");
+  await page.locator('img[alt^="nodetect at"]').first().click();
+  await expect(page.locator(".lightbox-overlay")).toBeVisible();
+
+  const groups = page.locator(".lightbox-meta-col .meta-group");
+  const expressed = groups.filter({ has: page.locator(".meta-label", { hasText: /^Anatomy$/ }) });
+  const notDetected = groups.filter({
+    has: page.locator(".meta-label", { hasText: "Not detected in" }),
+  });
+  await expect(expressed).toContainText("hindbrain");
+  await expect(expressed).not.toContainText("whole organism");
+  await expect(notDetected).toContainText("whole organism");
+});
+
+test("grid hover text never lists 'expression not found' terms as expression", async ({ page }) => {
+  await page.route("**/api/genes/batch", async (route) => {
+    const img = {
+      ...image("nosignal", stages[0]),
+      anatomy_terms: [
+        { anatomy_name: "whole organism", anatomy_id: "ZFA:0001094", expression_found: false },
+      ],
+    };
+    await route.fulfill({ json: { nosignal: [img] } });
+  });
+
+  await page.goto("/?genes=nosignal");
+  const cellImage = page.locator('img[alt^="nosignal at"]').first();
+  await expect(cellImage).toHaveAttribute("title", /no expression detected/);
+  await expect(cellImage).not.toHaveAttribute("title", /whole organism/);
+  await expect(page.locator(".cell-tooltip").first()).toContainText("no expression detected");
+});
+
 test("lightbox keeps the header fixed while the modal body scrolls", async ({ page }) => {
   await page.setViewportSize({ width: 1000, height: 460 });
   await page.route("**/api/genes/batch", async (route) => {
@@ -1030,6 +1074,29 @@ test("suggested-gene chip disables after adding and the gene is not duplicated",
   // evx1 is added exactly once — clicking again (or a dedup regression) must
   // not create a second column.
   await expect(page.getByRole("columnheader").filter({ hasText: "evx1" })).toHaveCount(1);
+});
+
+test("include-substructures toggle switches to exact-term matching and persists in the URL", async ({ page }) => {
+  const flags = [];
+  page.on("request", (req) => {
+    if (req.url().includes("/api/anatomy/hindbrain/genes")) {
+      flags.push(new URL(req.url()).searchParams.get("include_substructures"));
+    }
+  });
+
+  await page.goto("/?anatomy=hindbrain");
+  const toggle = page.getByLabel("Include substructures");
+  await expect(toggle).toBeChecked();
+  await expect(page.locator(".suggested-genes-strip")).toContainText("evx1");
+  // Substructures are the server default, so the first request omits the flag.
+  expect(flags[0]).toBeNull();
+
+  await toggle.uncheck();
+  await expect.poll(() => flags.at(-1)).toBe("false");
+  await expect(page).toHaveURL(/substructures=0/);
+
+  await page.reload();
+  await expect(page.getByLabel("Include substructures")).not.toBeChecked();
 });
 
 test("multiple anatomy terms show AND-matched suggested genes", async ({ page }) => {
