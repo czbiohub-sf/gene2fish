@@ -1086,6 +1086,38 @@ test("lightbox hotlinks zfin.org directly when an image isn't in the mirror", as
   await expect(lightboxImg).toBeVisible();
 });
 
+test("lightbox loads the mirrored plain image when the annotated lookup fails with a 502", async ({ page }) => {
+  // The proxy retries `_annot.jpg` as plain `.jpg` only on a miss; a 502 (one
+  // unreadable mirror object) propagates without a second lookup. The lightbox
+  // must then still try the mirrored plain variant before hotlinking zfin.org.
+  await mockZfinBatch(page);
+  await page.route("**/api/image-proxy**", async (route) => {
+    const url = new URL(route.request().url()).searchParams.get("url");
+    if (url.endsWith("_annot.jpg")) {
+      await route.fulfill({ status: 502, json: { detail: "Image mirror unavailable" } });
+      return;
+    }
+    await route.fulfill({ contentType: "image/png", body: MOCK_PNG });
+  });
+  const zfinRequests = [];
+  await page.route("https://zfin.org/imageLoadUp/**", async (route) => {
+    zfinRequests.push(route.request().url());
+    await route.fulfill({ contentType: "image/png", body: MOCK_PNG });
+  });
+
+  await page.goto("/?genes=pax2a");
+  await page.locator('img[alt^="pax2a at"]').first().click();
+
+  const lightboxImg = page.locator(".lightbox-img");
+  await expect(lightboxImg).toHaveAttribute(
+    "src",
+    /^\/api\/image-proxy\?url=.*ZDB-IMAGE-pax2a-[\d-]+\.jpg$/
+  );
+  await expect(lightboxImg).not.toHaveAttribute("src", /_annot\.jpg$/);
+  await expect(lightboxImg).toBeVisible();
+  expect(zfinRequests).toHaveLength(0);
+});
+
 test("narrowing the stage range refetches and shows only in-range stages", async ({ page }) => {
   const batchRequests = [];
   page.on("request", (request) => {

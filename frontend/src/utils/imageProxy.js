@@ -22,21 +22,9 @@ export function proxiedImageSrc(src) {
 // Sources to try, in order, for an image whose variant URLs are given best
 // first: each variant from our mirror, then the same variants hotlinked from
 // zfin.org. URLs the proxy leaves unchanged appear only once.
-//
-// The proxy itself retries an `_annot.jpg` URL as its plain `.jpg` against the
-// mirror, so that plain variant is not requested through the proxy again; it is
-// still hotlinked. Any other fallback (e.g. `_medium.jpg` -> `.jpg`) is not
-// covered by the proxy and keeps its own proxied candidate.
-const ANNOT_SUFFIX = "_annot.jpg";
-
-function proxyServesPlainVariant(primary, url) {
-  return primary.endsWith(ANNOT_SUFFIX) && url === `${primary.slice(0, -ANNOT_SUFFIX.length)}.jpg`;
-}
-
 export function imageSrcCandidates(...urls) {
   const present = urls.filter(Boolean);
-  const mirrored = present.filter((url, i) => i === 0 || !proxyServesPlainVariant(present[0], url));
-  return [...new Set([...mirrored.map(proxiedImageSrc), ...present])];
+  return [...new Set([...present.map(proxiedImageSrc), ...present])];
 }
 
 // The candidate to try after `current` failed to load, or undefined when none are left.
