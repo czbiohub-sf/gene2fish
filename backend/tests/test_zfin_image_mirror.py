@@ -140,6 +140,21 @@ def test_uploads_only_package_images_missing_from_the_mirror(tmp_path, s3):
     }
 
 
+def test_overwrite_reuploads_existing_objects_without_listing_the_bucket(tmp_path, s3):
+    already = f"{PREFIX}/imageLoadUp/2004/ZDB-PUB-040907-1/ZDB-IMAGE-060810-2888.jpg"
+    fake = s3(_FakeS3(existing=[already]))
+    package = _package(tmp_path, VALID)
+
+    rc = zfin_image_mirror.main(
+        ["--package", str(package), "--bucket", "mirror-bucket", "--overwrite"]
+    )
+
+    assert rc == 0
+    assert fake.listed == []
+    assert already in fake.puts
+    assert len(fake.puts) == 3
+
+
 def test_dry_run_reports_without_uploading(tmp_path, s3, capsys):
     fake = s3(_FakeS3())
     package = _package(tmp_path, VALID)
