@@ -179,6 +179,47 @@ def test_dry_run_reports_without_uploading(tmp_path, s3, capsys):
     assert "would upload 3" in capsys.readouterr().out
 
 
+EXTRA = f"{PREFIX}/imageLoadUp/2006/ZDB-PUB-060503-2/ZDB-IMAGE-981125-4.jpg"
+
+
+def test_dry_run_fails_when_the_mirror_holds_objects_outside_the_package(tmp_path, s3, capsys):
+    fake = s3(_FakeS3(existing=[EXTRA]))
+    package = _package(tmp_path, VALID)
+
+    rc = zfin_image_mirror.main(["--package", str(package), "--bucket", "mirror-bucket", "--dry-run"])
+
+    out = capsys.readouterr().out
+    assert rc != 0
+    assert EXTRA in out
+    assert fake.puts == {}
+
+
+def test_real_run_uploads_the_package_then_fails_on_extra_mirror_objects(tmp_path, s3, capsys):
+    # Never deletes: the package is still uploaded, but the exit code says the
+    # "mirror holds exactly the package" invariant does not hold.
+    fake = s3(_FakeS3(existing=[EXTRA]))
+    package = _package(tmp_path, VALID)
+
+    rc = zfin_image_mirror.main(["--package", str(package), "--bucket", "mirror-bucket"])
+
+    assert rc != 0
+    assert EXTRA in capsys.readouterr().out
+    assert len(fake.puts) == 3
+
+
+def test_overwrite_does_not_check_for_extra_objects(tmp_path, s3):
+    # --overwrite never lists the bucket, so there is nothing to compare against.
+    fake = s3(_FakeS3(existing=[EXTRA]))
+    package = _package(tmp_path, VALID)
+
+    rc = zfin_image_mirror.main(
+        ["--package", str(package), "--bucket", "mirror-bucket", "--overwrite"]
+    )
+
+    assert rc == 0
+    assert fake.listed == []
+
+
 def test_refuses_the_whole_package_if_any_member_is_unexpected(tmp_path, s3):
     # Fail closed: one non-Thisse image means the wrong file was given, so
     # nothing is uploaded at all (not even the valid members before it).

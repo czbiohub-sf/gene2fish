@@ -18,7 +18,10 @@ The package's paths map 1:1 onto the key layout the backend looks up (see
         → s3://{bucket}/{prefix}/imageLoadUp/{year}/{pub_id}/{file}
 
 The run is resumable: objects already present under the prefix are listed once
-up front and skipped, so re-running only uploads what is missing.
+up front and skipped, so re-running only uploads what is missing. Objects under
+the prefix that are not in the package are reported (up to 20 keys) and make the
+run exit non-zero, because the mirror must hold exactly the package; nothing is
+ever deleted. ``--overwrite`` skips the listing, so it does not check for extras.
 
 Credentials are read from the standard AWS chain (env vars, shared config, or an
 instance/role profile). Never hard-code keys here.
@@ -190,14 +193,21 @@ def main(argv: list[str] | None = None) -> int:
         existing = set() if args.overwrite else list_existing_keys(s3, args.bucket, args.prefix)
         todo = [(member, key) for member, key in plan if key not in existing]
         skipped = len(plan) - len(todo)
+        extra = sorted(existing - {key for _, key in plan})
+        if extra:
+            shown = "\n  ".join(extra[:20])
+            print(
+                f"WARNING: {len(extra)} object(s) under the prefix are not in the package "
+                f"(the mirror must hold exactly the package; nothing is deleted):\n  {shown}"
+            )
 
         if args.dry_run:
             print(f"Dry run: would upload {len(todo)}, skip {skipped} already in the mirror.")
-            return 0
+            return 1 if extra else 0
         uploaded, errors = upload_all(s3, args.bucket, tf, todo, args.workers)
 
-    print(f"\nDone. uploaded={uploaded} skipped={skipped} errors={errors}")
-    return 1 if errors else 0
+    print(f"\nDone. uploaded={uploaded} skipped={skipped} errors={errors} extra={len(extra)}")
+    return 1 if errors or extra else 0
 
 
 if __name__ == "__main__":

@@ -167,7 +167,10 @@ https://zfin.org/imageLoadUp/{year}/{pub}/{file}     (what the app requests)
   → s3://{bucket}/{prefix}/imageLoadUp/{year}/{pub}/{file}
 ```
 
-The run is resumable (objects already present are skipped). It needs
+The run is resumable (objects already present are skipped). A non-zero exit
+can also mean the bucket holds objects outside the package: they are listed in
+the output and never deleted (`--overwrite` skips the listing, so it does not
+check for them). It needs
 `s3:PutObject` on the prefix plus `s3:ListBucket`, which the deployed
 environments don't grant by default, so seeding one needs a reviewed write path
 in sfbiohub-infra first. Credentials come from the standard AWS chain.
