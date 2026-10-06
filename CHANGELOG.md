@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.14.0](https://github.com/czbiohub-sf/gene2fish/compare/v0.13.1...v0.14.0) (2026-10-06)
+
+
+### Features
+
+* **infra:** flip gene2fish prod DNS to the Envoy Gateway ([#168](https://github.com/czbiohub-sf/gene2fish/issues/168)) ([80b37a5](https://github.com/czbiohub-sf/gene2fish/commit/80b37a50579676c099629f7968ad32ea5e0c05d2))
+* **infra:** flip gene2fish staging DNS to the Envoy Gateway ([#160](https://github.com/czbiohub-sf/gene2fish/issues/160)) ([3575268](https://github.com/czbiohub-sf/gene2fish/commit/35752684e9ec0bc37cbdc83aa127d4d47fd6e533))
+
+
+### Bug Fixes
+
+* **anatomy:** ignore "not found" annotations and match substructures ([#166](https://github.com/czbiohub-sf/gene2fish/issues/166)) ([414dd92](https://github.com/czbiohub-sf/gene2fish/commit/414dd9242ac6728e283f9e5c269cbc64d2df4fff))
+
+
+### Misc
+
+* bump @sentry/react from 10.73.0 to 11.4.0 in /frontend ([#170](https://github.com/czbiohub-sf/gene2fish/issues/170)) ([bb3e0ba](https://github.com/czbiohub-sf/gene2fish/commit/bb3e0ba1f22cec7ca60e577125ba4002a1144458))
+* bump boto3 from 1.43.67 to 1.43.108 ([#171](https://github.com/czbiohub-sf/gene2fish/issues/171)) ([db12eac](https://github.com/czbiohub-sf/gene2fish/commit/db12eacc9ba7ff03d7bce9b19b67778e1cd3a264))
+* bump click from 8.4.2 to 8.5.0 ([#157](https://github.com/czbiohub-sf/gene2fish/issues/157)) ([37ea9fd](https://github.com/czbiohub-sf/gene2fish/commit/37ea9fd939e3f61bc7d40a64edf7f8e05be9307d))
+* bump idna from 3.19 to 3.20 ([#164](https://github.com/czbiohub-sf/gene2fish/issues/164)) ([518ba17](https://github.com/czbiohub-sf/gene2fish/commit/518ba17975f2e96595e28a90d29870e806ce3a08))
+* bump pandas from 3.0.5 to 3.0.6 ([#161](https://github.com/czbiohub-sf/gene2fish/issues/161)) ([1c0755a](https://github.com/czbiohub-sf/gene2fish/commit/1c0755aa8a0bcefe8cbebb8401d6a56698193af3))
+* bump starlette from 1.6.0 to 1.7.0 ([#173](https://github.com/czbiohub-sf/gene2fish/issues/173)) ([2da46fa](https://github.com/czbiohub-sf/gene2fish/commit/2da46fad462a73adcadd3dbf6ae95753df7b1f86))
+* bump vite from 8.2.2 to 8.3.1 in /frontend ([#172](https://github.com/czbiohub-sf/gene2fish/issues/172)) ([8bdc77e](https://github.com/czbiohub-sf/gene2fish/commit/8bdc77edab2c23cc46331f54a78681f008ab38b3))
+* **infra:** bump the gene2fish stack chart to 2.59.0 ([#167](https://github.com/czbiohub-sf/gene2fish/issues/167)) ([be27e75](https://github.com/czbiohub-sf/gene2fish/commit/be27e75e7c60c9b0a14df3d71ddcda9b256229d5))
+
 ## [0.13.1](https://github.com/czbiohub-sf/gene2fish/compare/v0.13.0...v0.13.1) (2026-09-17)
 
 
