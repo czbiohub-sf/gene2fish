@@ -427,7 +427,13 @@ def image_proxy(url: str = Query(...)) -> Response:
         # here: a 502 from the lookup above propagates without a second try.
         result = _mirror_image(plain)
     if result is None:
-        raise HTTPException(status_code=404, detail="Image not in mirror")
+        # Cache the miss briefly so repeat views skip both S3 lookups; a 502 is
+        # transient and stays uncached.
+        raise HTTPException(
+            status_code=404,
+            detail="Image not in mirror",
+            headers={"Cache-Control": "public, max-age=3600"},
+        )
     data, media_type = result
     return Response(
         content=data,

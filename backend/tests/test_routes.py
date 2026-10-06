@@ -150,6 +150,8 @@ def test_image_proxy_reports_502_when_the_mirror_is_unreadable(client, monkeypat
     assert resp.status_code == 502
     assert lookups == [ANNOT]
     assert "Image mirror read failed" in caplog.text
+    # An outage is transient: unlike a miss, the 502 must not be cached.
+    assert "cache-control" not in resp.headers
 
 
 def test_image_proxy_502_log_shows_why_the_s3_client_could_not_be_created(
@@ -229,6 +231,19 @@ def test_image_proxy_404s_when_neither_variant_is_mirrored(client, monkeypatch):
 
     assert resp.status_code == 404
     assert lookups == [ANNOT, PLAIN]
+
+
+def test_image_proxy_miss_is_briefly_cacheable(client, monkeypatch):
+    # Without a cache header every page view repeats both S3 lookups (annot +
+    # plain) for an unmirrored image before the browser hotlinks zfin.org. An
+    # hour keeps that cheap while a reseeded mirror still shows up the same day.
+    _forbid_network(monkeypatch)
+    _mirror(monkeypatch, {})
+
+    resp = client.get("/api/image-proxy", params={"url": ANNOT})
+
+    assert resp.status_code == 404
+    assert resp.headers["cache-control"] == "public, max-age=3600"
 
 
 def test_build_image_url_includes_medium():
