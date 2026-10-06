@@ -91,6 +91,19 @@ def test_member_key_maps_package_paths_to_mirror_keys():
     ) == f"{PREFIX}/imageLoadUp/2001/ZDB-PUB-010810-1/ZDB-IMAGE-021202-261_annot_medium.jpg"
 
 
+@pytest.mark.parametrize("pub", sorted(zfin_image_mirror.THISSE_PUBLICATIONS))
+def test_member_key_year_matches_the_backend_image_url(pub):
+    # The mirror's year gate re-implements the backend's year-from-pub-id rule;
+    # pin that both place a publication's images in the same year directory.
+    from gene2image.routes import _build_image_url
+
+    image = "ZDB-IMAGE-060810-2888"
+    url = _build_image_url(pub, image)[1]
+    year = url.split("/imageLoadUp/")[1].split("/")[0]
+    key = zfin_image_mirror.member_key(f"{PUBS}/{year}/{pub}/{image}.jpg", PREFIX)
+    assert key == f"{PREFIX}/imageLoadUp/{year}/{pub}/{image}.jpg"
+
+
 @pytest.mark.parametrize(
     "name",
     [
