@@ -57,15 +57,18 @@ THISSE_PUBLICATIONS = frozenset({
 })
 
 # opt/zfin/loadUp/pubs/{year}/{pub_id}/{image_id}{variant}.jpg, as ZFIN packaged it.
+# Matched with fullmatch and re.ASCII: "$" would accept a trailing newline and
+# str-mode "\d" would accept non-ASCII digits, both off the package layout.
 MEMBER_RE = re.compile(
-    r"^(?:\./)?opt/zfin/loadUp/pubs/(?P<year>\d{4})/(?P<pub>ZDB-PUB-\d{6}-\d+)/"
-    r"(?P<file>ZDB-IMAGE-\d{6}-\d+(?:_annot|_medium|_thumb|_annot_medium)?\.jpg)$"
+    r"(?:\./)?opt/zfin/loadUp/pubs/(?P<year>\d{4})/(?P<pub>ZDB-PUB-\d{6}-\d+)/"
+    r"(?P<file>ZDB-IMAGE-\d{6}-\d+(?:_annot|_medium|_thumb|_annot_medium)?\.jpg)",
+    re.ASCII,
 )
 
 
 def member_key(name: str, prefix: str) -> str:
     """Map a package member to its S3 key; ValueError if it isn't a Thisse image."""
-    match = MEMBER_RE.match(name)
+    match = MEMBER_RE.fullmatch(name)
     if not match:
         raise ValueError(f"unexpected path in package: {name}")
     year, pub, file = match.group("year", "pub", "file")

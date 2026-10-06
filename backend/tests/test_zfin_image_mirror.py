@@ -121,6 +121,19 @@ def test_member_key_rejects_anything_outside_the_thisse_package(name):
         zfin_image_mirror.member_key(name, PREFIX)
 
 
+@pytest.mark.parametrize(
+    "name",
+    [
+        f"{PUBS}/2004/ZDB-PUB-040907-1/ZDB-IMAGE-060810-2888.jpg\n",  # "$" matches before a trailing newline
+        f"{PUBS}/2004/ZDB-PUB-040907-1/ZDB-IMAGE-٠٦٠810-2888.jpg",  # Arabic-Indic digits
+        f"{PUBS}/٢٠٠٤/ZDB-PUB-040907-1/ZDB-IMAGE-060810-2888.jpg",
+    ],
+)
+def test_member_key_rejects_trailing_newline_and_non_ascii_digits(name):
+    with pytest.raises(ValueError):
+        zfin_image_mirror.member_key(name, PREFIX)
+
+
 def test_uploads_only_package_images_missing_from_the_mirror(tmp_path, s3):
     already = f"{PREFIX}/imageLoadUp/2004/ZDB-PUB-040907-1/ZDB-IMAGE-060810-2888.jpg"
     fake = s3(_FakeS3(existing=[already]))
