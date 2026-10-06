@@ -1054,6 +1054,47 @@ test("grid tries every mirrored variant before hotlinking zfin.org", async ({ pa
   expect(zfinRequests).toHaveLength(0);
 });
 
+test("grid queues fallback candidates during a mirror outage instead of hotlinking at once", async ({ page }) => {
+  // In a mirror outage every proxied request fails, often all together. Each
+  // fallback (the next mirrored variant, then the zfin.org hotlinks) must wait
+  // its turn in the image queue like the first request, or a large grid sends
+  // its whole request volume to zfin.org at once from the visitor's IP.
+  await mockZfinBatch(page);
+  const proxyRequests = [];
+  await page.route("**/api/image-proxy**", async (route) => {
+    proxyRequests.push(route.request().url());
+    await route.fulfill({ status: 502, json: { detail: "Image mirror unavailable" } });
+  });
+  const zfinRequests = [];
+  await page.route("https://zfin.org/imageLoadUp/**", async (route) => {
+    zfinRequests.push(route.request().url());
+    await route.fulfill({ contentType: "image/png", body: MOCK_PNG });
+  });
+  // Freeze the page's timers so the queue releases a batch only when ticked.
+  await page.clock.install();
+  await page.clock.pauseAt(Date.now() + 1_000);
+
+  await page.goto("/?genes=pax2a");
+
+  const placeholders = page.locator(".single-image-placeholder");
+  await expect(placeholders).toHaveCount(stages.length);
+  expect(proxyRequests).toHaveLength(0);
+
+  // One tick releases the first batch of 4; all of them hit the broken mirror.
+  await page.clock.runFor(40);
+  await expect.poll(() => proxyRequests.length).toBe(4);
+  // The failed cells wait in the queue again rather than walking on to zfin.org.
+  await expect(placeholders).toHaveCount(stages.length);
+  expect(zfinRequests).toHaveLength(0);
+
+  // Let time flow again: draining the queue still ends every cell on its
+  // zfin.org hotlink.
+  await page.clock.resume();
+  const images = page.locator('img[alt^="pax2a at"]');
+  await expect(images).toHaveCount(stages.length);
+  await expect(images.first()).toHaveAttribute("src", /^https:\/\/zfin\.org\/.*_medium\.jpg$/);
+});
+
 test("lightbox hotlinks zfin.org directly when an image isn't in the mirror", async ({ page }) => {
   // Only the grid's medium variant is mirrored here, so the lightbox's full-res
   // request misses the mirror and must fall back to zfin.org: annotated first,

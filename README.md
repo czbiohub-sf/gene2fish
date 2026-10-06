@@ -232,7 +232,10 @@ queued from the previous one.
 An image that isn't in the mirror is loaded by the browser straight from
 zfin.org (see [Image mirror](#image-mirror)). Those requests come from each
 visitor's own IP, so ZFIN's per-IP limit applies per visitor; if ZFIN starts
-refusing them, only images missing from the mirror stop loading.
+refusing them, only images missing from the mirror stop loading. Every fallback
+(the next mirrored variant, then the zfin.org hotlink) goes back through the
+same queue, so during a mirror outage, when every cell fails at once, the grid
+still reaches zfin.org at the queue's pace rather than all at once.
 
 ## Security / dependency auditing
 

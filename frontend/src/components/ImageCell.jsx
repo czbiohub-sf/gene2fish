@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useImageQueue } from "../hooks/useImageQueue.js";
 import { imageSrcCandidates, nextImageSrc } from "../utils/imageProxy.js";
 
@@ -15,6 +15,7 @@ function SingleImage({ image, onClick, compact, onFail }) {
   const [src, setSrc] = useState(null); // null = waiting in queue, not yet requested
   const [failed, setFailed] = useState(false);
   const enqueue = useImageQueue();
+  const dequeueRef = useRef(null); // cancels this cell's pending queue entry
 
   // Load from our S3 mirror through the backend proxy, hotlinking zfin.org
   // directly when an image isn't mirrored (see imageSrcCandidates).
@@ -31,14 +32,17 @@ function SingleImage({ image, onClick, compact, onFail }) {
   useEffect(() => {
     setSrc(null);
     setFailed(false);
-    const dequeue = enqueue(setSrc, candidates[0]);
-    return dequeue; // remove from queue if unmounted before turn
+    dequeueRef.current = enqueue(setSrc, candidates[0]);
+    return () => dequeueRef.current(); // remove from queue if unmounted before turn
   }, [image.image_medium_url]); // re-enqueue if image changes
 
   function handleError(e) {
     const next = nextImageSrc(candidates, src);
     if (next) {
-      setSrc(next);
+      // Queue the next candidate like the first: in a mirror outage every cell
+      // fails together and would otherwise hotlink zfin.org all at once.
+      setSrc(null);
+      dequeueRef.current = enqueue(setSrc, next);
     } else {
       e.target.onerror = null;
       setFailed(true);
