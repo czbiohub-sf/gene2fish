@@ -35,7 +35,6 @@ import argparse
 import re
 import sys
 import tarfile
-import threading
 import time
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from pathlib import Path
@@ -121,27 +120,26 @@ def list_existing_keys(s3, bucket: str, prefix: str) -> set[str]:
     return keys
 
 
-class Counts:
-    def __init__(self) -> None:
-        self.uploaded = 0
-        self.errors = 0
-        self._lock = threading.Lock()
+def upload_all(s3, bucket: str, tf: tarfile.TarFile, todo, workers: int) -> tuple[int, int]:
+    """Upload ``todo`` and return ``(uploaded, errors)``."""
 
-    def add(self, field: str) -> None:
-        with self._lock:
-            setattr(self, field, getattr(self, field) + 1)
-
-
-def upload_all(s3, bucket: str, tf: tarfile.TarFile, todo, workers: int) -> Counts:
-    counts = Counts()
-
-    def put(key: str, data: bytes) -> None:
+    def put(key: str, data: bytes) -> bool:
         try:
             s3.put_object(Bucket=bucket, Key=key, Body=data, ContentType="image/jpeg")
-            counts.add("uploaded")
+            return True
         except (BotoCoreError, ClientError) as err:
             print(f"  ERROR uploading {key}: {err}", file=sys.stderr)
-            counts.add("errors")
+            return False
+
+    uploaded = errors = 0
+
+    def tally(done) -> None:
+        nonlocal uploaded, errors
+        for future in done:
+            if future.result():
+                uploaded += 1
+            else:
+                errors += 1
 
     start = time.monotonic()
     with ThreadPoolExecutor(max_workers=workers) as pool:
@@ -154,14 +152,12 @@ def upload_all(s3, bucket: str, tf: tarfile.TarFile, todo, workers: int) -> Coun
             # Bound the in-flight uploads so the package isn't buffered in memory.
             if len(pending) >= workers * 4:
                 done, pending = wait(pending, return_when=FIRST_COMPLETED)
-                for future in done:
-                    future.result()
+                tally(done)
             if i % 5000 == 0 or i == len(todo):
                 rate = i / max(time.monotonic() - start, 1e-6)
                 print(f"  {i}/{len(todo)} read ({rate:.0f}/s)", flush=True)
-        for future in wait(pending).done:
-            future.result()
-    return counts
+        tally(wait(pending).done)
+    return uploaded, errors
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -195,10 +191,10 @@ def main(argv: list[str] | None = None) -> int:
         if args.dry_run:
             print(f"Dry run: would upload {len(todo)}, skip {skipped} already in the mirror.")
             return 0
-        counts = upload_all(s3, args.bucket, tf, todo, args.workers)
+        uploaded, errors = upload_all(s3, args.bucket, tf, todo, args.workers)
 
-    print(f"\nDone. uploaded={counts.uploaded} skipped={skipped} errors={counts.errors}")
-    return 1 if counts.errors else 0
+    print(f"\nDone. uploaded={uploaded} skipped={skipped} errors={errors}")
+    return 1 if errors else 0
 
 
 if __name__ == "__main__":
