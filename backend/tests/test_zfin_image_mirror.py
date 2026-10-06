@@ -178,6 +178,45 @@ def test_refuses_an_empty_package(tmp_path, s3):
     assert fake.puts == {}
 
 
+def test_refuses_a_package_holding_one_image_path_twice(tmp_path, s3):
+    # "opt/..." and "./opt/..." are the same image: both map to one S3 key.
+    fake = s3(_FakeS3())
+    image = f"{PUBS}/2004/ZDB-PUB-040907-1/ZDB-IMAGE-060810-2888.jpg"
+    package = _package(tmp_path, {image: b"a", f"./{image}": b"b"})
+
+    with pytest.raises(SystemExit) as exc:
+        zfin_image_mirror.main(["--package", str(package), "--bucket", "mirror-bucket"])
+
+    assert "more than once" in str(exc.value)
+    assert fake.puts == {}
+    assert fake.listed == []
+
+
+@pytest.mark.parametrize("member_type", [tarfile.SYMTYPE, tarfile.LNKTYPE])
+def test_refuses_a_package_with_a_link_member(tmp_path, s3, member_type):
+    # A link named like an image would resolve to another member's bytes, so
+    # one key could hold a different image than the one packaged under it.
+    fake = s3(_FakeS3())
+    real = f"{PUBS}/2004/ZDB-PUB-040907-1/ZDB-IMAGE-060810-2888.jpg"
+    link = f"{PUBS}/2004/ZDB-PUB-040907-1/ZDB-IMAGE-060810-2888_medium.jpg"
+    package = tmp_path / "thisse-images.tar"
+    with tarfile.open(package, "w") as tf:
+        info = tarfile.TarInfo(real)
+        info.size = len(b"plain")
+        tf.addfile(info, io.BytesIO(b"plain"))
+        info = tarfile.TarInfo(link)
+        info.type = member_type
+        info.linkname = real
+        tf.addfile(info)
+
+    with pytest.raises(SystemExit) as exc:
+        zfin_image_mirror.main(["--package", str(package), "--bucket", "mirror-bucket"])
+
+    assert "not a regular file" in str(exc.value)
+    assert fake.puts == {}
+    assert fake.listed == []
+
+
 def test_upload_failures_exit_non_zero(tmp_path, s3):
     s3(_FakeS3(fail_puts=True))
     package = _package(tmp_path, VALID)
