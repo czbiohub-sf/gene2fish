@@ -4,8 +4,9 @@ Zebrafish gene expression image browser. Browse Thisse in situ hybridization ima
 
 Images originate from ZFIN (zfin.org) under CC BY 4.0. To stay resilient to
 temporary ZFIN outages, images are served through the backend `/api/image-proxy`
-endpoint, which reads them from our own S3 mirror and falls back to fetching live
-from ZFIN when an object isn't mirrored. See [Image mirror](#image-mirror).
+endpoint from our own S3 mirror of the Thisse image package ZFIN provided. An
+image that isn't mirrored is loaded by the browser directly from zfin.org; the
+backend never fetches from ZFIN. See [Image mirror](#image-mirror).
 
 ## Ownership
 
@@ -117,14 +118,24 @@ The container exposes `/api/health` for deployment health checks.
 
 To keep images loading when ZFIN is temporarily unavailable, the in-situ images
 are mirrored into our own S3 bucket and served through the backend
-`/api/image-proxy` endpoint. The proxy reads each image from S3 first and only
-falls back to fetching live from ZFIN when the object isn't mirrored (or S3 is
-unreachable), so a ZFIN outage no longer breaks image loading.
+`/api/image-proxy` endpoint. The deployed buckets hold exactly the Thisse image
+package ZFIN provided, which is all we're cleared to host, so the proxy serves
+images from S3 only and never fetches from ZFIN itself:
 
-**Opt-in / no-op by default.** The proxy reads S3 only when
-`GENE2IMAGE_IMAGE_S3_BUCKET` is set. When it's unset (e.g. local dev), the proxy
-behaves exactly as before — a pure ZFIN passthrough — so no AWS setup is needed
-to run the app locally.
+- **Mirrored image:** served from S3. If an `_annot.jpg` isn't mirrored, the
+  proxy serves the plain `.jpg` instead.
+- **Not mirrored:** the proxy answers 404 and the browser loads the image
+  straight from zfin.org (a plain hotlink, which ZFIN permits for the Thisse
+  images).
+- **S3 unreadable** (credentials, permissions, network): the proxy answers 502
+  and logs a warning; the browser falls back to zfin.org the same way.
+- **PNG export:** zfin.org sends no CORS headers, so the export uses mirrored
+  images only and shows "Image unavailable" for anything else.
+
+**No AWS needed locally.** The proxy reads S3 only when
+`GENE2IMAGE_IMAGE_S3_BUCKET` is set. When it's unset (e.g. local dev), nothing is
+mirrored: the proxy answers 404 for every image and the browser loads them all
+from zfin.org directly.
 
 Backend env vars (all optional):
 
@@ -134,10 +145,11 @@ Backend env vars (all optional):
 | `GENE2IMAGE_IMAGE_S3_PREFIX` | `gene2fish/zfin-images` | Key prefix within the bucket |
 | `GENE2IMAGE_IMAGE_S3_REGION` | `us-west-2` | Bucket region |
 
-The deployment must grant the backend `s3:GetObject` on the bucket/prefix
-(via an IAM role / service account; standard AWS credential chain). The bucket
-stays **private** — images are never exposed publicly; they are streamed through
-the backend.
+The deployment must grant the backend `s3:GetObject` on the bucket/prefix, plus
+`s3:ListBucket` on the prefix so a missing object reads as a miss (`NoSuchKey`)
+rather than `AccessDenied` (via an IAM role / service account; standard AWS
+credential chain). The bucket stays **private** — images are never exposed
+publicly; they are streamed through the backend.
 
 ### Populating the mirror
 
@@ -210,15 +222,20 @@ details.
 
 ## Rate limiting
 
-gene2image loads images directly from ZFIN's image server (hotlinking). To avoid
-triggering ZFIN's per-IP rate limit, images are loaded sequentially with a 150 ms
-delay between requests rather than all at once. A grid with 30 images will fully
-load in approximately 4–5 seconds — the grid fills in progressively as each image
-arrives.
+Images are served from our own S3 mirror through the backend proxy, so normal
+use never touches ZFIN's image server or its per-IP rate limit. The grid still
+loads images through a small client-side queue that releases 4 images every
+40 ms, so a large comparison grid fills in progressively instead of firing every
+request at once. Starting a new gene or stage search cancels any loads still
+queued from the previous one.
 
-If you do hit a rate limit (images stop loading or show as broken), wait a few
-minutes before searching for new genes. Searching for a new gene automatically
-cancels any pending loads from the previous search.
+An image that isn't in the mirror is loaded by the browser straight from
+zfin.org (see [Image mirror](#image-mirror)). Those requests come from each
+visitor's own IP, so ZFIN's per-IP limit applies per visitor; if ZFIN starts
+refusing them, only images missing from the mirror stop loading. Every fallback
+(the next mirrored variant, then the zfin.org hotlink) goes back through the
+same queue, so during a mirror outage, when every cell fails at once, the grid
+still reaches zfin.org at the queue's pace rather than all at once.
 
 ## Security / dependency auditing
 

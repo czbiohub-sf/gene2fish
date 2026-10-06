@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { proxiedImageSrc } from "../utils/imageProxy.js";
+import { imageSrcCandidates, nextImageSrc } from "../utils/imageProxy.js";
 
 function zfinUrl(id) {
   return `https://zfin.org/${id}`;
@@ -57,6 +57,8 @@ export function Lightbox({ image, onClose, onPrev, onNext, hasPrev, hasNext }) {
 
   if (!image) return null;
 
+  const imageCandidates = imageSrcCandidates(image.image_url, image.image_url_fallback);
+
   function stopAndCall(fn) {
     return (e) => {
       e.stopPropagation();
@@ -82,20 +84,19 @@ export function Lightbox({ image, onClose, onPrev, onNext, hasPrev, hasNext }) {
         <div className="lightbox-body">
           <div className="lightbox-image-col">
             <img
-              // key forces a fresh element per image so the fallback flag and
-              // any display:none from a prior image are reset on navigation.
+              // key forces a fresh element per image so a fallback src and any
+              // display:none from a prior image are reset on navigation.
               key={image.image_id}
               className="lightbox-img"
-              // Served via the backend proxy (S3 mirror, live-ZFIN fallback) so
-              // images survive temporary ZFIN outages (GEN-22).
-              src={proxiedImageSrc(image.image_url)}
+              // Served from our S3 mirror via the backend proxy, hotlinking
+              // zfin.org directly when the image isn't mirrored.
+              src={imageCandidates[0]}
               alt={`${image.gene_symbol} expression`}
               onError={(e) => {
                 const img = e.target;
-                const fallback = proxiedImageSrc(image.image_url_fallback);
-                if (!img.dataset.fellBack && fallback && fallback !== img.getAttribute("src")) {
-                  img.dataset.fellBack = "1";
-                  img.src = fallback;
+                const next = nextImageSrc(imageCandidates, img.getAttribute("src"));
+                if (next) {
+                  img.src = next;
                 } else {
                   img.style.display = "none";
                 }

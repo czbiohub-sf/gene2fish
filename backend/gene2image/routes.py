@@ -2,14 +2,10 @@
 
 from __future__ import annotations
 
-import time
+import logging
 from collections import defaultdict
 from typing import NoReturn
-from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse, urlunparse
-from urllib.request import HTTPRedirectHandler, build_opener, install_opener
-from urllib.request import Request as UrlRequest
-from urllib.request import urlopen
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 
@@ -34,6 +30,7 @@ from .models import (
 from .stage_utils import CANONICAL_STAGES, get_stage_info, select_representative, select_top_n
 
 router = APIRouter(prefix="/api")
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -64,9 +61,8 @@ def _canonical_zfin_image_url(url: str) -> str:
     """Validate a ZFIN image URL and return it rebuilt from validated parts.
 
     Returning a URL reconstructed from the checked components (rather than the
-    caller reusing its own tainted string) puts the sanitizer on the data path —
-    CodeQL's py/full-ssrf treats validate-by-exception as no barrier — and drops
-    any query string or fragment that would otherwise ride along to ZFIN.
+    caller reusing its own tainted string) drops any query string or fragment,
+    so it can't change the S3 key or slip past the annotated-variant fallback.
     """
     try:
         parsed = urlparse(url)
@@ -79,86 +75,6 @@ def _canonical_zfin_image_url(url: str) -> str:
     if not parsed.path.startswith("/imageLoadUp/"):
         raise HTTPException(status_code=400, detail="Only ZFIN imageLoadUp URLs are supported")
     return urlunparse(("https", "zfin.org", parsed.path, "", "", ""))
-
-
-class _NoRedirectHandler(HTTPRedirectHandler):
-    """SSRF guard: never follow redirects when fetching ZFIN images.
-
-    ``_canonical_zfin_image_url`` only checks the *initial* URL. urllib follows
-    3xx redirects by default and does not re-validate the target, so a redirect
-    (e.g. via an open redirect on zfin.org) could point the fetch at an internal
-    host such as the cloud metadata endpoint. Returning ``None`` turns any
-    redirect into an ``HTTPError`` instead of silently following it.
-    """
-
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return None
-
-
-# urlopen() reads urllib's process-global opener; install one that refuses
-# redirects so the image proxy can never be pivoted to an internal host.
-install_opener(build_opener(_NoRedirectHandler))
-
-
-# ZFIN's image host fails intermittently (connection resets, timeouts,
-# sporadic 5xx) even when it is otherwise up, which showed as randomly missing
-# images in the grid (GEN-46). Those blips are short-lived, so a couple of
-# quick same-request retries turn most of them into a served image. 4xx
-# responses are definitive (e.g. a genuinely missing _annot.jpg variant) and
-# are never retried, so the caller's plain-variant fallback still gets a
-# single fast 404.
-_ZFIN_FETCH_ATTEMPTS = 3
-_ZFIN_FETCH_RETRY_DELAY_SECONDS = 0.3
-
-
-def _fetch_zfin_image(url: str) -> tuple[bytes, str]:
-    url = _canonical_zfin_image_url(url)
-    request = UrlRequest(url, headers={"User-Agent": "gene2fish image export"})
-    last_err: Exception | None = None
-    for attempt in range(_ZFIN_FETCH_ATTEMPTS):
-        if attempt:
-            # Sync route → FastAPI runs this in a worker thread, so a short
-            # blocking sleep between attempts doesn't stall the event loop.
-            time.sleep(_ZFIN_FETCH_RETRY_DELAY_SECONDS)
-        try:
-            with urlopen(request, timeout=15) as resp:
-                media_type = resp.headers.get_content_type() or "image/jpeg"
-                if not media_type.startswith("image/"):
-                    # The proxy only serves images. Refuse anything else so a
-                    # non-image (e.g. text/html) upstream response can't be rendered
-                    # as a document on our own origin (stored/reflected XSS).
-                    raise HTTPException(
-                        status_code=502, detail="ZFIN returned non-image content"
-                    )
-                return resp.read(), media_type
-        except HTTPError as err:
-            if err.code < 500:
-                if err.code == 404:
-                    # Load-bearing: image_proxy's _annot.jpg -> plain .jpg
-                    # fallback keys on this exact status.
-                    raise HTTPException(
-                        status_code=404, detail="ZFIN image not found"
-                    ) from err
-                # Any other non-5xx upstream status (redirect refused by
-                # _NoRedirectHandler, 401/403/429) is a gateway condition for
-                # our caller, not a status our own resource can carry.
-                raise HTTPException(
-                    status_code=502,
-                    detail=f"ZFIN rejected the image request (upstream {err.code})",
-                ) from err
-            last_err = err
-        except (URLError, TimeoutError) as err:
-            last_err = err
-    if isinstance(last_err, HTTPError):
-        # Exhausted retries on a persistent 5xx — an upstream outage, not a
-        # missing image, so the detail must not read like a 404.
-        raise HTTPException(
-            status_code=last_err.code,
-            detail="ZFIN image temporarily unavailable (upstream error)",
-        ) from last_err
-    raise HTTPException(
-        status_code=502, detail="Unable to fetch ZFIN image"
-    ) from last_err
 
 
 def _plain_image_variant(url: str) -> str | None:
@@ -175,17 +91,21 @@ def _plain_image_variant(url: str) -> str | None:
     return None
 
 
-def _resolve_image(url: str) -> tuple[bytes, str]:
-    """Fetch an image from the S3 mirror if present, else live from ZFIN.
+def _mirror_image(url: str) -> tuple[bytes, str] | None:
+    """Read an image from the S3 mirror of the ZFIN Thisse package, never from ZFIN.
 
-    The S3 path is safe without a separate validation here: s3_images only
-    resolves a key for canonical zfin.org/imageLoadUp URLs, and the ZFIN
-    fallback validates the URL itself (in _fetch_zfin_image).
+    Returns None on a miss (the browser then hotlinks the image from zfin.org
+    itself, see frontend/src/utils/imageProxy.js). A broken mirror raises a 502
+    instead. The backend never fetches from ZFIN, so the proxy can only serve
+    the package ZFIN provided (legal requirement).
     """
-    result = s3_images.fetch_image(url) if s3_images.s3_enabled() else None
-    if result is not None:
-        return result
-    return _fetch_zfin_image(url)
+    try:
+        return s3_images.fetch_image(url)
+    except s3_images.ImageMirrorError as err:
+        # Logged on purpose: a broken mirror used to fall back to ZFIN silently.
+        # WARNING, not ERROR, because Sentry already reports the 502 below.
+        logger.warning("Image mirror read failed for %s", url, exc_info=True)
+        raise HTTPException(status_code=502, detail="Image mirror unavailable") from err
 
 
 def _record_to_model(record: dict) -> ImageRecord:
@@ -496,29 +416,32 @@ def resolve_gene(symbol: str, request: Request) -> GeneResolveResult:
 def image_proxy(url: str = Query(...)) -> Response:
     # Rebuild the URL from validated parts before S3 keying and annot-fallback
     # so a query string or fragment cannot skip `_plain_image_variant`.
-    # `_fetch_zfin_image` still sanitizes immediately before UrlRequest (CodeQL).
     url = _canonical_zfin_image_url(url)
-    # Serve the image from our own mirror first (S3) so a temporary ZFIN outage
-    # doesn't break image loading; fall back to fetching live from ZFIN when the
-    # object isn't mirrored or no bucket is configured (GEN-22).
-    try:
-        data, media_type = _resolve_image(url)
-    except HTTPException as err:
-        # ZFIN has no annotated (`_annot.jpg`) variant for many images and 404s
-        # on them; retry the plain `.jpg` server-side so the browser gets a
-        # single 200 instead of a 404 (plus a client-side refetch) per image.
-        plain = _plain_image_variant(url)
-        if err.status_code == 404 and plain is not None:
-            data, media_type = _resolve_image(plain)
-        else:
-            raise
+    # Serve only from our S3 mirror of the ZFIN-provided Thisse package; a miss
+    # is a 404 and the browser hotlinks zfin.org itself (GEN-22, GEN-45).
+    result = _mirror_image(url)
+    if result is None and (plain := _plain_image_variant(url)) is not None:
+        # The package has annotated (`_annot.jpg`) variants for only some images;
+        # serve the plain `.jpg` instead so the browser gets a single 200 rather
+        # than a 404 (plus a client-side refetch) per image. Only a miss gets
+        # here: a 502 from the lookup above propagates without a second try.
+        result = _mirror_image(plain)
+    if result is None:
+        # Cache the miss briefly so repeat views skip both S3 lookups; a 502 is
+        # transient and stays uncached.
+        raise HTTPException(
+            status_code=404,
+            detail="Image not in mirror",
+            headers={"Cache-Control": "public, max-age=3600"},
+        )
+    data, media_type = result
     return Response(
         content=data,
         media_type=media_type,
         headers={
             "Access-Control-Allow-Origin": "*",
             "Cache-Control": "public, max-age=86400",
-            # Belt-and-suspenders with the image/* check in _fetch_zfin_image:
+            # Belt-and-suspenders with the image/* check in s3_images.fetch_image:
             # never let a browser MIME-sniff a proxied response into HTML.
             "X-Content-Type-Options": "nosniff",
         },

@@ -49,6 +49,29 @@ function imagesFor(gene, nPerStage = 1, selectedStages = stages) {
   );
 }
 
+// Give an image record real ZFIN URLs (what the backend emits), so the frontend
+// loads it through the mirror proxy first.
+function withZfinUrls(img) {
+  const base = `https://zfin.org/imageLoadUp/2004/ZDB-PUB-040907-1/${img.image_id}`;
+  return {
+    ...img,
+    image_url: `${base}_annot.jpg`,
+    image_url_fallback: `${base}.jpg`,
+    image_medium_url: `${base}_medium.jpg`,
+  };
+}
+
+async function mockZfinBatch(page) {
+  await page.route("**/api/genes/batch", async (route) => {
+    const body = route.request().postDataJSON();
+    const response = {};
+    for (const gene of body.genes) {
+      response[gene] = imagesFor(gene, body.n_images || 1).map(withZfinUrls);
+    }
+    await route.fulfill({ json: response });
+  });
+}
+
 const MOCK_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
   "base64"
@@ -973,6 +996,167 @@ test("shows 'Image unavailable' with a ZFIN link when both image URLs 404", asyn
 
   // No usable images should remain rendered.
   await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(0);
+});
+
+test("grid hotlinks zfin.org directly when an image isn't in the mirror", async ({ page }) => {
+  // The proxy serves only our S3 mirror of the ZFIN-provided Thisse package and
+  // 404s anything else. The browser must then load the image from zfin.org
+  // itself (a plain hotlink) instead of showing it as unavailable.
+  await mockZfinBatch(page);
+  await page.route("**/api/image-proxy**", async (route) => {
+    await route.fulfill({ status: 404, json: { detail: "Image not in mirror" } });
+  });
+  const zfinRequests = [];
+  await page.route("https://zfin.org/imageLoadUp/**", async (route) => {
+    zfinRequests.push(route.request().url());
+    await route.fulfill({ contentType: "image/png", body: MOCK_PNG });
+  });
+
+  await page.goto("/?genes=pax2a");
+
+  const images = page.locator('img[alt^="pax2a at"]');
+  await expect(images).toHaveCount(stages.length);
+  await expect(images.first()).toHaveAttribute(
+    "src",
+    /^https:\/\/zfin\.org\/imageLoadUp\/2004\/ZDB-PUB-040907-1\/ZDB-IMAGE-pax2a-[\d-]+_medium\.jpg$/
+  );
+  expect(zfinRequests.length).toBeGreaterThan(0);
+  expect(zfinRequests.every((url) => url.endsWith("_medium.jpg"))).toBe(true);
+});
+
+test("grid tries every mirrored variant before hotlinking zfin.org", async ({ page }) => {
+  // The mirror has the plain .jpg but not the _medium.jpg. The grid must fall
+  // back to the mirrored plain variant instead of hotlinking zfin.org.
+  await mockZfinBatch(page);
+  await page.route("**/api/image-proxy**", async (route) => {
+    const url = new URL(route.request().url()).searchParams.get("url");
+    if (url.endsWith("_medium.jpg")) {
+      await route.fulfill({ status: 404, json: { detail: "Image not in mirror" } });
+      return;
+    }
+    await route.fulfill({ contentType: "image/png", body: MOCK_PNG });
+  });
+  const zfinRequests = [];
+  await page.route("https://zfin.org/imageLoadUp/**", async (route) => {
+    zfinRequests.push(route.request().url());
+    await route.fulfill({ contentType: "image/png", body: MOCK_PNG });
+  });
+
+  await page.goto("/?genes=pax2a");
+
+  const images = page.locator('img[alt^="pax2a at"]');
+  await expect(images).toHaveCount(stages.length);
+  await expect(images.first()).toHaveAttribute(
+    "src",
+    /^\/api\/image-proxy\?url=.*ZDB-IMAGE-pax2a-[\d-]+\.jpg$/
+  );
+  await expect(images.first()).not.toHaveAttribute("src", /_medium\.jpg$/);
+  expect(zfinRequests).toHaveLength(0);
+});
+
+test("grid queues fallback candidates during a mirror outage instead of hotlinking at once", async ({ page }) => {
+  // In a mirror outage every proxied request fails, often all together. Each
+  // fallback (the next mirrored variant, then the zfin.org hotlinks) must wait
+  // its turn in the image queue like the first request, or a large grid sends
+  // its whole request volume to zfin.org at once from the visitor's IP.
+  await mockZfinBatch(page);
+  const proxyRequests = [];
+  await page.route("**/api/image-proxy**", async (route) => {
+    proxyRequests.push(route.request().url());
+    await route.fulfill({ status: 502, json: { detail: "Image mirror unavailable" } });
+  });
+  const zfinRequests = [];
+  await page.route("https://zfin.org/imageLoadUp/**", async (route) => {
+    zfinRequests.push(route.request().url());
+    await route.fulfill({ contentType: "image/png", body: MOCK_PNG });
+  });
+  // Freeze the page's timers so the queue releases a batch only when ticked.
+  await page.clock.install();
+  await page.clock.pauseAt(Date.now() + 1_000);
+
+  await page.goto("/?genes=pax2a");
+
+  const placeholders = page.locator(".single-image-placeholder");
+  await expect(placeholders).toHaveCount(stages.length);
+  expect(proxyRequests).toHaveLength(0);
+
+  // One tick releases the first batch of 4; all of them hit the broken mirror.
+  await page.clock.runFor(40);
+  await expect.poll(() => proxyRequests.length).toBe(4);
+  // The failed cells wait in the queue again rather than walking on to zfin.org.
+  await expect(placeholders).toHaveCount(stages.length);
+  expect(zfinRequests).toHaveLength(0);
+
+  // Let time flow again: draining the queue still ends every cell on its
+  // zfin.org hotlink.
+  await page.clock.resume();
+  const images = page.locator('img[alt^="pax2a at"]');
+  await expect(images).toHaveCount(stages.length);
+  await expect(images.first()).toHaveAttribute("src", /^https:\/\/zfin\.org\/.*_medium\.jpg$/);
+});
+
+test("lightbox hotlinks zfin.org directly when an image isn't in the mirror", async ({ page }) => {
+  // Only the grid's medium variant is mirrored here, so the lightbox's full-res
+  // request misses the mirror and must fall back to zfin.org: annotated first,
+  // then (like most ZFIN images, this one has no annotated variant) plain.
+  await mockZfinBatch(page);
+  await page.route("**/api/image-proxy**", async (route) => {
+    const url = new URL(route.request().url()).searchParams.get("url");
+    if (url.endsWith("_medium.jpg")) {
+      await route.fulfill({ contentType: "image/png", body: MOCK_PNG });
+      return;
+    }
+    await route.fulfill({ status: 404, json: { detail: "Image not in mirror" } });
+  });
+  await page.route("https://zfin.org/imageLoadUp/**", async (route) => {
+    if (route.request().url().endsWith("_annot.jpg")) {
+      await route.fulfill({ status: 404 });
+      return;
+    }
+    await route.fulfill({ contentType: "image/png", body: MOCK_PNG });
+  });
+
+  await page.goto("/?genes=pax2a");
+  await page.locator('img[alt^="pax2a at"]').first().click();
+
+  const lightboxImg = page.locator(".lightbox-img");
+  await expect(lightboxImg).toHaveAttribute(
+    "src",
+    /^https:\/\/zfin\.org\/imageLoadUp\/2004\/ZDB-PUB-040907-1\/ZDB-IMAGE-pax2a-[\d-]+\.jpg$/
+  );
+  await expect(lightboxImg).toBeVisible();
+});
+
+test("lightbox loads the mirrored plain image when the annotated lookup fails with a 502", async ({ page }) => {
+  // The proxy retries `_annot.jpg` as plain `.jpg` only on a miss; a 502 (one
+  // unreadable mirror object) propagates without a second lookup. The lightbox
+  // must then still try the mirrored plain variant before hotlinking zfin.org.
+  await mockZfinBatch(page);
+  await page.route("**/api/image-proxy**", async (route) => {
+    const url = new URL(route.request().url()).searchParams.get("url");
+    if (url.endsWith("_annot.jpg")) {
+      await route.fulfill({ status: 502, json: { detail: "Image mirror unavailable" } });
+      return;
+    }
+    await route.fulfill({ contentType: "image/png", body: MOCK_PNG });
+  });
+  const zfinRequests = [];
+  await page.route("https://zfin.org/imageLoadUp/**", async (route) => {
+    zfinRequests.push(route.request().url());
+    await route.fulfill({ contentType: "image/png", body: MOCK_PNG });
+  });
+
+  await page.goto("/?genes=pax2a");
+  await page.locator('img[alt^="pax2a at"]').first().click();
+
+  const lightboxImg = page.locator(".lightbox-img");
+  await expect(lightboxImg).toHaveAttribute(
+    "src",
+    /^\/api\/image-proxy\?url=.*ZDB-IMAGE-pax2a-[\d-]+\.jpg$/
+  );
+  await expect(lightboxImg).not.toHaveAttribute("src", /_annot\.jpg$/);
+  await expect(lightboxImg).toBeVisible();
+  expect(zfinRequests).toHaveLength(0);
 });
 
 test("narrowing the stage range refetches and shows only in-range stages", async ({ page }) => {

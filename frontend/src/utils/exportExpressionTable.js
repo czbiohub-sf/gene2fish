@@ -68,6 +68,9 @@ function loadImage(src) {
   });
 }
 
+// Unlike the grid and lightbox, the export never hotlinks zfin.org: ZFIN sends no
+// CORS headers, so its images can't be drawn into an exportable canvas. An image
+// that isn't in our mirror exports as "Image unavailable".
 async function loadBestImage(image) {
   const primary = await loadImage(proxiedImageSrc(image.image_url));
   if (primary) return primary;

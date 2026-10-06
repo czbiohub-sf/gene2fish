@@ -70,7 +70,6 @@ def test_image_proxy_keeps_single_nosniff_header(client, monkeypatch):
     # setdefault, so the header must appear exactly once (not duplicated).
     from gene2image import s3_images
 
-    monkeypatch.setattr(s3_images, "s3_enabled", lambda: True)
     monkeypatch.setattr(s3_images, "fetch_image", lambda url: (b"bytes", "image/jpeg"))
 
     resp = client.get(
