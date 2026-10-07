@@ -705,6 +705,41 @@ test("exports only the expression table as a PNG", async ({ page }) => {
   expect(proxiedUrls[0]).toContain("https://zfin.org/imageLoadUp/");
 });
 
+test("PNG export credits Thisse, ZFIN and the CC BY 4.0 license", async ({ page }) => {
+  // An exported PNG travels without the app's footer, so it must carry the
+  // credit itself: ZFIN's permission requires attribution to both Thisse and
+  // ZFIN wherever the images are used, and CC BY 4.0 requires the license
+  // notice. A one-gene export is the narrowest canvas, so the credit has to
+  // wrap there rather than being cut short.
+  await page.addInitScript(() => {
+    window.__canvasText = [];
+    const fillText = CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText = function (text, ...rest) {
+      window.__canvasText.push(String(text));
+      return fillText.call(this, text, ...rest);
+    };
+  });
+
+  await page.goto("/?genes=pax2a");
+  await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length);
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export table PNG" }).click();
+  const bytes = await readFile(await (await downloadPromise).path());
+
+  const drawn = (await page.evaluate(() => window.__canvasText)).join(" ");
+  expect(drawn).toContain(
+    "Images and image data provided by ZFIN (zfin.org). Thisse et al. high-throughput in situ hybridization data."
+  );
+  expect(drawn).toContain("Licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/).");
+  expect(drawn).toContain("ZFIN publications: ZDB-PUB-040907-1.");
+
+  // The credit sits below the table, so the PNG is taller than the table
+  // itself (PNG IHDR height, at the export's 2x scale).
+  const tableHeight = (58 + stages.length * 180) * 2;
+  expect(bytes.readUInt32BE(20)).toBeGreaterThan(tableHeight);
+});
+
 test("adding an anatomy-suggested gene preserves previously visible gene columns", async ({ page }) => {
   const batchRequests = [];
   page.on("request", (request) => {

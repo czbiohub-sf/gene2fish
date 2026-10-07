@@ -269,6 +269,10 @@ cd frontend && npm audit --audit-level=high
 Images from ZFIN (zfin.org). Thisse et al. in situ hybridization data.
 Licensed under CC BY 4.0. Attribution: Thisse, B., Thisse, C. et al.
 
+The PNG table export carries the same credit below the table: ZFIN, Thisse et
+al., CC BY 4.0 with the license link, and the ZFIN publication IDs of the
+exported images.
+
 ## License
 
 The code in this repository is licensed under the [MIT License](LICENSE),

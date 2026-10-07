@@ -7,6 +7,9 @@ const EXPORT_CELL_PADDING = 8;
 const EXPORT_IMAGE_GAP = 4;
 const EXPORT_SCALE = 2;
 const EXPORT_IMAGE_LOAD_CONCURRENCY = 6;
+const EXPORT_CREDIT_PADDING = 12;
+const EXPORT_CREDIT_LINE_HEIGHT = 15;
+const EXPORT_CREDIT_FONT = "11px sans-serif";
 
 function cssVar(name, fallback) {
   const root = document.querySelector(".app-root") || document.documentElement;
@@ -33,6 +36,38 @@ function drawText(ctx, text, x, y, maxWidth, options = {}) {
   }
   ctx.fillText(label, x, y, maxWidth);
   ctx.restore();
+}
+
+// Credit drawn under every export. The images are Thisse et al. data under
+// CC BY 4.0, and ZFIN's permission requires crediting both Thisse and ZFIN
+// wherever the images are used. An exported PNG travels without the app's
+// footer, so it carries the same wording (components/Attribution.jsx) plus the
+// license link and the ZFIN publications it shows.
+function exportCreditText(images) {
+  const publications = [...new Set(images.map((image) => image.publication_id).filter(Boolean))].sort();
+  return [
+    "Images and image data provided by ZFIN (zfin.org).",
+    "Thisse et al. high-throughput in situ hybridization data.",
+    "Licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/).",
+    ...(publications.length ? [`ZFIN publications: ${publications.join(", ")}.`] : []),
+  ].join(" ");
+}
+
+// Greedy word wrap. Unlike drawText, the credit must never be truncated.
+function wrapText(ctx, text, maxWidth) {
+  const lines = [];
+  let line = "";
+  for (const word of text.split(" ")) {
+    const candidate = line ? `${line} ${word}` : word;
+    if (line && ctx.measureText(candidate).width > maxWidth) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = candidate;
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
 }
 
 function drawRect(ctx, x, y, width, height, fill, stroke) {
@@ -166,17 +201,23 @@ export async function exportExpressionTablePng({ rows, genes, lookup, colMaxImag
 
   const columnWidths = genes.map((symbol) => EXPORT_CELL_SIZE * (colMaxImages[symbol] || 1));
   const width = EXPORT_ROW_HEADER_WIDTH + columnWidths.reduce((sum, w) => sum + w, 0);
-  const height = EXPORT_HEADER_HEIGHT + rows.length * EXPORT_CELL_SIZE;
+  const tableHeight = EXPORT_HEADER_HEIGHT + rows.length * EXPORT_CELL_SIZE;
   const canvas = document.createElement("canvas");
-  canvas.width = width * EXPORT_SCALE;
-  canvas.height = height * EXPORT_SCALE;
-  canvas.style.width = `${width}px`;
-  canvas.style.height = `${height}px`;
-
   const ctx = canvas.getContext("2d");
   if (!ctx) {
     throw new Error("PNG export failed: canvas rendering is unavailable");
   }
+
+  // Measure the wrapped credit before sizing the canvas so it always fits.
+  const creditWidth = width - 2 * EXPORT_CREDIT_PADDING;
+  ctx.font = EXPORT_CREDIT_FONT;
+  const creditLines = wrapText(ctx, exportCreditText(exportImages), creditWidth);
+  const creditHeight = 2 * EXPORT_CREDIT_PADDING + creditLines.length * EXPORT_CREDIT_LINE_HEIGHT;
+  const height = tableHeight + creditHeight;
+  canvas.width = width * EXPORT_SCALE;
+  canvas.height = height * EXPORT_SCALE;
+  canvas.style.width = `${width}px`;
+  canvas.style.height = `${height}px`;
 
   const loadedImages = await preloadImages(exportImages, reportImageProgress);
 
@@ -238,6 +279,19 @@ export async function exportExpressionTablePng({ rows, genes, lookup, colMaxImag
       x += columnWidth;
     }
   }
+
+  drawRect(ctx, 0, tableHeight, width, creditHeight, colors.card, colors.border);
+  ctx.save();
+  ctx.fillStyle = colors.secondary;
+  ctx.font = EXPORT_CREDIT_FONT;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+  creditLines.forEach((line, index) => {
+    const y = tableHeight + EXPORT_CREDIT_PADDING + index * EXPORT_CREDIT_LINE_HEIGHT;
+    // maxWidth squeezes rather than clips a single word wider than the canvas.
+    ctx.fillText(line, EXPORT_CREDIT_PADDING, y, creditWidth);
+  });
+  ctx.restore();
 
   const blob = await toBlob(canvas);
   onProgress?.(100);
