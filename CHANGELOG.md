@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.14.1](https://github.com/czbiohub-sf/gene2fish/compare/v0.14.0...v0.14.1) (2026-10-07)
+
+
+### Bug Fixes
+
+* **image-proxy:** serve images only from the S3 mirror and hotlink ZFIN on a miss ([#174](https://github.com/czbiohub-sf/gene2fish/issues/174)) ([0ade02c](https://github.com/czbiohub-sf/gene2fish/commit/0ade02cdd094f0717e11b5da6291ad4f712bb017))
+* **mirror:** seed the S3 mirror only from the ZFIN-provided Thisse package ([#175](https://github.com/czbiohub-sf/gene2fish/issues/175)) ([8f7a28a](https://github.com/czbiohub-sf/gene2fish/commit/8f7a28aa27565454e9cc0272c85fad28fb514dbf))
+
+
+### Misc
+
+* **infra:** retire the gene2fish nginx Ingress and oauth2-proxy ([#165](https://github.com/czbiohub-sf/gene2fish/issues/165)) ([bef64c1](https://github.com/czbiohub-sf/gene2fish/commit/bef64c12dfda056ae45895a0c2a6e9b544e02c77))
+
 ## [0.14.0](https://github.com/czbiohub-sf/gene2fish/compare/v0.13.1...v0.14.0) (2026-10-06)
 
 
