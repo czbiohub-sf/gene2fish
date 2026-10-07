@@ -1,98 +1,122 @@
 #!/usr/bin/env python3
-"""ZFIN Image Mirror → S3.
+"""ZFIN Thisse image package → S3 mirror.
 
-Downloads the Thisse in-situ hybridization images referenced by
-``image_metadata.json`` from ZFIN and uploads them to our own S3 bucket, so the
-application can serve them from our cloud (via the backend ``/api/image-proxy``
-endpoint) instead of hotlinking ZFIN live. This protects the UI from temporary
-ZFIN outages (GEN-22).
+Uploads the Thisse in-situ hybridization image package that ZFIN provided
+(``thisse-images.tar``) into our own S3 bucket, so the backend serves the images
+from our cloud through ``/api/image-proxy`` (GEN-22, GEN-45).
 
-For every image it mirrors:
-  - the plain      ``{image_id}.jpg``        (present for every image)
-  - the annotated  ``{image_id}_annot.jpg``  (present only for some
-    publications; 404s are recorded as "missing" and skipped, not errors)
+The mirror must hold exactly that package and nothing else: legal cleared us to
+host the Thisse images ZFIN sent, and rights for other ZFIN images are decided
+case by case. So this script never downloads from zfin.org. It reads the
+tarball, and if any file in it falls outside the five Thisse publications or
+the expected layout it uploads nothing at all.
 
-The S3 layout mirrors the ZFIN path 1:1 so the backend can map a canonical ZFIN
-image URL to an object key with a simple prefix swap::
+The package's paths map 1:1 onto the key layout the backend looks up (see
+``backend/gene2image/s3_images.py``)::
 
-    https://zfin.org/imageLoadUp/{year}/{pub_id}/{file}
+    opt/zfin/loadUp/pubs/{year}/{pub_id}/{file}
         → s3://{bucket}/{prefix}/imageLoadUp/{year}/{pub_id}/{file}
 
 The run is resumable: objects already present under the prefix are listed once
-up front and skipped, so re-running only fetches what is missing.
+up front and skipped, so re-running only uploads what is missing. Objects under
+the prefix that are not in the package are reported (up to 20 keys) and make the
+run exit non-zero, because the mirror must hold exactly the package; nothing is
+ever deleted. ``--overwrite`` skips the listing, so it does not check for extras.
 
 Credentials are read from the standard AWS chain (env vars, shared config, or an
 instance/role profile). Never hard-code keys here.
 
 Usage::
 
-    export GENE2IMAGE_DATA_DIR=/path/to/gene2image_data   # holds image_metadata*.json
-    export AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_DEFAULT_REGION=us-west-2
-    python zfin_image_mirror.py                            # mirror everything
-    python zfin_image_mirror.py --limit 50 --dry-run       # smoke test, no uploads
+    python zfin_image_mirror.py --package thisse-images.tar --bucket BUCKET --dry-run
+    python zfin_image_mirror.py --package thisse-images.tar --bucket BUCKET
 """
 
 from __future__ import annotations
 
 import argparse
-import json
-import os
 import re
 import sys
-import threading
+import tarfile
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from pathlib import Path
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
 
 import boto3
 from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 
-DEFAULT_BUCKET = "czbsf-rnaquarium"
 DEFAULT_PREFIX = "gene2fish/zfin-images"
 DEFAULT_REGION = "us-west-2"
-USER_AGENT = "gene2fish image mirror (GEN-22)"
 
-ZFIN_HOST_PREFIX = "https://zfin.org/imageLoadUp/"
+# The five Thisse publications in ZFIN's package (also the extractor's default
+# publication filter in zfin_image_metadata_extractor.py).
+THISSE_PUBLICATIONS = frozenset({
+    "ZDB-PUB-010810-1",   # Thisse 2001
+    "ZDB-PUB-040907-1",   # Thisse 2004
+    "ZDB-PUB-051025-1",   # Thisse 2005
+    "ZDB-PUB-080220-1",   # Thisse 2008
+    "ZDB-PUB-080227-22",  # Thisse 2008
+})
 
-
-def build_image_urls(pub_id: str, image_id: str) -> tuple[str, str, str]:
-    """Return (annotated_url, plain_url, medium_url) — mirrors backend ``_build_image_url``."""
-    try:
-        year = "20" + pub_id.split("-")[2][:2]
-    except (IndexError, AttributeError):
-        year = "2000"
-    base = f"{ZFIN_HOST_PREFIX}{year}/{pub_id}/{image_id}"
-    return f"{base}_annot.jpg", f"{base}.jpg", f"{base}_medium.jpg"
-
-
-def url_to_key(url: str, prefix: str) -> str:
-    """Map a ZFIN imageLoadUp URL to its S3 object key under ``prefix``."""
-    rel = url[len(ZFIN_HOST_PREFIX):]  # imageLoadUp/{year}/{pub}/{file}
-    return f"{prefix.rstrip('/')}/imageLoadUp/{rel}"
-
-
-def load_metadata(path: Path) -> list[dict]:
-    raw = path.read_text(encoding="utf-8")
-    raw = re.sub(r"\bNaN\b", "null", raw)  # pandas exports bare NaN
-    return json.loads(raw)
+# opt/zfin/loadUp/pubs/{year}/{pub_id}/{image_id}{variant}.jpg, as ZFIN packaged it.
+# Matched with fullmatch and re.ASCII: "$" would accept a trailing newline and
+# str-mode "\d" would accept non-ASCII digits, both off the package layout.
+MEMBER_RE = re.compile(
+    r"(?:\./)?opt/zfin/loadUp/pubs/(?P<year>\d{4})/(?P<pub>ZDB-PUB-\d{6}-\d+)/"
+    r"(?P<file>ZDB-IMAGE-\d{6}-\d+(?:_annot|_medium|_thumb|_annot_medium)?\.jpg)",
+    re.ASCII,
+)
 
 
-def find_metadata_file(explicit: str | None) -> Path:
-    if explicit:
-        return Path(explicit)
-    data_dir = os.environ.get("GENE2IMAGE_DATA_DIR")
-    if not data_dir:
+def member_key(name: str, prefix: str) -> str:
+    """Map a package member to its S3 key; ValueError if it isn't a Thisse image."""
+    match = MEMBER_RE.fullmatch(name)
+    if not match:
+        raise ValueError(f"unexpected path in package: {name}")
+    year, pub, file = match.group("year", "pub", "file")
+    if pub not in THISSE_PUBLICATIONS:
+        raise ValueError(f"not a Thisse publication: {name}")
+    if year != "20" + pub.split("-")[2][:2]:
+        # The backend derives the year directory from the publication ID, so a
+        # mismatched year would upload objects the proxy never looks up.
+        raise ValueError(f"year directory does not match {pub}: {name}")
+    return f"{prefix.rstrip('/')}/imageLoadUp/{year}/{pub}/{file}"
+
+
+def plan_uploads(tf: tarfile.TarFile, prefix: str) -> list[tuple[tarfile.TarInfo, str]]:
+    """Validate every package member before anything is uploaded.
+
+    Fails closed: a single member that isn't a Thisse image in the expected
+    layout means this is not the package we were cleared to host.
+    """
+    plan: list[tuple[tarfile.TarInfo, str]] = []
+    problems: list[str] = []
+    for member in tf.getmembers():
+        if member.isdir():
+            continue
+        if not member.isfile():
+            problems.append(f"not a regular file: {member.name}")
+            continue
+        try:
+            plan.append((member, member_key(member.name, prefix)))
+        except ValueError as err:
+            problems.append(str(err))
+    members_by_key: dict[str, list[str]] = {}
+    for member, key in plan:
+        members_by_key.setdefault(key, []).append(member.name)
+    for names in members_by_key.values():
+        if len(names) > 1:
+            problems.append(f"the package holds the same image path more than once: {', '.join(names)}")
+    if problems:
+        shown = "\n  ".join(problems[:20])
         sys.exit(
-            "No metadata file given. Pass --metadata PATH or set GENE2IMAGE_DATA_DIR."
+            f"Refusing to upload anything: {len(problems)} problem(s) in the package "
+            f"(only the ZFIN-provided Thisse images may be mirrored):\n  {shown}"
         )
-    for name in ("image_metadata_v2.json", "image_metadata.json"):
-        candidate = Path(data_dir) / name
-        if candidate.exists():
-            return candidate
-    sys.exit(f"No image_metadata*.json found in {data_dir}")
+    if not plan:
+        sys.exit("Refusing to upload: the package contains no images.")
+    return plan
 
 
 def list_existing_keys(s3, bucket: str, prefix: str) -> set[str]:
@@ -105,151 +129,88 @@ def list_existing_keys(s3, bucket: str, prefix: str) -> set[str]:
     return keys
 
 
-def download(url: str, retries: int = 3) -> bytes | None:
-    """Fetch image bytes. Returns None on a definitive 404 (image variant absent)."""
-    request = Request(url, headers={"User-Agent": USER_AGENT})
-    last_err: Exception | None = None
-    for attempt in range(retries):
+def upload_all(s3, bucket: str, tf: tarfile.TarFile, todo, workers: int) -> tuple[int, int]:
+    """Upload ``todo`` and return ``(uploaded, errors)``."""
+
+    def put(key: str, data: bytes) -> bool:
         try:
-            with urlopen(request, timeout=30) as resp:
-                return resp.read()
-        except HTTPError as err:
-            if err.code == 404:
-                return None  # this variant simply does not exist
-            last_err = err
-        except (URLError, TimeoutError) as err:
-            last_err = err
-        if attempt < retries - 1:  # no point sleeping after the final attempt
-            time.sleep(0.5 * (attempt + 1))
-    raise RuntimeError(f"failed to download {url}: {last_err}")
+            s3.put_object(Bucket=bucket, Key=key, Body=data, ContentType="image/jpeg")
+            return True
+        except (BotoCoreError, ClientError) as err:
+            print(f"  ERROR uploading {key}: {err}", file=sys.stderr)
+            return False
+
+    uploaded = errors = 0
+
+    def tally(done) -> None:
+        nonlocal uploaded, errors
+        for future in done:
+            if future.result():
+                uploaded += 1
+            else:
+                errors += 1
+
+    start = time.monotonic()
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        pending = set()
+        for i, (member, key) in enumerate(todo, 1):
+            fileobj = tf.extractfile(member)
+            if fileobj is None:  # plan_uploads keeps regular files only
+                sys.exit(f"Cannot read {member.name} from the package.")
+            pending.add(pool.submit(put, key, fileobj.read()))
+            # Bound the in-flight uploads so the package isn't buffered in memory.
+            if len(pending) >= workers * 4:
+                done, pending = wait(pending, return_when=FIRST_COMPLETED)
+                tally(done)
+            if i % 5000 == 0 or i == len(todo):
+                rate = i / max(time.monotonic() - start, 1e-6)
+                print(f"  {i}/{len(todo)} read ({rate:.0f}/s)", flush=True)
+        tally(wait(pending).done)
+    return uploaded, errors
 
 
-class Counts:
-    def __init__(self) -> None:
-        self.uploaded = 0
-        self.skipped = 0
-        self.missing = 0
-        self.errors = 0
-        self._lock = threading.Lock()
-
-    def add(self, field: str) -> None:
-        with self._lock:
-            setattr(self, field, getattr(self, field) + 1)
-
-    def total(self) -> int:
-        return self.uploaded + self.skipped + self.missing + self.errors
-
-
-def mirror_one(
-    s3,
-    bucket: str,
-    url: str,
-    key: str,
-    existing: set[str],
-    counts: Counts,
-    *,
-    overwrite: bool,
-    dry_run: bool,
-) -> None:
-    if not overwrite and key in existing:
-        counts.add("skipped")
-        return
-    try:
-        data = download(url)
-    except RuntimeError as err:
-        print(f"  ERROR {err}", file=sys.stderr)
-        counts.add("errors")
-        return
-    if data is None:
-        counts.add("missing")
-        return
-    if dry_run:
-        counts.add("uploaded")
-        return
-    try:
-        s3.put_object(Bucket=bucket, Key=key, Body=data, ContentType="image/jpeg")
-        counts.add("uploaded")
-    except (BotoCoreError, ClientError) as err:
-        print(f"  ERROR uploading {key}: {err}", file=sys.stderr)
-        counts.add("errors")
-
-
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Mirror ZFIN images into S3 (GEN-22).")
-    parser.add_argument("--metadata", help="Path to image_metadata*.json")
-    parser.add_argument("--bucket", default=DEFAULT_BUCKET)
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Upload the ZFIN-provided Thisse image package to the S3 mirror (GEN-22, GEN-45)."
+    )
+    parser.add_argument("--package", required=True, type=Path, help="Path to ZFIN's thisse-images.tar")
+    parser.add_argument("--bucket", required=True, help="Mirror bucket, e.g. gene2fish-zfin-images-dev")
     parser.add_argument("--prefix", default=DEFAULT_PREFIX)
     parser.add_argument("--region", default=DEFAULT_REGION)
     parser.add_argument("--workers", type=int, default=8)
-    parser.add_argument("--limit", type=int, default=0, help="Process only the first N images")
+    parser.add_argument("--overwrite", action="store_true", help="Re-upload objects that already exist")
     parser.add_argument(
-        "--skip-annot",
-        action="store_true",
-        help="Skip the annotated variant (still mirrors plain .jpg + _medium.jpg)",
+        "--dry-run", action="store_true", help="Validate the package and report what would be uploaded"
     )
-    parser.add_argument("--overwrite", action="store_true", help="Re-upload even if present")
-    parser.add_argument("--dry-run", action="store_true", help="Download but do not upload")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
-    meta_path = find_metadata_file(args.metadata)
-    print(f"Loading metadata from {meta_path} ...")
-    records = load_metadata(meta_path)
-    if args.limit:
-        records = records[: args.limit]
-    print(f"{len(records)} image records.")
+    # "r:" = uncompressed only: random access per member stays cheap on a 9 GB tar.
+    with tarfile.open(args.package, "r:") as tf:
+        print(f"Validating {args.package} ...")
+        plan = plan_uploads(tf, args.prefix)
+        print(f"{len(plan)} files, all Thisse images in the expected layout.")
 
-    # Build the (url, key) work list — plain + medium always, annotated unless
-    # skipped. The grid serves the medium variant (GEN-36), so mirroring it keeps
-    # the grid resilient to ZFIN outages just like the full-res lightbox image.
-    tasks: list[tuple[str, str]] = []
-    for r in records:
-        image_id = r.get("image_id") or ""
-        pub_id = (r.get("publication") or {}).get("publication_id") or ""
-        if not image_id or not pub_id:
-            continue
-        annot_url, plain_url, medium_url = build_image_urls(pub_id, image_id)
-        tasks.append((plain_url, url_to_key(plain_url, args.prefix)))
-        tasks.append((medium_url, url_to_key(medium_url, args.prefix)))
-        if not args.skip_annot:
-            tasks.append((annot_url, url_to_key(annot_url, args.prefix)))
-    print(f"{len(tasks)} image files to consider (plain + medium + annotated).")
-
-    config = Config(region_name=args.region, retries={"max_attempts": 5, "mode": "standard"})
-    s3 = boto3.client("s3", config=config)
-
-    print(f"Listing existing objects under s3://{args.bucket}/{args.prefix}/ ...")
-    existing = set() if args.overwrite else list_existing_keys(s3, args.bucket, args.prefix)
-    print(f"{len(existing)} objects already present (will be skipped).")
-
-    counts = Counts()
-    total = len(tasks)
-    start = time.monotonic()
-
-    with ThreadPoolExecutor(max_workers=args.workers) as pool:
-        futures = [
-            pool.submit(
-                mirror_one, s3, args.bucket, url, key, existing, counts,
-                overwrite=args.overwrite, dry_run=args.dry_run,
+        config = Config(region_name=args.region, retries={"max_attempts": 5, "mode": "standard"})
+        s3 = boto3.client("s3", config=config)
+        print(f"Listing existing objects under s3://{args.bucket}/{args.prefix}/ ...")
+        existing = set() if args.overwrite else list_existing_keys(s3, args.bucket, args.prefix)
+        todo = [(member, key) for member, key in plan if key not in existing]
+        skipped = len(plan) - len(todo)
+        extra = sorted(existing - {key for _, key in plan})
+        if extra:
+            shown = "\n  ".join(extra[:20])
+            print(
+                f"WARNING: {len(extra)} object(s) under the prefix are not in the package "
+                f"(the mirror must hold exactly the package; nothing is deleted):\n  {shown}"
             )
-            for url, key in tasks
-        ]
-        for i, _ in enumerate(as_completed(futures), 1):
-            if i % 500 == 0 or i == total:
-                rate = i / max(time.monotonic() - start, 1e-6)
-                print(
-                    f"  {i}/{total} processed "
-                    f"(uploaded={counts.uploaded} skipped={counts.skipped} "
-                    f"missing={counts.missing} errors={counts.errors}) "
-                    f"{rate:.0f}/s",
-                    flush=True,
-                )
 
-    elapsed = time.monotonic() - start
-    print(
-        f"\nDone in {elapsed:.0f}s. uploaded={counts.uploaded} "
-        f"skipped={counts.skipped} missing={counts.missing} errors={counts.errors}"
-    )
-    return 1 if counts.errors else 0
+        if args.dry_run:
+            print(f"Dry run: would upload {len(todo)}, skip {skipped} already in the mirror.")
+            return 1 if extra else 0
+        uploaded, errors = upload_all(s3, args.bucket, tf, todo, args.workers)
+
+    print(f"\nDone. uploaded={uploaded} skipped={skipped} errors={errors} extra={len(extra)}")
+    return 1 if errors or extra else 0
 
 
 if __name__ == "__main__":

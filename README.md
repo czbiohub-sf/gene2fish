@@ -153,27 +153,35 @@ publicly; they are streamed through the backend.
 
 ### Populating the mirror
 
-`zfin_image_mirror.py` reads `image_metadata*.json`, downloads each image from
-ZFIN (the plain `.jpg`, plus the annotated `_annot.jpg` where it exists), and
-uploads them to S3, mirroring the ZFIN path 1:1 so the backend can map a ZFIN URL
-to a key by a prefix swap:
+The mirror holds exactly the Thisse image package ZFIN provided
+(`thisse-images.tar`: 190,141 files covering the 53,759 images of the five
+Thisse publications), which is all we're cleared to host; ask the maintainers
+for a copy. `zfin_image_mirror.py` uploads that tarball to S3 and never
+downloads from zfin.org. It validates every file first and uploads nothing if
+any file falls outside the five Thisse publications or the expected layout.
+Package paths map 1:1 onto the keys the backend derives from a ZFIN image URL:
 
 ```
-https://zfin.org/imageLoadUp/{year}/{pub}/{file}
+opt/zfin/loadUp/pubs/{year}/{pub}/{file}             (in the tarball)
+https://zfin.org/imageLoadUp/{year}/{pub}/{file}     (what the app requests)
   → s3://{bucket}/{prefix}/imageLoadUp/{year}/{pub}/{file}
 ```
 
-The run is resumable (objects already present are skipped):
+The run is resumable (objects already present are skipped). A non-zero exit
+can also mean the bucket holds objects outside the package: they are listed in
+the output and never deleted (`--overwrite` skips the listing, so it does not
+check for them). It needs
+`s3:PutObject` on the prefix plus `s3:ListBucket`, which the deployed
+environments don't grant by default, so seeding one needs a reviewed write path
+in sfbiohub-infra first. Credentials come from the standard AWS chain.
 
 ```bash
-export GENE2IMAGE_DATA_DIR=/path/to/gene2image_data   # holds image_metadata*.json
-export AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_DEFAULT_REGION=us-west-2
-python zfin_image_mirror.py                            # mirror everything
-python zfin_image_mirror.py --limit 50 --dry-run       # smoke test, no uploads
+python zfin_image_mirror.py --package thisse-images.tar --bucket BUCKET --dry-run  # validate + report only
+python zfin_image_mirror.py --package thisse-images.tar --bucket BUCKET
 ```
 
 Useful flags: `--workers N` (concurrency), `--overwrite` (re-upload existing),
-`--skip-annot` (plain `.jpg` only), `--bucket` / `--prefix` / `--region`.
+`--prefix` / `--region`.
 
 ## Usage
 
