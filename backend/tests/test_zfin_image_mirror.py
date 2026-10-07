@@ -256,7 +256,8 @@ def test_refuses_a_package_holding_one_image_path_twice(tmp_path, s3):
     with pytest.raises(SystemExit) as exc:
         zfin_image_mirror.main(["--package", str(package), "--bucket", "mirror-bucket"])
 
-    assert "more than once" in str(exc.value)
+    # Name the colliding members, so a 190k-member package needs no grep.
+    assert f"more than once: {image}, ./{image}" in str(exc.value)
     assert fake.puts == {}
     assert fake.listed == []
 

@@ -102,9 +102,12 @@ def plan_uploads(tf: tarfile.TarFile, prefix: str) -> list[tuple[tarfile.TarInfo
             plan.append((member, member_key(member.name, prefix)))
         except ValueError as err:
             problems.append(str(err))
-    keys = [key for _, key in plan]
-    if len(set(keys)) != len(keys):
-        problems.append("the package holds the same image path more than once")
+    members_by_key: dict[str, list[str]] = {}
+    for member, key in plan:
+        members_by_key.setdefault(key, []).append(member.name)
+    for names in members_by_key.values():
+        if len(names) > 1:
+            problems.append(f"the package holds the same image path more than once: {', '.join(names)}")
     if problems:
         shown = "\n  ".join(problems[:20])
         sys.exit(
