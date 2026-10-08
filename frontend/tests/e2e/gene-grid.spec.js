@@ -11,6 +11,13 @@ const stages = [
   { stage_name: "Pharyngula:High-pec", begin_hours: 42, display_label: "High-pec (42 hpf)" },
 ];
 
+// Export layout, mirroring EXPORT_HEADER_HEIGHT, EXPORT_CELL_SIZE and
+// EXPORT_SCALE in src/utils/exportExpressionTable.js. Only the PNG credit test
+// uses them; update them here if the export layout changes.
+const EXPORT_HEADER_HEIGHT = 58;
+const EXPORT_CELL_SIZE = 180;
+const EXPORT_SCALE = 2;
+
 function image(gene, stage, index = 1) {
   const id = `ZDB-IMAGE-${gene}-${stage.begin_hours}-${index}`.replaceAll(".", "-");
   return {
@@ -703,6 +710,152 @@ test("exports only the expression table as a PNG", async ({ page }) => {
   expect([...bytes.slice(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
   expect(proxiedUrls.length).toBeGreaterThan(0);
   expect(proxiedUrls[0]).toContain("https://zfin.org/imageLoadUp/");
+});
+
+test("PNG export credits Thisse, ZFIN and the CC BY 4.0 license", async ({ page }) => {
+  // An exported PNG travels without the app's footer, so it must carry the
+  // credit itself: ZFIN's permission requires attribution to both Thisse and
+  // ZFIN wherever the images are used, and CC BY 4.0 requires the license
+  // notice. A one-gene export is the narrowest canvas, so the credit has to
+  // wrap there rather than being cut short.
+  await page.addInitScript(() => {
+    window.__canvasText = [];
+    const fillText = CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText = function (text, ...rest) {
+      window.__canvasText.push(String(text));
+      return fillText.call(this, text, ...rest);
+    };
+  });
+
+  await page.goto("/?genes=pax2a");
+  await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length);
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export table PNG" }).click();
+  const bytes = await readFile(await (await downloadPromise).path());
+
+  const drawn = (await page.evaluate(() => window.__canvasText)).join(" ");
+  expect(drawn).toContain(
+    "Images and image data provided by ZFIN (zfin.org). Thisse et al. high-throughput in situ hybridization data."
+  );
+  expect(drawn).toContain("Licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/).");
+  expect(drawn).toContain("ZFIN publications: ZDB-PUB-040907-1.");
+
+  // The credit sits below the table, so the PNG is taller than the table
+  // itself (PNG IHDR height, at the export's scale).
+  const tableHeight = (EXPORT_HEADER_HEIGHT + stages.length * EXPORT_CELL_SIZE) * EXPORT_SCALE;
+  expect(bytes.readUInt32BE(20)).toBeGreaterThan(tableHeight);
+});
+
+test("PNG export draws the credit in the dark theme's colors", async ({ page }) => {
+  // The credit strip uses the same theme colors as the table (card background,
+  // secondary text), so in dark theme the text must be drawn in the dark text
+  // color on the dark card, not left on light-theme values. Spy on the canvas
+  // fill styles at draw time: the strip is the last fillRect, and the credit
+  // text is the fillText that carries the ZFIN sentence.
+  await page.addInitScript(() => {
+    window.__creditDraw = { stripFill: null, textFill: null };
+    const proto = CanvasRenderingContext2D.prototype;
+    const fillRect = proto.fillRect;
+    const fillText = proto.fillText;
+    proto.fillRect = function (...args) {
+      window.__creditDraw.stripFill = this.fillStyle;
+      return fillRect.apply(this, args);
+    };
+    proto.fillText = function (text, ...rest) {
+      if (String(text).includes("ZFIN")) window.__creditDraw.textFill = this.fillStyle;
+      return fillText.call(this, text, ...rest);
+    };
+  });
+
+  await page.goto("/?genes=pax2a");
+  await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length);
+  await page.getByRole("button", { name: "Toggle theme" }).click();
+  await expect(page.locator(".app-root")).toHaveAttribute("data-theme", "dark");
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export table PNG" }).click();
+  await downloadPromise;
+
+  const { stripFill, textFill, card, secondary } = await page.evaluate(() => {
+    const style = getComputedStyle(document.querySelector(".app-root"));
+    return {
+      ...window.__creditDraw,
+      card: style.getPropertyValue("--bg-card").trim().toLowerCase(),
+      secondary: style.getPropertyValue("--text-secondary").trim().toLowerCase(),
+    };
+  });
+
+  expect(card).not.toBe("");
+  expect(secondary).not.toBe("");
+  expect(card).not.toBe(secondary);
+  expect(stripFill).toBe(card);
+  expect(textFill).toBe(secondary);
+});
+
+async function exportPngAndReadCredit(page, publicationIds) {
+  await page.addInitScript(() => {
+    window.__canvasText = [];
+    const fillText = CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText = function (text, ...rest) {
+      window.__canvasText.push(String(text));
+      return fillText.call(this, text, ...rest);
+    };
+  });
+
+  await page.route("**/api/genes/batch", async (route) => {
+    const body = route.request().postDataJSON();
+    const response = {};
+    for (const gene of body.genes) {
+      response[gene] = imagesFor(gene, body.n_images || 1).map((img, i) => ({
+        ...img,
+        publication_id: publicationIds[i % publicationIds.length],
+      }));
+    }
+    await route.fulfill({ json: response });
+  });
+
+  await page.goto("/?genes=pax2a");
+  await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length);
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export table PNG" }).click();
+  await downloadPromise;
+
+  return (await page.evaluate(() => window.__canvasText)).join(" ");
+}
+
+test("PNG export lists distinct ZFIN publications once each in sorted order", async ({ page }) => {
+  // First-seen order is 051025 then 010810, with a repeated id, so the credit
+  // is only correct if it dedupes and sorts.
+  const drawn = await exportPngAndReadCredit(page, [
+    "ZDB-PUB-051025-1",
+    "ZDB-PUB-010810-1",
+    "ZDB-PUB-051025-1",
+  ]);
+  expect(drawn.split("ZFIN publications: ZDB-PUB-010810-1, ZDB-PUB-051025-1.")).toHaveLength(2);
+});
+
+test("PNG export credit carries the same wording as the page footer", async ({ page }) => {
+  // The footer (components/Attribution.jsx) and the export credit
+  // (utils/exportExpressionTable.js) hold the ZFIN-approved wording separately,
+  // so this pins them together: the export may add the license URL, but the
+  // approved sentences must read identically on both surfaces.
+  const drawn = await exportPngAndReadCredit(page, ["ZDB-PUB-040907-1"]);
+  const footer = (await page.locator(".footer-license").innerText()).replace(/\s+/g, " ").trim();
+
+  const [, approvedSentences, licenseNotice] = footer.match(/^(.*?data\.) (Licensed under CC BY 4\.0)\.$/);
+  expect(approvedSentences).toBeTruthy();
+  expect(drawn).toContain(`${approvedSentences} ${licenseNotice} (`);
+});
+
+test("PNG export omits the ZFIN publications sentence when no image has one", async ({ page }) => {
+  const drawn = await exportPngAndReadCredit(page, [null]);
+  expect(drawn).toContain(
+    "Images and image data provided by ZFIN (zfin.org). Thisse et al. high-throughput in situ hybridization data."
+  );
+  expect(drawn).toContain("Licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/).");
+  expect(drawn).not.toContain("ZFIN publications");
 });
 
 test("adding an anatomy-suggested gene preserves previously visible gene columns", async ({ page }) => {
