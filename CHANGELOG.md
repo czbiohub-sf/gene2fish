@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.2](https://github.com/czbiohub-sf/gene2fish/compare/v0.14.1...v0.14.2) (2026-10-08)
+
+
+### Bug Fixes
+
+* **export:** credit Thisse, ZFIN and CC BY 4.0 in the PNG export ([#178](https://github.com/czbiohub-sf/gene2fish/issues/178)) ([b2d5d83](https://github.com/czbiohub-sf/gene2fish/commit/b2d5d8361b17845fd42c152051c69fcf78c4e70f))
+
 ## [0.14.1](https://github.com/czbiohub-sf/gene2fish/compare/v0.14.0...v0.14.1) (2026-10-07)
 
 
