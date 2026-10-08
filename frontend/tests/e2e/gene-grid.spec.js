@@ -783,6 +783,19 @@ test("PNG export lists distinct ZFIN publications once each in sorted order", as
   expect(drawn.split("ZFIN publications: ZDB-PUB-010810-1, ZDB-PUB-051025-1.")).toHaveLength(2);
 });
 
+test("PNG export credit carries the same wording as the page footer", async ({ page }) => {
+  // The footer (components/Attribution.jsx) and the export credit
+  // (utils/exportExpressionTable.js) hold the ZFIN-approved wording separately,
+  // so this pins them together: the export may add the license URL, but the
+  // approved sentences must read identically on both surfaces.
+  const drawn = await exportPngAndReadCredit(page, ["ZDB-PUB-040907-1"]);
+  const footer = (await page.locator(".footer-license").innerText()).replace(/\s+/g, " ").trim();
+
+  const [, approvedSentences, licenseNotice] = footer.match(/^(.*?data\.) (Licensed under CC BY 4\.0)\.$/);
+  expect(approvedSentences).toBeTruthy();
+  expect(drawn).toContain(`${approvedSentences} ${licenseNotice} (`);
+});
+
 test("PNG export omits the ZFIN publications sentence when no image has one", async ({ page }) => {
   const drawn = await exportPngAndReadCredit(page, [null]);
   expect(drawn).toContain(
