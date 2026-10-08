@@ -740,6 +740,58 @@ test("PNG export credits Thisse, ZFIN and the CC BY 4.0 license", async ({ page 
   expect(bytes.readUInt32BE(20)).toBeGreaterThan(tableHeight);
 });
 
+async function exportPngAndReadCredit(page, publicationIds) {
+  await page.addInitScript(() => {
+    window.__canvasText = [];
+    const fillText = CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText = function (text, ...rest) {
+      window.__canvasText.push(String(text));
+      return fillText.call(this, text, ...rest);
+    };
+  });
+
+  await page.route("**/api/genes/batch", async (route) => {
+    const body = route.request().postDataJSON();
+    const response = {};
+    for (const gene of body.genes) {
+      response[gene] = imagesFor(gene, body.n_images || 1).map((img, i) => ({
+        ...img,
+        publication_id: publicationIds[i % publicationIds.length],
+      }));
+    }
+    await route.fulfill({ json: response });
+  });
+
+  await page.goto("/?genes=pax2a");
+  await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length);
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export table PNG" }).click();
+  await downloadPromise;
+
+  return (await page.evaluate(() => window.__canvasText)).join(" ");
+}
+
+test("PNG export lists distinct ZFIN publications once each in sorted order", async ({ page }) => {
+  // First-seen order is 051025 then 010810, with a repeated id, so the credit
+  // is only correct if it dedupes and sorts.
+  const drawn = await exportPngAndReadCredit(page, [
+    "ZDB-PUB-051025-1",
+    "ZDB-PUB-010810-1",
+    "ZDB-PUB-051025-1",
+  ]);
+  expect(drawn.split("ZFIN publications: ZDB-PUB-010810-1, ZDB-PUB-051025-1.")).toHaveLength(2);
+});
+
+test("PNG export omits the ZFIN publications sentence when no image has one", async ({ page }) => {
+  const drawn = await exportPngAndReadCredit(page, [null]);
+  expect(drawn).toContain(
+    "Images and image data provided by ZFIN (zfin.org). Thisse et al. high-throughput in situ hybridization data."
+  );
+  expect(drawn).toContain("Licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/).");
+  expect(drawn).not.toContain("ZFIN publications");
+});
+
 test("adding an anatomy-suggested gene preserves previously visible gene columns", async ({ page }) => {
   const batchRequests = [];
   page.on("request", (request) => {
