@@ -1,3 +1,4 @@
+import { APPROVED_SENTENCES, LICENSE_LABEL, LICENSE_URL } from "./attribution.js";
 import { proxiedImageSrc } from "./imageProxy.js";
 
 const EXPORT_CELL_SIZE = 180;
@@ -41,14 +42,17 @@ function drawText(ctx, text, x, y, maxWidth, options = {}) {
 // Credit drawn under every export. The images are Thisse et al. data under
 // CC BY 4.0, and ZFIN's permission requires crediting both Thisse and ZFIN
 // wherever the images are used. An exported PNG travels without the app's
-// footer, so it carries the same wording (components/Attribution.jsx) plus the
-// license link and the ZFIN publications it shows.
+// footer, so it carries the same wording (shared via utils/attribution.js)
+// plus the license link and the ZFIN publications it shows.
 function exportCreditText(images) {
-  const publications = [...new Set(images.map((image) => image.publication_id).filter(Boolean))].sort();
+  // Numeric-aware sort: same-date ZFIN ids with multi-digit serials would
+  // misorder lexicographically (ZDB-PUB-...-22 before ...-3).
+  const publications = [...new Set(images.map((image) => image.publication_id).filter(Boolean))].sort(
+    (a, b) => a.localeCompare(b, "en", { numeric: true })
+  );
   return [
-    "Images and image data provided by ZFIN (zfin.org).",
-    "Thisse et al. high-throughput in situ hybridization data.",
-    "Licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/).",
+    APPROVED_SENTENCES,
+    `Licensed under ${LICENSE_LABEL} (${LICENSE_URL}).`,
     ...(publications.length ? [`ZFIN publications: ${publications.join(", ")}.`] : []),
   ].join(" ");
 }

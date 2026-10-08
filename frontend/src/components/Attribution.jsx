@@ -1,3 +1,13 @@
+import {
+  LICENSE_LABEL,
+  LICENSE_URL,
+  PROVIDED_BY_PREFIX,
+  THISSE_AFTER,
+  THISSE_BEFORE,
+  THISSE_EM,
+  ZFIN_LABEL,
+} from "../utils/attribution.js";
+
 const ZFIN_PUBLICATIONS = [
   {
     id: "ZDB-PUB-220216-32",
@@ -43,18 +53,13 @@ export function Attribution() {
   return (
     <footer className="app-footer">
       <div className="footer-license">
-        Images and image data provided by{" "}
+        {PROVIDED_BY_PREFIX}{" "}
         <a href="https://zfin.org" target="_blank" rel="noopener noreferrer">
-          ZFIN (zfin.org)
+          {ZFIN_LABEL}
         </a>
-        . Thisse et al. high-throughput <em>in situ</em> hybridization data.
-        Licensed under{" "}
-        <a
-          href="https://creativecommons.org/licenses/by/4.0/"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          CC BY 4.0
+        . {THISSE_BEFORE} <em>{THISSE_EM}</em> {THISSE_AFTER} Licensed under{" "}
+        <a href={LICENSE_URL} target="_blank" rel="noopener noreferrer">
+          {LICENSE_LABEL}
         </a>
         .
       </div>
