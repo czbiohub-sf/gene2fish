@@ -11,6 +11,13 @@ const stages = [
   { stage_name: "Pharyngula:High-pec", begin_hours: 42, display_label: "High-pec (42 hpf)" },
 ];
 
+// Export layout, mirroring EXPORT_HEADER_HEIGHT, EXPORT_CELL_SIZE and
+// EXPORT_SCALE in src/utils/exportExpressionTable.js. Only the PNG credit test
+// uses them; update them here if the export layout changes.
+const EXPORT_HEADER_HEIGHT = 58;
+const EXPORT_CELL_SIZE = 180;
+const EXPORT_SCALE = 2;
+
 function image(gene, stage, index = 1) {
   const id = `ZDB-IMAGE-${gene}-${stage.begin_hours}-${index}`.replaceAll(".", "-");
   return {
@@ -735,9 +742,55 @@ test("PNG export credits Thisse, ZFIN and the CC BY 4.0 license", async ({ page 
   expect(drawn).toContain("ZFIN publications: ZDB-PUB-040907-1.");
 
   // The credit sits below the table, so the PNG is taller than the table
-  // itself (PNG IHDR height, at the export's 2x scale).
-  const tableHeight = (58 + stages.length * 180) * 2;
+  // itself (PNG IHDR height, at the export's scale).
+  const tableHeight = (EXPORT_HEADER_HEIGHT + stages.length * EXPORT_CELL_SIZE) * EXPORT_SCALE;
   expect(bytes.readUInt32BE(20)).toBeGreaterThan(tableHeight);
+});
+
+test("PNG export draws the credit in the dark theme's colors", async ({ page }) => {
+  // The credit strip uses the same theme colors as the table (card background,
+  // secondary text), so in dark theme the text must be drawn in the dark text
+  // color on the dark card, not left on light-theme values. Spy on the canvas
+  // fill styles at draw time: the strip is the last fillRect, and the credit
+  // text is the fillText that carries the ZFIN sentence.
+  await page.addInitScript(() => {
+    window.__creditDraw = { stripFill: null, textFill: null };
+    const proto = CanvasRenderingContext2D.prototype;
+    const fillRect = proto.fillRect;
+    const fillText = proto.fillText;
+    proto.fillRect = function (...args) {
+      window.__creditDraw.stripFill = this.fillStyle;
+      return fillRect.apply(this, args);
+    };
+    proto.fillText = function (text, ...rest) {
+      if (String(text).includes("ZFIN")) window.__creditDraw.textFill = this.fillStyle;
+      return fillText.call(this, text, ...rest);
+    };
+  });
+
+  await page.goto("/?genes=pax2a");
+  await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length);
+  await page.getByRole("button", { name: "Toggle theme" }).click();
+  await expect(page.locator(".app-root")).toHaveAttribute("data-theme", "dark");
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export table PNG" }).click();
+  await downloadPromise;
+
+  const { stripFill, textFill, card, secondary } = await page.evaluate(() => {
+    const style = getComputedStyle(document.querySelector(".app-root"));
+    return {
+      ...window.__creditDraw,
+      card: style.getPropertyValue("--bg-card").trim().toLowerCase(),
+      secondary: style.getPropertyValue("--text-secondary").trim().toLowerCase(),
+    };
+  });
+
+  expect(card).not.toBe("");
+  expect(secondary).not.toBe("");
+  expect(card).not.toBe(secondary);
+  expect(stripFill).toBe(card);
+  expect(textFill).toBe(secondary);
 });
 
 async function exportPngAndReadCredit(page, publicationIds) {
