@@ -1634,7 +1634,7 @@ test("anatomy dropdown lists enabled options above disabled ones, each group alp
   await expect(items).toHaveText(["pronephros", "liver primordium"]);
 });
 
-test("clear-all button resets stage and anatomy filters and their URL params without a reload", async ({ page }) => {
+test("clear-all button resets genes, stage and anatomy filters and their URL params without a reload", async ({ page }) => {
   await page.goto("/?genes=pax2a&stage_min=10.33&stage_max=19&anatomy=hindbrain");
 
   // Canary to prove no full page reload happens while clearing.
@@ -1644,16 +1644,17 @@ test("clear-all button resets stage and anatomy filters and their URL params wit
   await expect(clearAll).toBeVisible();
   await clearAll.click();
 
-  // Filter controls reset to their defaults, but the comparison itself stays.
+  // Everything resets: filter controls to their defaults, and the gene columns
+  // clear too (GEN-52) — users read "Clear all filters" as a full reset of the
+  // comparison, not just of the stage/anatomy controls.
   const stageSelects = page.locator(".stage-filter select");
   await expect(stageSelects.nth(0)).toHaveValue("5.25");
   await expect(stageSelects.nth(1)).toHaveValue("42");
   await expect(page.locator(".anatomy-term-chip")).toHaveCount(0);
-  await expect(page.getByRole("columnheader").filter({ hasText: "pax2a" })).toBeVisible();
+  await expect(page.getByRole("columnheader").filter({ hasText: "pax2a" })).toHaveCount(0);
 
-  // URL params drop (writes are debounced) while genes stays put.
-  await expect(page).not.toHaveURL(/stage_min|stage_max|anatomy/);
-  await expect(page).toHaveURL(/genes=pax2a/);
+  // Every URL param drops (writes are debounced).
+  await expect(page).not.toHaveURL(/stage_min|stage_max|anatomy|genes/);
 
   // No filters active anymore → the button removes itself.
   await expect(clearAll).toHaveCount(0);
