@@ -283,6 +283,42 @@ test("renders and stays interactive inside a ZebraHub-style iframe embed", async
   }
 });
 
+test("adding a gene does not abandon queued images of genes already open", async ({ page }) => {
+  // GEN-50: images went intermittently missing across development stages. A
+  // comparison change (adding a gene, narrowing the stage range) flushed the
+  // whole image queue, including entries for cells that stayed mounted; those
+  // cells never re-enqueued — their image URL hadn't changed — and sat as
+  // empty placeholders until a reload.
+  //
+  // The queue drains on a real-time interval, so a fake clock pins the race
+  // deterministically: time is frozen while the second gene is added, which
+  // PROVES entries are still pending at that moment (asserted below) no matter
+  // how slowly CI schedules the steps.
+  await page.clock.install();
+  await page.goto("/?genes=pax2a&n_images=10"); // 60 entries at 4 per 40 ms tick
+  await expect(page.getByRole("columnheader").filter({ hasText: "pax2a" })).toBeVisible();
+
+  // Release a few ticks so loading is visibly underway, then stop time.
+  await page.clock.runFor(200);
+  await expect(page.locator('img[alt^="pax2a at"]').first()).toBeVisible();
+  expect(await page.locator(".single-image-placeholder").count()).toBeGreaterThan(0);
+
+  // Add a gene while pax2a entries are provably still queued. (Fetches are not
+  // timer-bound, so resolve/batch complete without advancing the clock.)
+  const input = page.getByPlaceholder("Gene symbol (e.g. pax2a)");
+  await input.fill("evx1");
+  await input.press("Enter");
+  await expect(page.getByRole("columnheader").filter({ hasText: "evx1" })).toBeVisible();
+
+  // Let the queue drain. Every image of BOTH genes must arrive, with no cell
+  // left behind as a permanent placeholder. (The default mock serves evx1 one
+  // image on four stages regardless of n_images.)
+  await page.clock.runFor(5000);
+  await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length * 10);
+  await expect(page.locator('img[alt^="evx1 at"]')).toHaveCount(4);
+  await expect(page.locator(".single-image-placeholder")).toHaveCount(0);
+});
+
 test("changing images per cell keeps queued image cells loading and clickable", async ({ page }) => {
   await page.goto("/?genes=pax2a");
 
