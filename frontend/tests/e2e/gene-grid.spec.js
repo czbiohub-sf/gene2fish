@@ -283,6 +283,29 @@ test("renders and stays interactive inside a ZebraHub-style iframe embed", async
   }
 });
 
+test("adding a gene does not abandon queued images of genes already open", async ({ page }) => {
+  // GEN-50: images went intermittently missing across development stages. A
+  // comparison change (adding a gene, narrowing the stage range) flushed the
+  // whole image queue, including entries for cells that stayed mounted; those
+  // cells never re-enqueued — their image URL hadn't changed — and sat as
+  // empty placeholders until a reload. 10 images per cell keeps the queue busy
+  // for ~600 ms, so the second gene lands while pax2a entries are still queued.
+  await page.goto("/?genes=pax2a&n_images=10");
+  await expect(page.locator('img[alt^="pax2a at"]').first()).toBeVisible();
+
+  const input = page.getByPlaceholder("Gene symbol (e.g. pax2a)");
+  await input.fill("evx1");
+  await input.press("Enter");
+  await expect(page.getByRole("columnheader").filter({ hasText: "evx1" })).toBeVisible();
+
+  // Every image of BOTH genes must still arrive, with no cell left behind as a
+  // permanent placeholder. (The default mock serves evx1 one image on four
+  // stages regardless of n_images.)
+  await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length * 10);
+  await expect(page.locator('img[alt^="evx1 at"]')).toHaveCount(4);
+  await expect(page.locator(".single-image-placeholder")).toHaveCount(0);
+});
+
 test("changing images per cell keeps queued image cells loading and clickable", async ({ page }) => {
   await page.goto("/?genes=pax2a");
 

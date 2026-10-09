@@ -1,28 +1,20 @@
-import { useRef, useState, useEffect } from "react";
-import { resetQueue } from "./useImageQueue.js";
+import { useState, useEffect } from "react";
 
 export function useGeneData(genes, stageMin, stageMax, nImages) {
   const [data, setData] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const previousSearchKeyRef = useRef(null);
 
   useEffect(() => {
     if (!genes || genes.length === 0) {
       setData({});
-      previousSearchKeyRef.current = null;
-      resetQueue();
       return;
     }
 
+    // Pending image loads are NOT flushed here (GEN-50): cells that leave the
+    // grid cancel their own queued entry on unmount, and a global flush also
+    // hit cells that stayed mounted across the change, leaving them empty.
     let cancelled = false;
-    // Changing images-per-cell should not flush queued image loads; only a new
-    // gene/stage search should cancel the previous queue.
-    const searchKey = JSON.stringify({ genes, stageMin, stageMax });
-    if (previousSearchKeyRef.current !== searchKey) {
-      resetQueue(); // flush pending loads only for a new gene/stage search
-      previousSearchKeyRef.current = searchKey;
-    }
 
     async function fetchData() {
       setLoading(true);

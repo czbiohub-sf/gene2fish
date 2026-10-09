@@ -26,21 +26,16 @@ function startInterval() {
 }
 
 /**
- * Flush all pending entries and stop the interval.
- * Call this when a new gene search starts so stale loads don't bleed in.
- */
-export function resetQueue() {
-  queue.length = 0;
-  if (intervalId !== null) {
-    clearInterval(intervalId);
-    intervalId = null;
-  }
-}
-
-/**
  * Returns an enqueue function. Each SingleImage calls:
  *   const dequeue = enqueue(setSrc, url)
  * on mount, and dequeue() on unmount (removes entry if not yet fired).
+ *
+ * Cancellation is per-entry ONLY — cells that leave the grid dequeue their own
+ * pending entry in their unmount cleanup. There is deliberately no global
+ * flush: one used to run on every comparison change (GEN-50) and it also
+ * discarded entries of cells that stayed mounted (adding a gene, narrowing the
+ * stage range); those cells never re-enqueued, because their image URL hadn't
+ * changed, and sat as empty placeholders until a reload.
  */
 export function useImageQueue() {
   function enqueue(setSrc, url) {
