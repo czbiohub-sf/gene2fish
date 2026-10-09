@@ -1469,23 +1469,41 @@ test("overflowing suggested-genes strip is scrollable with a styled scrollbar", 
   // ::-webkit-scrollbar styling and fall back to the invisible overlay, which
   // is exactly how this bug survived the old `scrollbar-width: thin`.
   expect(await strip.evaluate((el) => getComputedStyle(el).scrollbarWidth)).toBe("auto");
-  // Config half 2: the ::-webkit-scrollbar styling itself exists. Cross-origin
-  // stylesheets throw on cssRules access; skip those rather than fail here.
-  expect(
-    await page.evaluate(() =>
-      [...document.styleSheets].some((sheet) => {
-        let rules;
-        try {
-          rules = [...sheet.cssRules];
-        } catch {
-          return false;
+  // Config half 2: the ::-webkit-scrollbar styling must not just exist — its
+  // visibility-critical declarations must hold, or a height: 0 bar or a
+  // transparent thumb would recreate the invisible scrollbar with the selector
+  // still present. Cross-origin stylesheets throw on cssRules access; skip
+  // those rather than fail here.
+  const scrollbarConfig = await page.evaluate(() => {
+    const config = { barHeight: null, thumbBackground: null };
+    for (const sheet of document.styleSheets) {
+      let rules;
+      try {
+        rules = [...sheet.cssRules];
+      } catch {
+        continue;
+      }
+      for (const rule of rules) {
+        if (rule.selectorText === ".suggested-genes-strip::-webkit-scrollbar") {
+          config.barHeight = rule.style.height;
         }
-        return rules.some((rule) =>
-          rule.selectorText?.includes(".suggested-genes-strip::-webkit-scrollbar")
-        );
-      })
+        if (rule.selectorText === ".suggested-genes-strip::-webkit-scrollbar-thumb") {
+          config.thumbBackground = rule.style.background || rule.style.backgroundColor;
+        }
+      }
+    }
+    return config;
+  });
+  expect(parseInt(scrollbarConfig.barHeight, 10)).toBeGreaterThanOrEqual(6);
+  expect(scrollbarConfig.thumbBackground).toBeTruthy();
+  expect(["transparent", "none"]).not.toContain(scrollbarConfig.thumbBackground);
+  // The thumb color is a theme variable; it must resolve to a real color.
+  expect(
+    await strip.evaluate(
+      (el, varName) => getComputedStyle(el).getPropertyValue(varName).trim(),
+      scrollbarConfig.thumbBackground.match(/var\((--[\w-]+)\)/)?.[1] ?? "--text-muted"
     )
-  ).toBe(true);
+  ).not.toBe("");
 
   // The chips past the fold start out of view and are reachable by scrolling.
   const last = strip.locator(".suggested-gene-chip").last();
