@@ -1469,14 +1469,21 @@ test("overflowing suggested-genes strip is scrollable with a styled scrollbar", 
   // ::-webkit-scrollbar styling and fall back to the invisible overlay, which
   // is exactly how this bug survived the old `scrollbar-width: thin`.
   expect(await strip.evaluate((el) => getComputedStyle(el).scrollbarWidth)).toBe("auto");
-  // Config half 2: the ::-webkit-scrollbar styling itself exists.
+  // Config half 2: the ::-webkit-scrollbar styling itself exists. Cross-origin
+  // stylesheets throw on cssRules access; skip those rather than fail here.
   expect(
     await page.evaluate(() =>
-      [...document.styleSheets].some((sheet) =>
-        [...sheet.cssRules].some((rule) =>
+      [...document.styleSheets].some((sheet) => {
+        let rules;
+        try {
+          rules = [...sheet.cssRules];
+        } catch {
+          return false;
+        }
+        return rules.some((rule) =>
           rule.selectorText?.includes(".suggested-genes-strip::-webkit-scrollbar")
-        )
-      )
+        );
+      })
     )
   ).toBe(true);
 
