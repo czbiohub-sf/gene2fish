@@ -1432,7 +1432,37 @@ select {
   gap: 6px;
   overflow-x: auto;
   padding: 4px 2px 14px;
-  scrollbar-width: thin;
+  /* The strip overflows for most anatomy terms, but overlay scrollbars (the
+     macOS default) are invisible until a scroll is already in progress, so
+     users never discovered the genes past the fold (GEN-51). Styling the
+     WebKit scrollbar pseudo-elements opts the element into a classic bar that
+     occupies layout space and is always shown. Deliberately NO standard
+     scrollbar-width/scrollbar-color here: setting either makes Chromium ignore
+     the ::-webkit-scrollbar styling and fall back to the invisible overlay
+     (which is exactly how this bug survived `scrollbar-width: thin`). The
+     standard properties are applied Firefox-only below. */
+}
+
+.suggested-genes-strip::-webkit-scrollbar {
+  height: 8px;
+}
+
+.suggested-genes-strip::-webkit-scrollbar-thumb {
+  background: var(--text-muted);
+  border-radius: 4px;
+}
+
+.suggested-genes-strip::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Firefox has no ::-webkit-scrollbar; give it the standard properties inside a
+   Firefox-only gate so they can't disable the WebKit pseudo-styling above. */
+@supports (-moz-appearance: none) {
+  .suggested-genes-strip {
+    scrollbar-width: thin;
+    scrollbar-color: var(--text-muted) transparent;
+  }
 }
 
 .suggested-gene-chip {

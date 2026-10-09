@@ -1436,6 +1436,57 @@ test("include-substructures toggle switches to exact-term matching and persists 
   await expect(page.getByLabel("Include substructures")).not.toBeChecked();
 });
 
+test("overflowing suggested-genes strip is scrollable with a styled scrollbar", async ({ page }) => {
+  // GEN-51: with many anatomy-filtered genes the strip overflows horizontally,
+  // but the overlay scrollbar (the macOS default) stays invisible until a
+  // scroll is already happening, so users never discovered the genes past the
+  // fold. Styling the ::-webkit-scrollbar pseudos switches the strip to a
+  // classic always-visible bar IN HEADED BROWSERS — headless Chromium renders
+  // overlay scrollbars no matter what, so the bar's layout space (offsetHeight
+  // minus clientHeight, 8px when headed) is not assertable here. Instead this
+  // pins the two config halves whose regression re-hides the bar, plus the
+  // overflow/reachability behavior.
+  await page.route("**/api/anatomy/hindbrain/genes**", async (route) => {
+    await route.fulfill({
+      json: {
+        total: 40,
+        genes: Array.from({ length: 40 }, (_, i) => ({
+          gene_symbol: `suggestedgene${String(i).padStart(2, "0")}`,
+          image_count: i + 1,
+        })),
+      },
+    });
+  });
+
+  await page.goto("/?anatomy=hindbrain");
+  const strip = page.locator(".suggested-genes-strip");
+  await expect(strip.locator(".suggested-gene-chip")).toHaveCount(40);
+
+  expect(await strip.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+
+  // Config half 1: the standard scrollbar properties must stay OFF the strip
+  // in Chromium — setting either one makes Chromium ignore the
+  // ::-webkit-scrollbar styling and fall back to the invisible overlay, which
+  // is exactly how this bug survived the old `scrollbar-width: thin`.
+  expect(await strip.evaluate((el) => getComputedStyle(el).scrollbarWidth)).toBe("auto");
+  // Config half 2: the ::-webkit-scrollbar styling itself exists.
+  expect(
+    await page.evaluate(() =>
+      [...document.styleSheets].some((sheet) =>
+        [...sheet.cssRules].some((rule) =>
+          rule.selectorText?.includes(".suggested-genes-strip::-webkit-scrollbar")
+        )
+      )
+    )
+  ).toBe(true);
+
+  // The chips past the fold start out of view and are reachable by scrolling.
+  const last = strip.locator(".suggested-gene-chip").last();
+  await expect(last).not.toBeInViewport();
+  await strip.evaluate((el) => { el.scrollLeft = el.scrollWidth; });
+  await expect(last).toBeInViewport();
+});
+
 test("multiple anatomy terms show AND-matched suggested genes", async ({ page }) => {
   await page.goto("/");
 
