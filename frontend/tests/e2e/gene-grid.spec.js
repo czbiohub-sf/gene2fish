@@ -443,6 +443,23 @@ test("shows no-image labels for empty cells in a mixed gene grid", async ({ page
   await expect(page.getByText("No expression images found for the selected genes and filters.")).toHaveCount(0);
 });
 
+test("labels per-stage gaps so absent data doesn't read as missing images", async ({ page }) => {
+  // GEN-50 follow-up: a bare empty cell is indistinguishable from a cell whose
+  // image failed to load, and reads as "images went missing" — the other half
+  // of the ticket's report. The mock serves evx1 on only four of pax2a's six
+  // stages, so its column has two data gaps.
+  await page.goto("/?genes=pax2a,evx1");
+  await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length);
+  await expect(page.locator('img[alt^="evx1 at"]')).toHaveCount(4);
+
+  const gaps = page.locator(".no-image-cell-text", { hasText: "No image at this stage" });
+  await expect(gaps).toHaveCount(2);
+  await expect(gaps.first()).toHaveAttribute(
+    "title",
+    "ZFIN's Thisse dataset has no evx1 image at 50%-epiboly"
+  );
+});
+
 test("lightbox links key metadata identifiers", async ({ page }) => {
   await page.goto("/?genes=pax2a");
 

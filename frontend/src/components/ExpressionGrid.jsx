@@ -251,14 +251,20 @@ export function ExpressionGrid({ genes, data, onRemoveGene, onAddGene, onSetAnat
                     return (
                       <td
                         key={symbol}
-                        className={`empty-cell${genesWithoutImages[symbol] ? " no-image-cell" : ""}`}
+                        className="empty-cell no-image-cell"
                         style={nImages > 1
                           ? { width: `calc(var(--cell-size) * ${colMaxImages[symbol]})` }
                           : undefined}
                       >
-                        {genesWithoutImages[symbol] && (
-                          <span className="no-image-cell-text">No image</span>
-                        )}
+                        {/* Say WHY the cell is empty (GEN-50): a bare cell is
+                            indistinguishable from a broken image and read as
+                            "images went missing". */}
+                        <span
+                          className="no-image-cell-text"
+                          title={`ZFIN's Thisse dataset has no ${symbol} image at ${label}`}
+                        >
+                          {genesWithoutImages[symbol] ? "No image" : "No image at this stage"}
+                        </span>
                       </td>
                     );
                   })}
