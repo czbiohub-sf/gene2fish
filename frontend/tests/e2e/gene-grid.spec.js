@@ -475,7 +475,11 @@ test("shows no-image labels for empty cells in a mixed gene grid", async ({ page
   await expect(page.getByRole("columnheader").filter({ hasText: "a1cf" })).toBeVisible();
   await expect(page.getByRole("columnheader").filter({ hasText: "pax2a" })).toBeVisible();
   await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length);
-  await expect(page.locator(".no-image-cell-text", { hasText: "No image" })).toHaveCount(stages.length);
+  // Exact match: hasText "No image" is a substring match that would also accept
+  // the per-stage "No image at this stage" label. pax2a has no gaps, so a1cf's
+  // cells must carry the whole-gene label and nothing else.
+  await expect(page.locator(".no-image-cell-text").filter({ hasText: /^No image$/ })).toHaveCount(stages.length);
+  await expect(page.locator(".no-image-cell-text", { hasText: "No image at this stage" })).toHaveCount(0);
   await expect(page.getByText("No expression images found for the selected genes and filters.")).toHaveCount(0);
 });
 
