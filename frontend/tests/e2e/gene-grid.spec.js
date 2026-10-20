@@ -319,6 +319,42 @@ test("adding a gene does not abandon queued images of genes already open", async
   await expect(page.locator(".single-image-placeholder")).toHaveCount(0);
 });
 
+test("removing a gene cancels its queued images so the next gene loads promptly", async ({ page }) => {
+  // With no global queue flush (GEN-50), a cell that leaves the grid is the only
+  // thing that removes its pending queue entry (its unmount cleanup). If that
+  // cancel broke, the departed gene's entries would stay in the queue and keep
+  // consuming release slots (4 per 40 ms tick) ahead of everything queued later.
+  //
+  // Time is frozen (install() alone keeps it flowing), so the number of ticks
+  // is exact: with the departed entries cancelled, one tick is enough to load
+  // the next gene's four images; with 50+ dead entries ahead of them, it is not.
+  await page.clock.install();
+  await page.clock.pauseAt(Date.now() + 1_000);
+  await page.goto("/?genes=pax2a&n_images=10"); // 60 entries at 4 per 40 ms tick
+  const pendingPax2a = page.locator('.single-image-placeholder[aria-label^="pax2a at"]');
+  await expect(pendingPax2a).toHaveCount(stages.length * 10);
+
+  // A couple of ticks release 8 entries; most of the 60 are still queued.
+  await page.clock.runFor(80);
+  await expect(page.locator('img[alt^="pax2a at"]').first()).toBeVisible();
+  expect(await pendingPax2a.count()).toBeGreaterThan(40);
+
+  // Remove the gene while its entries are queued, then open another one.
+  await page.getByTitle("Remove pax2a").click();
+  await expect(page.getByRole("columnheader")).toHaveCount(0);
+  const input = page.getByPlaceholder("Gene symbol (e.g. pax2a)");
+  await input.fill("evx1");
+  await input.press("Enter");
+  await expect(page.getByRole("columnheader").filter({ hasText: "evx1" })).toBeVisible();
+
+  // One tick releases 4 entries. evx1 has four images (the default mock), so
+  // all of them load only if nothing from pax2a is still ahead in the queue.
+  await page.clock.runFor(40);
+  await expect(page.locator('img[alt^="evx1 at"]')).toHaveCount(4);
+  await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(0);
+  await expect(page.locator(".single-image-placeholder")).toHaveCount(0);
+});
+
 test("changing images per cell keeps queued image cells loading and clickable", async ({ page }) => {
   await page.goto("/?genes=pax2a");
 
