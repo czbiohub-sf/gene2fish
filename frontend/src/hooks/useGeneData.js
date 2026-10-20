@@ -8,6 +8,8 @@ export function useGeneData(genes, stageMin, stageMax, nImages) {
   useEffect(() => {
     if (!genes || genes.length === 0) {
       setData({});
+      setLoading(false);
+      setError(null);
       return;
     }
 

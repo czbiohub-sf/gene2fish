@@ -1873,6 +1873,52 @@ test("clear-all button resets genes, stage and anatomy filters and their URL par
   expect(await page.evaluate(() => window.__noReloadCanary)).toBe(true);
 });
 
+test("clear-all while a refetch is in flight does not leave the loading status stuck", async ({ page }) => {
+  let holdBatch = false;
+  let releaseBatch;
+  const released = new Promise((resolve) => { releaseBatch = resolve; });
+  let heldRequests = 0;
+  await page.route("**/api/genes/batch", async (route) => {
+    if (holdBatch) {
+      heldRequests += 1;
+      await released;
+      await route.fulfill({ json: { pax2a: imagesFor("pax2a") } });
+      return;
+    }
+    await route.fulfill({ json: { pax2a: imagesFor("pax2a") } });
+  });
+
+  await page.goto("/?genes=pax2a&stage_min=10.33");
+  await expect(page.locator('img[alt^="pax2a at"]').first()).toBeVisible();
+
+  // A stage change triggers a refetch that never resolves while we click.
+  holdBatch = true;
+  await page.locator(".stage-filter select").nth(1).selectOption("19");
+  await expect(page.locator(".request-status")).toHaveText("Loading…");
+  expect(heldRequests).toBe(1);
+
+  await page.getByRole("button", { name: "Clear all filters" }).click();
+
+  await expect(page.getByText("Search one gene to explore its expression patterns")).toBeVisible();
+  await expect(page.locator(".request-status")).toHaveCount(0);
+
+  releaseBatch();
+});
+
+test("clear-all drops a stale error banner left by a failed fetch", async ({ page }) => {
+  await page.route("**/api/genes/batch", async (route) => {
+    await route.fulfill({ status: 500, json: { detail: "boom" } });
+  });
+
+  await page.goto("/?genes=pax2a&stage_min=10.33");
+  await expect(page.getByText(/Error: API error: 500/)).toBeVisible();
+
+  await page.getByRole("button", { name: "Clear all filters" }).click();
+
+  await expect(page.getByText("Search one gene to explore its expression patterns")).toBeVisible();
+  await expect(page.getByText(/Error:/)).toHaveCount(0);
+});
+
 test("clear-all button is hidden when no filters are active", async ({ page }) => {
   await page.goto("/?genes=pax2a");
   await expect(page.getByRole("columnheader").filter({ hasText: "pax2a" })).toBeVisible();
