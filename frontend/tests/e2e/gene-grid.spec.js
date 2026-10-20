@@ -1654,11 +1654,10 @@ test("overflowing suggested-genes strip is scrollable with a styled scrollbar", 
   expect(scrollbarConfig.thumbBackground).toBeTruthy();
   expect(["transparent", "none"]).not.toContain(scrollbarConfig.thumbBackground);
   // The thumb color is a theme variable; it must resolve to a real color.
+  const thumbVar = scrollbarConfig.thumbBackground.match(/var\((--[\w-]+)\)/)?.[1];
+  expect(thumbVar, `thumb background is not a theme var: ${scrollbarConfig.thumbBackground}`).toBeTruthy();
   expect(
-    await strip.evaluate(
-      (el, varName) => getComputedStyle(el).getPropertyValue(varName).trim(),
-      scrollbarConfig.thumbBackground.match(/var\((--[\w-]+)\)/)?.[1] ?? "--text-muted"
-    )
+    await strip.evaluate((el, varName) => getComputedStyle(el).getPropertyValue(varName).trim(), thumbVar)
   ).not.toBe("");
 
   // The chips past the fold start out of view and are reachable by scrolling.
