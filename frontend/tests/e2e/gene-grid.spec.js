@@ -1628,37 +1628,17 @@ test("overflowing suggested-genes strip is scrollable with a styled scrollbar", 
   // Config half 2: the ::-webkit-scrollbar styling must not just exist — its
   // visibility-critical declarations must hold, or a height: 0 bar or a
   // transparent thumb would recreate the invisible scrollbar with the selector
-  // still present. Cross-origin stylesheets throw on cssRules access; skip
-  // those rather than fail here.
-  const scrollbarConfig = await page.evaluate(() => {
-    const config = { barHeight: null, thumbBackground: null };
-    for (const sheet of document.styleSheets) {
-      let rules;
-      try {
-        rules = [...sheet.cssRules];
-      } catch {
-        continue;
-      }
-      for (const rule of rules) {
-        if (rule.selectorText === ".suggested-genes-strip::-webkit-scrollbar") {
-          config.barHeight = rule.style.height;
-        }
-        if (rule.selectorText === ".suggested-genes-strip::-webkit-scrollbar-thumb") {
-          config.thumbBackground = rule.style.background || rule.style.backgroundColor;
-        }
-      }
-    }
-    return config;
-  });
-  expect(parseInt(scrollbarConfig.barHeight, 10)).toBeGreaterThanOrEqual(6);
-  expect(scrollbarConfig.thumbBackground).toBeTruthy();
-  expect(["transparent", "none"]).not.toContain(scrollbarConfig.thumbBackground);
-  // The thumb color is a theme variable; it must resolve to a real color.
-  const thumbVar = scrollbarConfig.thumbBackground.match(/var\((--[\w-]+)\)/)?.[1];
-  expect(thumbVar, `thumb background is not a theme var: ${scrollbarConfig.thumbBackground}`).toBeTruthy();
-  expect(
-    await strip.evaluate((el, varName) => getComputedStyle(el).getPropertyValue(varName).trim(), thumbVar)
-  ).not.toBe("");
+  // still present. Headless Chromium resolves the pseudo-element computed
+  // styles (theme var included), so read them instead of walking stylesheets.
+  const scrollbar = await strip.evaluate((el) => ({
+    barHeight: getComputedStyle(el, "::-webkit-scrollbar").height,
+    thumbColor: getComputedStyle(el, "::-webkit-scrollbar-thumb").backgroundColor,
+  }));
+  expect(parseInt(scrollbar.barHeight, 10), `scrollbar height: ${scrollbar.barHeight}`).toBeGreaterThanOrEqual(6);
+  // A transparent thumb computes to rgba(0, 0, 0, 0); a thumb whose theme var
+  // no longer resolves computes to the same, so this covers both.
+  expect(scrollbar.thumbColor).toMatch(/^rgba?\(/);
+  expect(scrollbar.thumbColor).not.toBe("rgba(0, 0, 0, 0)");
 
   // The chips past the fold start out of view and are reachable by scrolling.
   const last = strip.locator(".suggested-gene-chip").last();
