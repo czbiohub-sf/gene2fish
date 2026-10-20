@@ -500,6 +500,69 @@ test("labels per-stage gaps so absent data doesn't read as missing images", asyn
   );
 });
 
+test("no-image labels wait until a newly added gene's data has arrived", async ({ page }) => {
+  // A gene added to an open grid has no entry in `data` until its batch
+  // request resolves (useGeneData keeps the previous response meanwhile). Its
+  // column must make no claim until then: "No image at this stage" asserts the
+  // dataset lacks the image, which is not known yet.
+  let releaseEvx1;
+  const evx1Released = new Promise((resolve) => { releaseEvx1 = resolve; });
+  let markEvx1Requested;
+  const evx1Requested = new Promise((resolve) => { markEvx1Requested = resolve; });
+  await page.route("**/api/genes/batch", async (route) => {
+    if (route.request().postDataJSON().genes.includes("evx1")) {
+      markEvx1Requested();
+      await evx1Released;
+    }
+    await route.fallback();
+  });
+
+  await page.goto("/?genes=pax2a");
+  await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length);
+
+  const input = page.getByPlaceholder("Gene symbol (e.g. pax2a)");
+  await input.fill("evx1");
+  await input.press("Enter");
+  await expect(page.getByRole("columnheader").filter({ hasText: "evx1" })).toBeVisible();
+  await evx1Requested;
+
+  // evx1's column is rendered (one empty cell per pax2a stage) but unlabelled.
+  await expect(page.locator("td.empty-cell")).toHaveCount(stages.length);
+  await expect(page.locator(".no-image-cell-text")).toHaveCount(0);
+
+  // Once the data lands, real gaps are labelled: the mock serves evx1 on four
+  // of the six stages.
+  releaseEvx1();
+  await expect(page.locator('img[alt^="evx1 at"]')).toHaveCount(4);
+  await expect(page.locator(".no-image-cell-text", { hasText: "No image at this stage" })).toHaveCount(2);
+});
+
+test("no-image labels are not shown for a gene whose batch fetch failed", async ({ page }) => {
+  // On a failed fetch useGeneData sets the error and leaves `data` unchanged, so
+  // the added gene never gets an entry. Its column must not claim the dataset
+  // has no image for it; the error banner is the only signal.
+  await page.route("**/api/genes/batch", async (route) => {
+    if (route.request().postDataJSON().genes.includes("evx1")) {
+      await route.fulfill({ status: 500, json: { detail: "boom" } });
+      return;
+    }
+    await route.fallback();
+  });
+
+  await page.goto("/?genes=pax2a");
+  await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length);
+
+  const input = page.getByPlaceholder("Gene symbol (e.g. pax2a)");
+  await input.fill("evx1");
+  await input.press("Enter");
+  await expect(page.getByText(/Error: API error: 500/)).toBeVisible();
+  await expect(page.getByRole("columnheader").filter({ hasText: "evx1" })).toBeVisible();
+
+  await expect(page.locator("td.empty-cell")).toHaveCount(stages.length);
+  await expect(page.locator(".no-image-cell-text")).toHaveCount(0);
+  await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length);
+});
+
 test("lightbox links key metadata identifiers", async ({ page }) => {
   await page.goto("/?genes=pax2a");
 
