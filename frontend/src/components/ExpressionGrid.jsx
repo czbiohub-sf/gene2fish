@@ -248,16 +248,28 @@ export function ExpressionGrid({ genes, data, onRemoveGene, onAddGene, onSetAnat
                         />
                       );
                     }
+                    // A gene whose batch request is still in flight, or failed,
+                    // has no entry in `data` yet: its cells stay bare rather
+                    // than claim the dataset has no image for it.
+                    const loaded = Object.prototype.hasOwnProperty.call(data, symbol);
                     return (
                       <td
                         key={symbol}
-                        className={`empty-cell${genesWithoutImages[symbol] ? " no-image-cell" : ""}`}
+                        className={`empty-cell${loaded ? " no-image-cell" : ""}`}
                         style={nImages > 1
                           ? { width: `calc(var(--cell-size) * ${colMaxImages[symbol]})` }
                           : undefined}
                       >
-                        {genesWithoutImages[symbol] && (
-                          <span className="no-image-cell-text">No image</span>
+                        {/* Say WHY the cell is empty (GEN-50): a bare cell is
+                            indistinguishable from a broken image and read as
+                            "images went missing". */}
+                        {loaded && (
+                          <span
+                            className="no-image-cell-text"
+                            title={`ZFIN's Thisse dataset has no ${symbol} image at ${label}`}
+                          >
+                            {genesWithoutImages[symbol] ? "No image" : "No image at this stage"}
+                          </span>
                         )}
                       </td>
                     );

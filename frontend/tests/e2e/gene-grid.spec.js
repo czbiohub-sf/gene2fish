@@ -283,6 +283,78 @@ test("renders and stays interactive inside a ZebraHub-style iframe embed", async
   }
 });
 
+test("adding a gene does not abandon queued images of genes already open", async ({ page }) => {
+  // GEN-50: images went intermittently missing across development stages. A
+  // comparison change (adding a gene, narrowing the stage range) flushed the
+  // whole image queue, including entries for cells that stayed mounted; those
+  // cells never re-enqueued — their image URL hadn't changed — and sat as
+  // empty placeholders until a reload.
+  //
+  // The queue drains on a real-time interval, so a fake clock pins the race
+  // deterministically: time is frozen while the second gene is added, which
+  // PROVES entries are still pending at that moment (asserted below) no matter
+  // how slowly CI schedules the steps.
+  await page.clock.install();
+  await page.goto("/?genes=pax2a&n_images=10"); // 60 entries at 4 per 40 ms tick
+  await expect(page.getByRole("columnheader").filter({ hasText: "pax2a" })).toBeVisible();
+
+  // Release a few ticks so loading is visibly underway, then stop time.
+  await page.clock.runFor(200);
+  await expect(page.locator('img[alt^="pax2a at"]').first()).toBeVisible();
+  expect(await page.locator(".single-image-placeholder").count()).toBeGreaterThan(0);
+
+  // Add a gene while pax2a entries are provably still queued. (Fetches are not
+  // timer-bound, so resolve/batch complete without advancing the clock.)
+  const input = page.getByPlaceholder("Gene symbol (e.g. pax2a)");
+  await input.fill("evx1");
+  await input.press("Enter");
+  await expect(page.getByRole("columnheader").filter({ hasText: "evx1" })).toBeVisible();
+
+  // Let the queue drain. Every image of BOTH genes must arrive, with no cell
+  // left behind as a permanent placeholder. (The default mock serves evx1 one
+  // image on four stages regardless of n_images.)
+  await page.clock.runFor(5000);
+  await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length * 10);
+  await expect(page.locator('img[alt^="evx1 at"]')).toHaveCount(4);
+  await expect(page.locator(".single-image-placeholder")).toHaveCount(0);
+});
+
+test("removing a gene cancels its queued images so the next gene loads promptly", async ({ page }) => {
+  // With no global queue flush (GEN-50), a cell that leaves the grid is the only
+  // thing that removes its pending queue entry (its unmount cleanup). If that
+  // cancel broke, the departed gene's entries would stay in the queue and keep
+  // consuming release slots (4 per 40 ms tick) ahead of everything queued later.
+  //
+  // Time is frozen (install() alone keeps it flowing), so the number of ticks
+  // is exact: with the departed entries cancelled, one tick is enough to load
+  // the next gene's four images; with 50+ dead entries ahead of them, it is not.
+  await page.clock.install();
+  await page.clock.pauseAt(Date.now() + 1_000);
+  await page.goto("/?genes=pax2a&n_images=10"); // 60 entries at 4 per 40 ms tick
+  const pendingPax2a = page.locator('.single-image-placeholder[aria-label^="pax2a at"]');
+  await expect(pendingPax2a).toHaveCount(stages.length * 10);
+
+  // A couple of ticks release 8 entries; most of the 60 are still queued.
+  await page.clock.runFor(80);
+  await expect(page.locator('img[alt^="pax2a at"]').first()).toBeVisible();
+  expect(await pendingPax2a.count()).toBeGreaterThan(40);
+
+  // Remove the gene while its entries are queued, then open another one.
+  await page.getByTitle("Remove pax2a").click();
+  await expect(page.getByRole("columnheader")).toHaveCount(0);
+  const input = page.getByPlaceholder("Gene symbol (e.g. pax2a)");
+  await input.fill("evx1");
+  await input.press("Enter");
+  await expect(page.getByRole("columnheader").filter({ hasText: "evx1" })).toBeVisible();
+
+  // One tick releases 4 entries. evx1 has four images (the default mock), so
+  // all of them load only if nothing from pax2a is still ahead in the queue.
+  await page.clock.runFor(40);
+  await expect(page.locator('img[alt^="evx1 at"]')).toHaveCount(4);
+  await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(0);
+  await expect(page.locator(".single-image-placeholder")).toHaveCount(0);
+});
+
 test("changing images per cell keeps queued image cells loading and clickable", async ({ page }) => {
   await page.goto("/?genes=pax2a");
 
@@ -403,8 +475,92 @@ test("shows no-image labels for empty cells in a mixed gene grid", async ({ page
   await expect(page.getByRole("columnheader").filter({ hasText: "a1cf" })).toBeVisible();
   await expect(page.getByRole("columnheader").filter({ hasText: "pax2a" })).toBeVisible();
   await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length);
-  await expect(page.locator(".no-image-cell-text", { hasText: "No image" })).toHaveCount(stages.length);
+  // Exact match: hasText "No image" is a substring match that would also accept
+  // the per-stage "No image at this stage" label. pax2a has no gaps, so a1cf's
+  // cells must carry the whole-gene label and nothing else.
+  await expect(page.locator(".no-image-cell-text").filter({ hasText: /^No image$/ })).toHaveCount(stages.length);
+  await expect(page.locator(".no-image-cell-text", { hasText: "No image at this stage" })).toHaveCount(0);
   await expect(page.getByText("No expression images found for the selected genes and filters.")).toHaveCount(0);
+});
+
+test("labels per-stage gaps so absent data doesn't read as missing images", async ({ page }) => {
+  // GEN-50 follow-up: a bare empty cell is indistinguishable from a cell whose
+  // image failed to load, and reads as "images went missing" — the other half
+  // of the ticket's report. The mock serves evx1 on only four of pax2a's six
+  // stages, so its column has two data gaps.
+  await page.goto("/?genes=pax2a,evx1");
+  await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length);
+  await expect(page.locator('img[alt^="evx1 at"]')).toHaveCount(4);
+
+  const gaps = page.locator(".no-image-cell-text", { hasText: "No image at this stage" });
+  await expect(gaps).toHaveCount(2);
+  await expect(gaps.first()).toHaveAttribute(
+    "title",
+    "ZFIN's Thisse dataset has no evx1 image at 50%-epiboly"
+  );
+});
+
+test("no-image labels wait until a newly added gene's data has arrived", async ({ page }) => {
+  // A gene added to an open grid has no entry in `data` until its batch
+  // request resolves (useGeneData keeps the previous response meanwhile). Its
+  // column must make no claim until then: "No image at this stage" asserts the
+  // dataset lacks the image, which is not known yet.
+  let releaseEvx1;
+  const evx1Released = new Promise((resolve) => { releaseEvx1 = resolve; });
+  let markEvx1Requested;
+  const evx1Requested = new Promise((resolve) => { markEvx1Requested = resolve; });
+  await page.route("**/api/genes/batch", async (route) => {
+    if (route.request().postDataJSON().genes.includes("evx1")) {
+      markEvx1Requested();
+      await evx1Released;
+    }
+    await route.fallback();
+  });
+
+  await page.goto("/?genes=pax2a");
+  await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length);
+
+  const input = page.getByPlaceholder("Gene symbol (e.g. pax2a)");
+  await input.fill("evx1");
+  await input.press("Enter");
+  await expect(page.getByRole("columnheader").filter({ hasText: "evx1" })).toBeVisible();
+  await evx1Requested;
+
+  // evx1's column is rendered (one empty cell per pax2a stage) but unlabelled.
+  await expect(page.locator("td.empty-cell")).toHaveCount(stages.length);
+  await expect(page.locator(".no-image-cell-text")).toHaveCount(0);
+
+  // Once the data lands, real gaps are labelled: the mock serves evx1 on four
+  // of the six stages.
+  releaseEvx1();
+  await expect(page.locator('img[alt^="evx1 at"]')).toHaveCount(4);
+  await expect(page.locator(".no-image-cell-text", { hasText: "No image at this stage" })).toHaveCount(2);
+});
+
+test("no-image labels are not shown for a gene whose batch fetch failed", async ({ page }) => {
+  // On a failed fetch useGeneData sets the error and leaves `data` unchanged, so
+  // the added gene never gets an entry. Its column must not claim the dataset
+  // has no image for it; the error banner is the only signal.
+  await page.route("**/api/genes/batch", async (route) => {
+    if (route.request().postDataJSON().genes.includes("evx1")) {
+      await route.fulfill({ status: 500, json: { detail: "boom" } });
+      return;
+    }
+    await route.fallback();
+  });
+
+  await page.goto("/?genes=pax2a");
+  await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length);
+
+  const input = page.getByPlaceholder("Gene symbol (e.g. pax2a)");
+  await input.fill("evx1");
+  await input.press("Enter");
+  await expect(page.getByText(/Error: API error: 500/)).toBeVisible();
+  await expect(page.getByRole("columnheader").filter({ hasText: "evx1" })).toBeVisible();
+
+  await expect(page.locator("td.empty-cell")).toHaveCount(stages.length);
+  await expect(page.locator(".no-image-cell-text")).toHaveCount(0);
+  await expect(page.locator('img[alt^="pax2a at"]')).toHaveCount(stages.length);
 });
 
 test("lightbox links key metadata identifiers", async ({ page }) => {
