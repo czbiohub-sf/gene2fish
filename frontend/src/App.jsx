@@ -65,7 +65,15 @@ export default function App() {
     // Genes clear too (GEN-52): users read "Clear all filters" as a full reset
     // of the comparison, not just of the stage/anatomy controls. Individual
     // gene columns still have their own × for selective removal.
-    setUrlState((s) => ({ ...s, genes: [], stageMin: null, stageMax: null, anatomy: [] }));
+    setUrlState((s) => ({
+      ...s,
+      genes: [],
+      stageMin: null,
+      stageMax: null,
+      anatomy: [],
+      includeSubstructures: true,
+      nImages: 1,
+    }));
   }, [setUrlState]);
 
   const hasActiveFilters = stageMin != null || stageMax != null || anatomy.length > 0;

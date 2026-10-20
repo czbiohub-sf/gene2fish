@@ -1919,6 +1919,17 @@ test("clear-all drops a stale error banner left by a failed fetch", async ({ pag
   await expect(page.getByText(/Error:/)).toHaveCount(0);
 });
 
+test("clear-all also resets substructures and images-per-cell URL params", async ({ page }) => {
+  await page.goto("/?genes=pax2a&anatomy=hindbrain&substructures=0&n_images=6");
+
+  await page.getByRole("button", { name: "Clear all filters" }).click();
+  await expect(page.getByText("Search one gene to explore its expression patterns")).toBeVisible();
+
+  // Display modifiers of the cleared filters reset to their defaults too, so
+  // every URL param drops (writes are debounced).
+  await expect(page).not.toHaveURL(/stage_min|stage_max|anatomy|genes|substructures|n_images/);
+});
+
 test("clear-all button is hidden when no filters are active", async ({ page }) => {
   await page.goto("/?genes=pax2a");
   await expect(page.getByRole("columnheader").filter({ hasText: "pax2a" })).toBeVisible();
