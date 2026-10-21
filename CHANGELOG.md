@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.14.3](https://github.com/czbiohub-sf/gene2fish/compare/v0.14.2...v0.14.3) (2026-10-21)
+
+
+### Bug Fixes
+
+* **filters:** clear the gene columns too on "Clear all filters" ([#188](https://github.com/czbiohub-sf/gene2fish/issues/188)) ([2b25487](https://github.com/czbiohub-sf/gene2fish/commit/2b2548719df0c650c02b9763fac1f98ac77d5169))
+* **images:** stop flushing still-mounted cells' queued image loads ([#186](https://github.com/czbiohub-sf/gene2fish/issues/186)) ([32bd97a](https://github.com/czbiohub-sf/gene2fish/commit/32bd97a1ce2d2870f8060d8167d7140c5766e7df))
+* **ui:** always show the suggested-genes strip's horizontal scrollbar ([#187](https://github.com/czbiohub-sf/gene2fish/issues/187)) ([1443fc4](https://github.com/czbiohub-sf/gene2fish/commit/1443fc4420d5eb76eed5e2a2d965cdf356d2372c))
+
 ## [0.14.2](https://github.com/czbiohub-sf/gene2fish/compare/v0.14.1...v0.14.2) (2026-10-08)
 
 
