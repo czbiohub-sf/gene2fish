@@ -201,6 +201,9 @@ def test_image_proxy_mirror_lookup_uses_sanitized_url(client, monkeypatch):
         # Stays inside imageLoadUp/ but is not a canonical ZFIN path.
         "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/../ZDB-PUB-2/ZDB-IMAGE-1.jpg",
         "https://zfin.org/imageLoadUp/./2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg",
+        # The last path segment is checked too, not only the mid-path ones.
+        "https://zfin.org/imageLoadUp/2005/..",
+        "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/.",
     ],
 )
 def test_image_proxy_rejects_dot_segments_before_the_mirror(client, monkeypatch, url):
