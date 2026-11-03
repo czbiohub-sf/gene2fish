@@ -191,6 +191,32 @@ def test_image_proxy_mirror_lookup_uses_sanitized_url(client, monkeypatch):
     assert lookups == [PLAIN]
 
 
+@pytest.mark.parametrize(
+    "url",
+    [
+        # Climbs out of the mirror prefix (the shape path-traversal scanners send).
+        "https://zfin.org/imageLoadUp/../../../../secret.jpg",
+        # Climbs out of imageLoadUp/ but stays inside the bucket.
+        "https://zfin.org/imageLoadUp/2005/../../other/ZDB-IMAGE-1.jpg",
+        # Stays inside imageLoadUp/ but is not a canonical ZFIN path.
+        "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/../ZDB-PUB-2/ZDB-IMAGE-1.jpg",
+        "https://zfin.org/imageLoadUp/./2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg",
+    ],
+)
+def test_image_proxy_rejects_dot_segments_before_the_mirror(client, monkeypatch, url):
+    # The S3 key is a 1:1 prefix swap of the URL path, so a `.`/`..` segment
+    # would reach S3 as part of the key. S3 answers those with a 400, which the
+    # proxy used to report as a 502 "mirror unavailable" (GENE2FISH-BACKEND-8).
+    # A dot segment is bad client input: reject it with a 400 and never look it up.
+    _forbid_network(monkeypatch)
+    lookups = _mirror(monkeypatch, {})
+
+    resp = client.get("/api/image-proxy", params={"url": url})
+
+    assert resp.status_code == 400
+    assert lookups == []
+
+
 def test_image_proxy_falls_back_to_plain_when_annotated_not_mirrored(client, monkeypatch):
     # The package has `_annot.jpg` variants for only some images; the proxy must
     # serve the mirrored plain `.jpg` instead so the browser gets one 200 rather

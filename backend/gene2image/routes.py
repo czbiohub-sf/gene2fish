@@ -74,6 +74,11 @@ def _canonical_zfin_image_url(url: str) -> str:
         raise HTTPException(status_code=400, detail="Only zfin.org image URLs are supported")
     if not parsed.path.startswith("/imageLoadUp/"):
         raise HTTPException(status_code=400, detail="Only ZFIN imageLoadUp URLs are supported")
+    # The path becomes the S3 key 1:1, so a `.`/`..` segment would reach S3 and
+    # come back as a 400 we'd report as a 502 mirror outage (GENE2FISH-BACKEND-8).
+    # Canonical ZFIN image paths never contain one.
+    if any(segment in (".", "..") for segment in parsed.path.split("/")):
+        raise HTTPException(status_code=400, detail="Only ZFIN imageLoadUp URLs are supported")
     return urlunparse(("https", "zfin.org", parsed.path, "", "", ""))
 
 

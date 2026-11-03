@@ -129,6 +129,8 @@ images from S3 only and never fetches from ZFIN itself:
   images).
 - **S3 unreadable** (credentials, permissions, network): the proxy answers 502
   and logs a warning; the browser falls back to zfin.org the same way.
+- **Not a ZFIN image URL** (another host, a path outside `/imageLoadUp/`, or a
+  `.`/`..` path segment): the proxy answers 400 without reading S3.
 - **PNG export:** zfin.org sends no CORS headers, so the export uses mirrored
   images only and shows "Image unavailable" for anything else.
 
