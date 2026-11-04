@@ -85,8 +85,8 @@ def _forbid_network(monkeypatch):
     monkeypatch.setattr(socket.socket, "connect", boom)
 
 
-PLAIN = "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"
-ANNOT = "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1_annot.jpg"
+PLAIN = "https://zfin.org/imageLoadUp/2005/ZDB-PUB-051025-1/ZDB-IMAGE-060130-333.jpg"
+ANNOT = "https://zfin.org/imageLoadUp/2005/ZDB-PUB-051025-1/ZDB-IMAGE-060130-333_annot.jpg"
 
 
 def test_image_proxy_serves_mirrored_image(client, monkeypatch):
@@ -189,6 +189,71 @@ def test_image_proxy_mirror_lookup_uses_sanitized_url(client, monkeypatch):
 
     assert resp.status_code == 200
     assert lookups == [PLAIN]
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        # Climbs out of the mirror prefix (the shape path-traversal scanners send).
+        "https://zfin.org/imageLoadUp/../../../../secret.jpg",
+        # Climbs out of imageLoadUp/ but stays inside the bucket.
+        "https://zfin.org/imageLoadUp/2005/../../other/ZDB-IMAGE-1.jpg",
+        # Stays inside imageLoadUp/ but is not a canonical ZFIN path.
+        "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/../ZDB-PUB-2/ZDB-IMAGE-1.jpg",
+        "https://zfin.org/imageLoadUp/./2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg",
+        # The last path segment is checked too, not only the mid-path ones.
+        "https://zfin.org/imageLoadUp/2005/..",
+        "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/.",
+    ],
+)
+def test_image_proxy_rejects_dot_segments_before_the_mirror(client, monkeypatch, url):
+    # The S3 key is a 1:1 prefix swap of the URL path, so a `.`/`..` segment
+    # would reach S3 as part of the key. S3 answers those with a 400, which the
+    # proxy used to report as a 502 "mirror unavailable" (GENE2FISH-BACKEND-8).
+    # A dot segment is bad client input: reject it with a 400 and never look it up.
+    _forbid_network(monkeypatch)
+    lookups = _mirror(monkeypatch, {})
+
+    resp = client.get("/api/image-proxy", params={"url": url})
+
+    assert resp.status_code == 400
+    assert lookups == []
+
+
+_THISSE_DIR = "https://zfin.org/imageLoadUp/2005/ZDB-PUB-051025-1"
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        # A decoded `%00`: S3 rejects control bytes in a key with a 400.
+        f"{_THISSE_DIR}/ZDB-IMAGE-060130-333\x00.jpg",
+        # A literal `%2e%2e` segment (double-encoded on the wire).
+        f"{_THISSE_DIR}/%2e%2e/ZDB-IMAGE-060130-333.jpg",
+        # Off the mirror layout: wrong extension, unknown variant, extra or
+        # missing directory, non-ASCII digits, a bare directory.
+        f"{_THISSE_DIR}/ZDB-IMAGE-060130-333.png",
+        f"{_THISSE_DIR}/ZDB-IMAGE-060130-333_large.jpg",
+        f"{_THISSE_DIR}/sub/ZDB-IMAGE-060130-333.jpg",
+        "https://zfin.org/imageLoadUp/ZDB-PUB-051025-1/ZDB-IMAGE-060130-333.jpg",
+        "https://zfin.org/imageLoadUp/２００５/ZDB-PUB-051025-1/ZDB-IMAGE-060130-333.jpg",
+        f"{_THISSE_DIR}/",
+    ],
+)
+def test_image_proxy_rejects_paths_off_the_mirror_layout(client, monkeypatch, url):
+    # The mirror only ever holds `{year}/{ZDB-PUB-…}/{ZDB-IMAGE-…}{variant}.jpg`
+    # (MEMBER_RE in zfin_image_mirror.py refuses to upload anything else), so any
+    # other path is client junk, never a mirror object. Reject it with a 400
+    # before S3: whatever S3 itself rejects would otherwise come back as a 502
+    # "mirror unavailable" (GENE2FISH-BACKEND-8). The browser falls back to
+    # zfin.org on a 400 exactly as on a 404.
+    _forbid_network(monkeypatch)
+    lookups = _mirror(monkeypatch, {})
+
+    resp = client.get("/api/image-proxy", params={"url": url})
+
+    assert resp.status_code == 400
+    assert lookups == []
 
 
 def test_image_proxy_falls_back_to_plain_when_annotated_not_mirrored(client, monkeypatch):
