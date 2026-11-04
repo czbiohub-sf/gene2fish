@@ -104,6 +104,19 @@ def test_member_key_year_matches_the_backend_image_url(pub):
     assert key == f"{PREFIX}/imageLoadUp/{year}/{pub}/{image}.jpg"
 
 
+@pytest.mark.parametrize("variant", ["", "_annot", "_medium", "_thumb", "_annot_medium"])
+def test_image_proxy_accepts_every_mirror_file_variant(variant):
+    # The proxy 400s any path off the mirror layout; pin that it still accepts
+    # every variant MEMBER_RE lets into the mirror, or those images would
+    # silently stop being served from S3. Add a variant here with MEMBER_RE.
+    from gene2image.routes import _canonical_zfin_image_url
+
+    name = f"{PUBS}/2004/ZDB-PUB-040907-1/ZDB-IMAGE-060810-2888{variant}.jpg"
+    key = zfin_image_mirror.member_key(name, PREFIX)
+    url = "https://zfin.org/" + key.removeprefix(f"{PREFIX}/")
+    assert _canonical_zfin_image_url(url) == url
+
+
 @pytest.mark.parametrize(
     "name",
     [

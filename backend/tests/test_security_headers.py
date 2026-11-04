@@ -74,7 +74,7 @@ def test_image_proxy_keeps_single_nosniff_header(client, monkeypatch):
 
     resp = client.get(
         "/api/image-proxy",
-        params={"url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-1/ZDB-IMAGE-1.jpg"},
+        params={"url": "https://zfin.org/imageLoadUp/2005/ZDB-PUB-051025-1/ZDB-IMAGE-060130-333.jpg"},
     )
     assert resp.status_code == 200
     assert resp.headers["x-content-type-options"] == "nosniff"

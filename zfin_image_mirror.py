@@ -62,6 +62,8 @@ THISSE_PUBLICATIONS = frozenset({
 # opt/zfin/loadUp/pubs/{year}/{pub_id}/{image_id}{variant}.jpg, as ZFIN packaged it.
 # Matched with fullmatch and re.ASCII: "$" would accept a trailing newline and
 # str-mode "\d" would accept non-ASCII digits, both off the package layout.
+# The image proxy 400s any other path; keep _MIRROR_PATH_RE in
+# backend/gene2image/routes.py in step with this.
 MEMBER_RE = re.compile(
     r"(?:\./)?opt/zfin/loadUp/pubs/(?P<year>\d{4})/(?P<pub>ZDB-PUB-\d{6}-\d+)/"
     r"(?P<file>ZDB-IMAGE-\d{6}-\d+(?:_annot|_medium|_thumb|_annot_medium)?\.jpg)",

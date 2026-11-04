@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from collections import defaultdict
 from typing import NoReturn
 from urllib.parse import urlparse, urlunparse
@@ -57,6 +58,16 @@ def _build_image_url(pub_id: str, image_id: str) -> tuple[str, str, str]:
     return f"{base}_annot.jpg", f"{base}.jpg", f"{base}_medium.jpg"
 
 
+# The only path shape the S3 mirror can hold: the proxy-side twin of MEMBER_RE
+# in zfin_image_mirror.py, which refuses to upload anything else. Matched with
+# fullmatch and re.ASCII for the same reasons as MEMBER_RE.
+_MIRROR_PATH_RE = re.compile(
+    r"/imageLoadUp/\d{4}/ZDB-PUB-\d{6}-\d+/"
+    r"ZDB-IMAGE-\d{6}-\d+(?:_annot|_medium|_thumb|_annot_medium)?\.jpg",
+    re.ASCII,
+)
+
+
 def _canonical_zfin_image_url(url: str) -> str:
     """Validate a ZFIN image URL and return it rebuilt from validated parts.
 
@@ -72,12 +83,11 @@ def _canonical_zfin_image_url(url: str) -> str:
         ) from err
     if parsed.scheme != "https" or parsed.netloc != "zfin.org":
         raise HTTPException(status_code=400, detail="Only zfin.org image URLs are supported")
-    if not parsed.path.startswith("/imageLoadUp/"):
-        raise HTTPException(status_code=400, detail="Only ZFIN imageLoadUp URLs are supported")
-    # The path becomes the S3 key 1:1, so a `.`/`..` segment would reach S3 and
-    # come back as a 400 we'd report as a 502 mirror outage (GENE2FISH-BACKEND-8).
-    # Canonical ZFIN image paths never contain one.
-    if any(segment in (".", "..") for segment in parsed.path.split("/")):
+    # The path becomes the S3 key 1:1. Any path off the mirror layout is client
+    # junk, never a mirror object, so it must not reach S3: whatever S3 rejects
+    # (a `..` segment, a control byte) would come back as a 400 we'd report as
+    # a 502 mirror outage (GENE2FISH-BACKEND-8).
+    if not _MIRROR_PATH_RE.fullmatch(parsed.path):
         raise HTTPException(status_code=400, detail="Only ZFIN imageLoadUp URLs are supported")
     return urlunparse(("https", "zfin.org", parsed.path, "", "", ""))
 
