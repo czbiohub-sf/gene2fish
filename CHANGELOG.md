@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.4](https://github.com/czbiohub-sf/gene2fish/compare/v0.14.3...v0.14.4) (2026-11-04)
+
+
+### Bug Fixes
+
+* **image-proxy:** reject dot path segments with a 400 before the S3 lookup ([#209](https://github.com/czbiohub-sf/gene2fish/issues/209)) ([72dab51](https://github.com/czbiohub-sf/gene2fish/commit/72dab517f0b3518768a8c9e1a7238fb7e31ce0ea))
+
 ## [0.14.3](https://github.com/czbiohub-sf/gene2fish/compare/v0.14.2...v0.14.3) (2026-10-21)
 
 
